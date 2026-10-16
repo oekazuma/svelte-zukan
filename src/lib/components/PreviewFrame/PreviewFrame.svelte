@@ -1,36 +1,48 @@
 <script lang="ts">
+  import { messages, type Messages } from '../../app/i18n.js';
+
   const PRESETS = [375, 768, 1024, 1280];
   const MIN_WIDTH = 200;
   const MIN_HEIGHT = 80;
   const KEY_STEP = 10;
 
-  let { src, title }: { src: string; title: string } = $props();
+  let {
+    src,
+    title,
+    labels = messages.en
+  }: { src: string; title: string; labels?: Pick<Messages, 'previewWidth' | 'fullWidth'> } = $props();
 
   // null = 100%
   let width = $state<number | null>(null);
+  // 0 until measured
   let stageWidth = $state(0);
   let height = $state(MIN_HEIGHT);
   let dragging = $state(false);
   let startX = 0;
   let startWidth = 0;
 
-  let frame: HTMLDivElement;
-  let iframe: HTMLIFrameElement;
   let observer: ResizeObserver | undefined;
 
-  // the frame is capped by max-width: 100%, so report the effective width once the stage is measured
-  const current = $derived(stageWidth ? Math.min(width ?? stageWidth, stageWidth) : (width ?? 0));
+  // a stage narrower than MIN_WIDTH lowers the minimum, so aria-valuenow never goes below aria-valuemin
+  const min = $derived(Math.min(MIN_WIDTH, stageWidth));
+  // the frame is capped by max-width and min-width in CSS, so report the effective width
+  const current = $derived(clamp(width ?? stageWidth));
 
   function clamp(value: number) {
-    return Math.min(stageWidth, Math.max(MIN_WIDTH, value));
+    return Math.min(stageWidth, Math.max(min, value));
   }
 
   function onpointerdown(e: PointerEvent) {
     if (e.button !== 0) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const handle = e.currentTarget as HTMLElement;
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch {
+      // not an active pointer (synthetic event); dragging still works while the pointer stays on the handle
+    }
     dragging = true;
     startX = e.clientX;
-    startWidth = frame.getBoundingClientRect().width;
+    startWidth = handle.parentElement!.getBoundingClientRect().width;
   }
 
   function onpointermove(e: PointerEvent) {
@@ -38,27 +50,31 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    const delta = e.key === 'ArrowRight' ? KEY_STEP : e.key === 'ArrowLeft' ? -KEY_STEP : 0;
-    if (!delta) return;
+    if (e.key === 'Home') width = min;
+    else if (e.key === 'End') width = null;
+    else if (e.key === 'ArrowRight') width = clamp(current + KEY_STEP);
+    else if (e.key === 'ArrowLeft') width = clamp(current - KEY_STEP);
+    else return;
     e.preventDefault();
-    width = clamp(current + delta);
   }
 
-  function observe(el: HTMLIFrameElement) {
+  // the preview mounts after the iframe's load event, so watch the body and pick up the wrapper element when it appears
+  function observe(doc: Document) {
     observer?.disconnect();
-    const target = el.contentDocument?.querySelector('[data-zukan-preview]');
-    if (!target) return;
+    let target: Element | null = null;
     observer = new ResizeObserver(() => {
-      height = Math.max(MIN_HEIGHT, target.getBoundingClientRect().height);
+      const found = doc.querySelector('[data-zukan-preview]');
+      if (!found) return;
+      if (found !== target) {
+        target = found;
+        observer!.observe(found);
+      }
+      height = Math.max(MIN_HEIGHT, found.getBoundingClientRect().height);
     });
-    observer.observe(target);
+    observer.observe(doc.body);
   }
 
-  $effect(() => {
-    // the iframe may already be loaded when this runs (hydration), so onload alone can be missed
-    if (iframe.contentDocument?.readyState === 'complete') observe(iframe);
-    return () => observer?.disconnect();
-  });
+  $effect(() => () => observer?.disconnect());
 </script>
 
 <div class="preview">
@@ -66,17 +82,19 @@
     {#each PRESETS as preset (preset)}
       <button type="button" aria-pressed={width === preset} onclick={() => (width = preset)}>{preset}</button>
     {/each}
-    <button type="button" aria-pressed={width === null} onclick={() => (width = null)}>100%</button>
-    <output>{current}px</output>
+    <button type="button" aria-pressed={width === null} onclick={() => (width = null)}>{labels.fullWidth}</button>
+    <output>{stageWidth ? `${current}px` : ''}</output>
   </div>
   <div class="stage" bind:clientWidth={stageWidth}>
-    <div class="frame" bind:this={frame} style:width={width === null ? '100%' : `${width}px`}>
+    <div class="frame" style:width={width === null ? '100%' : `${width}px`}>
       <iframe
-        bind:this={iframe}
         {src}
         {title}
-        onload={(e) => observe(e.currentTarget as HTMLIFrameElement)}
-        class:dragging
+        onload={(e) => {
+          const doc = (e.currentTarget as HTMLIFrameElement).contentDocument;
+          if (doc?.body) observe(doc);
+        }}
+        class={{ dragging }}
         style:height="{height}px"
       ></iframe>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -84,10 +102,10 @@
         class="handle"
         role="separator"
         aria-orientation="vertical"
-        aria-label="プレビューの幅"
-        aria-valuemin={MIN_WIDTH}
-        aria-valuemax={stageWidth}
-        aria-valuenow={current}
+        aria-label={labels.previewWidth}
+        aria-valuemin={stageWidth ? min : undefined}
+        aria-valuemax={stageWidth || undefined}
+        aria-valuenow={stageWidth ? current : undefined}
         tabindex="0"
         {onpointerdown}
         {onpointermove}
@@ -147,6 +165,7 @@
 
   .frame {
     position: relative;
+    min-width: min(200px, 100%);
     max-width: 100%;
     background: var(--_bg);
   }

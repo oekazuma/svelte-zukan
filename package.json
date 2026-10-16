@@ -63,8 +63,8 @@
     "#lib/*": "./src/lib/*"
   },
   "peerDependencies": {
-    "@sveltejs/kit": "^3.0.0",
-    "svelte": "^5.0.0"
+    "svelte": "^5.0.0",
+    "vite": "^8.0.0"
   },
   "dependencies": {
     "magic-string": "^1.4.3",

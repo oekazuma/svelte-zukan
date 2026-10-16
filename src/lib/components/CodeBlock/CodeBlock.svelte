@@ -1,34 +1,43 @@
 <script lang="ts">
-  let { code }: { code: string } = $props();
+  import { messages, type Messages } from '../../app/i18n.js';
 
-  let copied = $state(false);
+  let {
+    code,
+    labels = messages.en
+  }: { code: string; labels?: Pick<Messages, 'code' | 'copy' | 'copied' | 'copyFailed'> } = $props();
+
+  let status = $state<'idle' | 'copied' | 'failed'>('idle');
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(code);
-      copied = true;
+      status = 'copied';
     } catch {
-      // clipboard unavailable (insecure context, denied): leave the label unchanged
+      // clipboard unavailable (insecure context, denied)
+      status = 'failed';
     }
+    clearTimeout(timer);
+    timer = setTimeout(() => (status = 'idle'), 2000);
   }
 
-  $effect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => (copied = false), 2000);
-    return () => clearTimeout(timer);
-  });
+  $effect(() => () => clearTimeout(timer));
 </script>
 
-<details>
-  <summary>コード</summary>
-  <div class="body">
-    <button type="button" onclick={copy} aria-live="polite">{copied ? 'コピーしました' : 'コピー'}</button>
+<!-- the button sits on the summary row but outside <summary>, which must not contain interactive content -->
+<div class="code-block">
+  <details>
+    <summary>{labels.code}</summary>
     <pre><code>{code}</code></pre>
-  </div>
-</details>
+  </details>
+  <button type="button" onclick={copy} aria-live="polite">
+    {status === 'copied' ? labels.copied : status === 'failed' ? labels.copyFailed : labels.copy}
+  </button>
+</div>
 
 <style>
-  details {
+  .code-block {
+    position: relative;
     border: 1px solid var(--_border);
     border-radius: 6px;
     font-family: var(--_font);
@@ -36,35 +45,34 @@
   }
 
   summary {
-    padding: 6px 10px;
+    padding: 6px 160px 6px 10px;
     font-size: 13px;
+    line-height: 20px;
     color: var(--_muted);
     cursor: pointer;
   }
 
-  .body {
-    position: relative;
-    border-top: 1px solid var(--_border);
-    background: var(--_code-bg);
-  }
-
   button {
     position: absolute;
-    top: 6px;
+    top: 5px;
     right: 6px;
-    padding: 2px 8px;
+    padding: 0 8px;
     border: 1px solid var(--_border);
     border-radius: 4px;
     background: var(--_bg);
     color: var(--_text);
     font: inherit;
     font-size: 12px;
+    line-height: 20px;
     cursor: pointer;
   }
 
   pre {
     margin: 0;
-    padding: 10px 140px 10px 10px;
+    padding: 10px;
+    border-top: 1px solid var(--_border);
+    border-radius: 0 0 6px 6px;
+    background: var(--_code-bg);
     overflow-x: auto;
     font-family: var(--_mono);
     font-size: 13px;

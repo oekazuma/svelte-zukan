@@ -1,20 +1,21 @@
 <script lang="ts">
+  import { formatHash } from '../app/hash.js';
   import type { Entry } from '../types.js';
   import Badge from './Badge/Badge.svelte';
 
-  let { entries, base, current }: { entries: Entry[]; base: string; current?: string } = $props();
-
-  // names may contain '#', '?' or '%', so encode each segment
-  const href = (entry: Entry) => `${base}/${entry.path.split('/').map(encodeURIComponent).join('/')}`;
+  let { entries, current }: { entries: Entry[]; current?: string } = $props();
 </script>
 
 <ul>
   {#each entries as entry (entry.path)}
     <li>
-      <!-- base already includes paths.base (derived from page.url.pathname), so resolve() would double it -->
+      <!-- the catalog is a hash-routed SPA outside SvelteKit, so resolve() does not apply -->
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-      <a href={href(entry)} aria-current={entry.path === current ? 'page' : undefined}>
-        <span>{entry.name}</span>
+      <a href={formatHash('detail', entry.path)} aria-current={entry.path === current ? 'page' : undefined}>
+        <span class="name">
+          {entry.name}
+          {#if entry.dir}<span class="dir">{entry.dir}</span>{/if}
+        </span>
         <Badge label={entry.group} />
       </a>
     </li>
@@ -38,6 +39,18 @@
     border-radius: 6px;
     color: var(--_text);
     text-decoration: none;
+  }
+
+  .name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .dir {
+    margin-left: 4px;
+    color: var(--_muted);
+    font-size: 12px;
+    font-weight: normal;
   }
 
   a:hover {
