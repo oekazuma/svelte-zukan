@@ -52,6 +52,17 @@ jobs:
       - name: Run Vitest
         run: pnpm test:run
 
+  # drive-letter paths and the fixtures' directory junctions
+  test-windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Node.js and dependencies
+        uses: ./.github/workflows/setup-node
+      - name: Run Vitest (server)
+        run: pnpm exec vitest run --project server
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10

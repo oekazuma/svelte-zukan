@@ -34,6 +34,11 @@ export default defineConfig(
     }
   },
   {
+    // the fixtures are separate projects outside the root tsconfig; no rule in use needs type information
+    files: ['fixtures/**/*.svelte'],
+    languageOptions: { parserOptions: { projectService: false } }
+  },
+  {
     // Override or add rule settings here, such as:
     // 'svelte/button-has-type': 'error'
     rules: {}

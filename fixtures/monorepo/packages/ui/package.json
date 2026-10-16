@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/ui",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#lib/*": "./src/lib/*"
+  },
+  "devDependencies": {
+    "svelte-zukan": "workspace:*"
+  }
+}
