@@ -1,27 +1,58 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import { marked } from 'marked';
 import { normalizePath, type Plugin } from 'vite';
 import { transformZukan } from './extract.js';
 
-const ZUKAN_ID = /^[^?#]+\.zukan\.svelte(?:[?#]|$)/;
+export type ZukanOptions = {
+  /** catalog file suffix: `Foo.<suffix>.svelte` / `Foo.<suffix>.md` (default 'zukan') */
+  suffix?: string;
+  /** group name -> directories to search (relative to the Vite root) */
+  groups?: Record<string, string | string[]>;
+  /** .svelte file wrapping every preview (relative to the Vite root) */
+  wrapper?: string;
+  /** logo image path (relative to the Vite root); false hides it */
+  logo?: string | false;
+  /** logo alt and <title> (default 'zukan') */
+  title?: string;
+  /** UI language (default 'en') */
+  locale?: 'en' | 'ja';
+  /** write the catalog as a static site on `vite build` (default false; outDir defaults to 'zukan-dist') */
+  build?: boolean | { outDir?: string };
+};
+
 const SVELTE_STYLE_ID = /[?&]svelte&type=style/;
 
-export const isZukanId = (id: string) => ZUKAN_ID.test(id) && !id.startsWith('\0') && !SVELTE_STYLE_ID.test(id);
+export function createMatchers(suffix: string) {
+  if (!/^[a-z0-9-]+$/i.test(suffix))
+    throw new Error(`svelte-zukan: invalid suffix "${suffix}" (use letters, digits and "-")`);
+  const ext = `.${suffix}.svelte`;
+  const docExt = `.${suffix}.md`;
+  // the suffix only has [a-z0-9-], so it needs no regex escaping
+  const catalogId = new RegExp(`^[^?#]+\\.${suffix}\\.svelte(?:[?#]|$)`, 'i');
+  const isCatalogFile = (file: string) => file.endsWith(ext);
+  return {
+    catalogId,
+    isCatalogId: (id: string) => catalogId.test(id) && !id.startsWith('\0') && !SVELTE_STYLE_ID.test(id),
+    isCatalogFile,
+    isDocFile: (file: string) => file.endsWith(docExt),
+    docFileOf: (catalogFile: string) => catalogFile.slice(0, -ext.length) + docExt,
+    catalogFileOf: (docFile: string) => docFile.slice(0, -docExt.length) + ext
+  };
+}
 
-const isDocument = (file: string) =>
-  path.basename(file) === 'Document.md' && path.basename(path.dirname(file)) === 'zukan';
-
-export function zukan(): Plugin {
+export function zukan(options: ZukanOptions = {}): Plugin {
+  const { catalogId, isCatalogId, isCatalogFile, isDocFile, docFileOf, catalogFileOf } = createMatchers(
+    options.suffix ?? 'zukan'
+  );
   return {
     name: 'vite-plugin-svelte-zukan',
     enforce: 'pre',
     transform: {
-      filter: { id: { include: ZUKAN_ID, exclude: [/^\0/, SVELTE_STYLE_ID] } },
+      filter: { id: { include: catalogId, exclude: [/^\0/, SVELTE_STYLE_ID] } },
       handler(code, id) {
-        if (!isZukanId(id)) return;
+        if (!isCatalogId(id)) return;
         const filename = id.split(/[?#]/)[0];
-        const docPath = path.join(path.dirname(filename), 'Document.md');
+        const docPath = docFileOf(filename);
         let doc: string | null = null;
         if (existsSync(docPath)) {
           this.addWatchFile(docPath);
@@ -33,13 +64,10 @@ export function zukan(): Plugin {
     hotUpdate({ type, file, modules, timestamp }) {
       const { moduleGraph } = this.environment;
       let targets: Iterable<(typeof modules)[number]>;
-      if (isDocument(file)) {
-        const dir = path.dirname(file);
-        // the whole directory may be gone (Document.md delete); the module graph is keyed by normalized paths
-        targets = (existsSync(dir) ? readdirSync(dir) : [])
-          .filter((name) => name.endsWith('.zukan.svelte'))
-          .flatMap((name) => [...(moduleGraph.getModulesByFile(normalizePath(path.join(dir, name))) ?? [])]);
-      } else if (type === 'update' && file.endsWith('.zukan.svelte')) {
+      if (isDocFile(file)) {
+        // the module graph is keyed by normalized paths; the catalog file may not be in it yet
+        targets = moduleGraph.getModulesByFile(normalizePath(catalogFileOf(file))) ?? [];
+      } else if (type === 'update' && isCatalogFile(file)) {
         targets = modules;
       } else return;
 

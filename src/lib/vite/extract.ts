@@ -96,9 +96,14 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
   return top.map((section) => {
     const attr = (section.attributes as Node[]).find((a) => a.name === 'title');
     const value = attr?.value as Node[] | true | undefined;
+    if (!attr) fail(section.start, '<Section> needs a title');
+    // `title` alone (value `true`) and `title=""` (no Text node) are both empty
+    if (value === true || (Array.isArray(value) && !value.length))
+      fail(section.start, '<Section> title must not be empty');
     if (!Array.isArray(value) || value.length !== 1 || value[0].type !== 'Text')
-      fail(section.start, '<Section> needs a static string title');
+      fail(section.start, '<Section> title must be a static string');
     const title = (value as unknown as { data: string }[])[0].data;
+    if (!title.trim()) fail(section.start, '<Section> title must not be empty');
     if (titles.has(title)) fail(section.start, `duplicate <Section> title "${title}"`);
     titles.add(title);
 

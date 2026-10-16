@@ -69,6 +69,32 @@ describe('extractSections', () => {
     expect(code).not.toContain('other');
   });
 
+  it('collects dotted component root', () => {
+    const source = `<script>
+  import * as Foo from './Foo.svelte';
+  import Other from './Other.svelte';
+</script>
+
+<Section title="a"><Foo.Bar /></Section>`;
+    const { code } = extractSections(source, FILE)[0];
+    expect(code).toContain("import * as Foo from './Foo.svelte';");
+    expect(code).not.toContain('Other');
+  });
+
+  it('collects transition and animate names', () => {
+    const source = `<script>
+  import { fade, fly } from 'svelte/transition';
+  import { flip } from 'svelte/animate';
+  import { unused } from './unused';
+</script>
+
+<Section title="a"><div transition:fade in:fly animate:flip></div></Section>`;
+    const { code } = extractSections(source, FILE)[0];
+    expect(code).toContain("import { fade, fly } from 'svelte/transition';");
+    expect(code).toContain("import { flip } from 'svelte/animate';");
+    expect(code).not.toContain('unused');
+  });
+
   it('dedents mixed indentation by common prefix', () => {
     const source = '<Section title="a">\n\t\t<A />\n\n\t\t\t<B />\n</Section>';
     expect(extractSections(source, FILE)[0].code).toBe('<A />\n\n\t<B />');
@@ -81,6 +107,25 @@ describe('extractSections', () => {
   it('throws on dynamic title', () => {
     const source = '<script>let x = "a";</script>\n\n<Section title={x}><A /></Section>';
     expect(() => extractSections(source, FILE)).toThrow(/Button\.zukan\.svelte:3/);
+  });
+
+  it.each(['title=""', 'title="  "'])('throws on empty title (%s)', (attr) => {
+    expect(() => extractSections(`<Section ${attr}><A /></Section>`, FILE)).toThrow(/Button\.zukan\.svelte:1 .*empty/);
+  });
+
+  it('missing and dynamic title have different messages', () => {
+    const message = (source: string) => {
+      try {
+        extractSections(source, FILE);
+      } catch (e) {
+        return (e as Error).message;
+      }
+    };
+    const missing = message('<Section><A /></Section>');
+    const dynamic = message('<script>let x = "a";</script>\n<Section title={x}><A /></Section>');
+    expect(missing).toMatch(/Button\.zukan\.svelte:1 /);
+    expect(dynamic).toMatch(/Button\.zukan\.svelte:2 /);
+    expect(missing!.split(' ').slice(1).join(' ')).not.toBe(dynamic!.split(' ').slice(1).join(' '));
   });
 
   it('throws on duplicate title', () => {

@@ -1,9 +1,9 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { normalizePath } from 'vite';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { isZukanId, zukan } from './index.js';
+import { createMatchers, zukan } from './index.js';
 
 // hooks are called with hand-made fakes, so the plugin is typed loosely
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -18,26 +18,54 @@ let docFile: string;
 
 beforeAll(async () => {
   dir = await mkdtemp(path.join(tmpdir(), 'zukan-'));
-  await mkdir(path.join(dir, 'zukan'));
-  zukanFile = path.join(dir, 'zukan', 'Foo.zukan.svelte');
-  docFile = path.join(dir, 'zukan', 'Document.md');
+  zukanFile = path.join(dir, 'Foo.zukan.svelte');
+  docFile = path.join(dir, 'Foo.zukan.md');
   await writeFile(zukanFile, source);
   await writeFile(docFile, '# Foo');
+  await writeFile(path.join(dir, 'Foo.catalog.md'), '# Foo');
 });
 
-const transform = (code: string, id: string, ctx = { addWatchFile: vi.fn() }) =>
-  plugin.transform.handler.call(ctx, code, id);
+const transform = (code: string, id: string, p = plugin, ctx = { addWatchFile: vi.fn() }) =>
+  p.transform.handler.call(ctx, code, id);
 
-describe('isZukanId', () => {
-  it('matches zukan files, with or without a query', () => {
-    expect(isZukanId('/a/Foo.zukan.svelte')).toBe(true);
-    expect(isZukanId('/a/Foo.zukan.svelte?v=1')).toBe(true);
+describe('createMatchers', () => {
+  it('matches catalog files, with or without a query', () => {
+    const { isCatalogId } = createMatchers('zukan');
+    expect(isCatalogId('/a/Foo.zukan.svelte')).toBe(true);
+    expect(isCatalogId('/a/Foo.zukan.svelte?v=1')).toBe(true);
   });
 
   it('rejects style modules, virtual modules and other files', () => {
-    expect(isZukanId('/a/Foo.zukan.svelte?svelte&type=style&lang.css')).toBe(false);
-    expect(isZukanId('\0/a/Foo.zukan.svelte')).toBe(false);
-    expect(isZukanId('/a/Foo.svelte')).toBe(false);
+    const { isCatalogId } = createMatchers('zukan');
+    expect(isCatalogId('/a/Foo.zukan.svelte?svelte&type=style&lang.css')).toBe(false);
+    expect(isCatalogId('\0/a/Foo.zukan.svelte')).toBe(false);
+    expect(isCatalogId('/a/Foo.svelte')).toBe(false);
+  });
+
+  it('follows the suffix', () => {
+    const { isCatalogId, isCatalogFile, isDocFile } = createMatchers('catalog');
+    expect(isCatalogId('/a/Foo.catalog.svelte')).toBe(true);
+    expect(isCatalogId('/a/Foo.zukan.svelte')).toBe(false);
+    expect(isCatalogFile('/a/Foo.catalog.svelte')).toBe(true);
+    expect(isCatalogFile('/a/Foo.zukan.svelte')).toBe(false);
+    expect(isDocFile('/a/Foo.catalog.md')).toBe(true);
+    expect(isDocFile('/a/Foo.zukan.md')).toBe(false);
+    expect(isDocFile('/a/Document.md')).toBe(false);
+  });
+
+  it('maps catalog files and doc files one to one', () => {
+    const { docFileOf, catalogFileOf } = createMatchers('zukan');
+    expect(docFileOf('/a/Foo.zukan.svelte')).toBe('/a/Foo.zukan.md');
+    expect(catalogFileOf('/a/Foo.zukan.md')).toBe('/a/Foo.zukan.svelte');
+  });
+
+  it('escapes the suffix in the patterns', () => {
+    expect(createMatchers('a-b').isCatalogId('/a/Foo.a-b.svelte')).toBe(true);
+  });
+
+  it.each(['a.b', '', 'a b', 'a|b'])('rejects invalid suffix %j', (suffix) => {
+    expect(() => createMatchers(suffix)).toThrow(/suffix/);
+    expect(() => zukan({ suffix })).toThrow(/suffix/);
   });
 });
 
@@ -49,68 +77,94 @@ describe('transform', () => {
     expect(plugin.transform.filter.id).toHaveProperty('exclude');
   });
 
+  it('filter agrees with isCatalogId', () => {
+    const { isCatalogId } = createMatchers('zukan');
+    const { include, exclude } = plugin.transform.filter.id as { include: RegExp; exclude: RegExp[] };
+    const ids = [
+      '/a/Foo.zukan.svelte',
+      '/a/Foo.zukan.svelte?v=1',
+      '/a/Foo.zukan.svelte#x',
+      '/a/Foo.zukan.svelte?svelte&type=style&lang.css',
+      '/a/Foo.zukan.svelte?foo&svelte&type=style',
+      '\0/a/Foo.zukan.svelte',
+      '/a/Foo.svelte',
+      '/a/Foo.zukan.svelte.ts',
+      '/a/Foo.catalog.svelte',
+      '/a/Foo.zukan.md'
+    ];
+    for (const id of ids) {
+      expect(include.test(id) && !exclude.some((r) => r.test(id)), id).toBe(isCatalogId(id));
+    }
+  });
+
   it('injects doc html', () => {
     const ctx = { addWatchFile: vi.fn() };
-    const result = transform(source, zukanFile, ctx);
+    const result = transform(source, zukanFile, plugin, ctx);
     expect(result.code).toContain(h1);
     expect(result.map).toBeDefined();
     expect(ctx.addWatchFile).toHaveBeenCalledWith(docFile);
   });
 
-  it('doc is null without Document.md', async () => {
+  it('reads Foo.<suffix>.md for a custom suffix', () => {
+    const catalog = zukan({ suffix: 'catalog' }) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const ctx = { addWatchFile: vi.fn() };
+    const result = transform(source, path.join(dir, 'Foo.catalog.svelte'), catalog, ctx);
+    expect(result.code).toContain(h1);
+    expect(ctx.addWatchFile).toHaveBeenCalledWith(path.join(dir, 'Foo.catalog.md'));
+  });
+
+  it('doc is null without Foo.zukan.md', async () => {
     const other = await mkdtemp(path.join(tmpdir(), 'zukan-'));
     const ctx = { addWatchFile: vi.fn() };
-    const result = transform(source, path.join(other, 'Foo.zukan.svelte'), ctx);
+    const result = transform(source, path.join(other, 'Foo.zukan.svelte'), plugin, ctx);
     expect(result.code).toContain('"doc":null');
     expect(ctx.addWatchFile).not.toHaveBeenCalled();
   });
 
-  it('handler ignores non-zukan ids', () => {
+  it('handler ignores non-catalog ids', () => {
     expect(transform(source, '/a/Foo.svelte')).toBeUndefined();
   });
 
   it('strips query from id', () => {
     const ctx = { addWatchFile: vi.fn() };
-    const result = transform(source, `${zukanFile}?v=123`, ctx);
+    const result = transform(source, `${zukanFile}?v=123`, plugin, ctx);
     expect(result.code).toContain(h1);
     expect(ctx.addWatchFile).toHaveBeenCalledWith(docFile);
   });
 });
 
 describe('hotUpdate', () => {
-  const setup = (consumer: 'client' | 'server') => {
-    const mod = { id: 'mod' };
+  const setup = (consumer: 'client' | 'server', found: Set<unknown> | null = new Set([{ id: 'mod' }])) => {
     const ctx = {
       environment: {
         config: { consumer },
         hot: { send: vi.fn() },
         moduleGraph: {
-          getModulesByFile: vi.fn(() => new Set([mod])),
+          getModulesByFile: vi.fn(() => found ?? undefined),
           invalidateModule: vi.fn()
         }
       }
     };
     const run = (type: string, file: string, modules: unknown[] = []) =>
       plugin.hotUpdate.call(ctx, { type, file, modules, timestamp: 1 });
-    return { mod, ctx, run };
+    return { ctx, run, mod: [...(found ?? [])][0] };
   };
 
-  it('reloads client on Document.md create', () => {
+  it.each(['create', 'update', 'delete'])('invalidates the catalog file on %s of its .md', (type) => {
     const { mod, ctx, run } = setup('client');
-    expect(run('create', docFile)).toEqual([]);
+    expect(run(type, docFile)).toEqual([]);
     expect(ctx.environment.moduleGraph.getModulesByFile).toHaveBeenCalledWith(normalizePath(zukanFile));
     expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(mod);
     expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'full-reload' });
   });
 
-  it.each(['update', 'delete'])('same for %s of Document.md', (type) => {
-    const { ctx, run } = setup('client');
-    expect(run(type, docFile)).toEqual([]);
-    expect(ctx.environment.moduleGraph.invalidateModule).toHaveBeenCalled();
-    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'full-reload' });
+  it('does not throw when the catalog file is not in the module graph', () => {
+    const { ctx, run } = setup('client', null);
+    expect(run('create', docFile)).toEqual([]);
+    expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
   });
 
-  it('reloads on zukan file update', () => {
+  it('reloads on catalog file update', () => {
     const { mod, ctx, run } = setup('client');
     expect(run('update', zukanFile, [mod])).toEqual([]);
     expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(mod);
@@ -124,17 +178,10 @@ describe('hotUpdate', () => {
     expect(ctx.environment.hot.send).not.toHaveBeenCalled();
   });
 
-  it('does not throw when the zukan directory is gone', async () => {
-    const gone = path.join(await mkdtemp(path.join(tmpdir(), 'zukan-')), 'zukan', 'Document.md');
+  it('ignores unrelated files, including the old Document.md', () => {
     const { ctx, run } = setup('client');
-    expect(run('delete', gone)).toEqual([]);
-    expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
-    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'full-reload' });
-  });
-
-  it('ignores unrelated files', () => {
-    const { ctx, run } = setup('client');
-    expect(run('update', path.join(dir, 'zukan', 'Button.svelte'))).toBeUndefined();
+    expect(run('update', path.join(dir, 'Button.svelte'))).toBeUndefined();
+    expect(run('update', path.join(dir, 'zukan', 'Document.md'))).toBeUndefined();
     expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
     expect(ctx.environment.hot.send).not.toHaveBeenCalled();
   });
