@@ -28,3 +28,6 @@ vite.config.ts.timestamp-*
 .vitest-attachments/
 
 .pnpm-store/
+
+# Superpowers (agent workspace)
+/.superpowers/
