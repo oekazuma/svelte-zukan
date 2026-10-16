@@ -13,13 +13,15 @@
     logo,
     wrapper,
     title,
-    locale
+    locale,
+    searched
   }: {
     catalog: Entry[];
     logo: string | null;
     wrapper: (() => Promise<{ default: Component<{ children: Snippet }> }>) | null;
     title: string;
     locale: 'en' | 'ja';
+    searched: { group: string; dirs: string[] }[];
   } = $props();
 
   let hash = $state(location.hash);
@@ -48,11 +50,11 @@
     <Sidebar entries={catalog} current={entry?.path} {logo} {title} {t} />
     <main>
       {#if route.view === 'list'}
-        <List entries={catalog} {t} />
+        <List entries={catalog} {searched} {t} />
       {:else if entry}
         <Detail {entry} {t} />
       {:else}
-        <p>{t.notFound}</p>
+        <h1>{t.notFound}</h1>
       {/if}
     </main>
   </div>
@@ -86,5 +88,10 @@
 
   main {
     padding: 24px;
+  }
+
+  h1 {
+    margin: 0 0 16px;
+    font-size: 24px;
   }
 </style>

@@ -112,6 +112,19 @@ describe('PreviewFrame resizing', () => {
     await expect.poll(() => iframe.style.height).toBe('300px');
   });
 
+  it('shows no width before the stage is measured', async () => {
+    const hidden = document.body.appendChild(document.createElement('div'));
+    hidden.style.display = 'none';
+    const screen = await render(PreviewFrame, { props, target: hidden });
+    const handle = screen.getByRole('separator', { includeHidden: true }).element();
+    expect(hidden.querySelector('output')!.textContent).toBe('');
+    for (const name of ['aria-valuenow', 'aria-valuemin', 'aria-valuemax'])
+      expect(handle.hasAttribute(name)).toBe(false);
+    hidden.style.display = '';
+    await expect.poll(() => handle.getAttribute('aria-valuenow')).not.toBeNull();
+    hidden.remove();
+  });
+
   it('labels come from props', async () => {
     const screen = await render(PreviewFrame, {
       props: { ...props, labels: { previewWidth: 'プレビューの幅', fullWidth: '全幅' } }

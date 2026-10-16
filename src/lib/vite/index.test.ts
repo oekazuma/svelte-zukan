@@ -253,7 +253,7 @@ describe('generateCatalogModule', () => {
 });
 
 describe('generateEntryModule', () => {
-  const base = { appFile: '/lib/app/App.svelte', title: 'zukan', locale: 'en' as const };
+  const base = { appFile: '/lib/app/App.svelte', title: 'zukan', locale: 'en' as const, searched: [] };
 
   it('imports the logo as a URL and the wrapper lazily', () => {
     const code = generateEntryModule({ ...base, logo: '/x/logo.svg', wrapper: '/x/Wrapper.svelte' });
@@ -277,6 +277,12 @@ describe('generateEntryModule', () => {
     expect(code).not.toContain('?url');
     expect(code).toContain('logo: null');
     expect(code).toContain('wrapper: null');
+  });
+
+  it('passes the searched places', () => {
+    const searched = [{ group: 'ui', dirs: ['src', '../outside'] }];
+    const code = generateEntryModule({ ...base, logo: null, wrapper: null, searched });
+    expect(code).toContain('searched: [{"group":"ui","dirs":["src","../outside"]}]');
   });
 });
 
@@ -357,6 +363,15 @@ describe('virtual modules', () => {
     const entry = p.load('\0virtual:svelte-zukan/entry');
     expect(entry).toContain(`import("${bundled('App.svelte')}")`);
     expect(entry).toContain(`import logo from "${bundled('logo.svg')}?url"`);
+    expect(entry).toContain('searched: [{"group":"app","dirs":["src"]}]');
+  });
+
+  it('passes the searched dirs relative to the root', async () => {
+    const { tmp, root } = await makeApp();
+    const { p } = boot(root, { groups: { a: '.', b: ['src', '../outside'] } });
+    const entry = p.load('\0virtual:svelte-zukan/entry');
+    expect(entry).toContain('searched: [{"group":"a","dirs":["."]},{"group":"b","dirs":["src","../outside"]}]');
+    expect(entry).not.toContain(tmp);
   });
 });
 

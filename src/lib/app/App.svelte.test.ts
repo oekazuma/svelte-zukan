@@ -10,7 +10,8 @@ function setup(hash: string) {
   location.hash = hash;
   const wrapper = vi.fn(() => Promise.resolve({ default: Wrapper }));
   const catalog = [{ group: 'ui', name: 'Card', dir: '', path: 'ui/Card', load }];
-  return { wrapper, props: { catalog, logo: null, wrapper, title: 'zukan', locale: 'en' as const } };
+  const searched = [{ group: 'ui', dirs: ['src', '../lib'] }];
+  return { wrapper, props: { catalog, logo: null, wrapper, title: 'zukan', locale: 'en' as 'en' | 'ja', searched } };
 }
 
 afterEach(() => {
@@ -47,7 +48,25 @@ describe('App', () => {
   it('an unknown ID is not found', async () => {
     const { props } = setup('#/ui/Nope');
     const screen = await render(App, { props });
-    await expect.element(screen.getByText('Not found')).toBeInTheDocument();
+    await expect.element(screen.getByRole('heading', { level: 1, name: 'Not found' })).toBeInTheDocument();
+  });
+
+  it('an empty catalog lists the searched places', async () => {
+    const { props } = setup('');
+    props.catalog = [];
+    const screen = await render(App, { props });
+    await expect.element(screen.getByText('No catalog files found. Searched:')).toBeInTheDocument();
+    await expect.element(screen.getByRole('main').getByRole('listitem')).toHaveTextContent('ui: src, ../lib');
+  });
+
+  it('uses the Japanese dictionary', async () => {
+    const { props } = setup('');
+    props.locale = 'ja';
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: 'コンポーネント一覧' })).toBeInTheDocument();
+    await expect.element(screen.getByRole('navigation', { name: 'コンポーネント' })).toBeInTheDocument();
+    location.hash = '#/ui/Nope';
+    await expect.element(screen.getByRole('heading', { level: 1, name: '見つかりません' })).toBeInTheDocument();
   });
 
   it('a load error is shown', async () => {

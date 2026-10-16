@@ -33,3 +33,10 @@
     <p>{t.loadFailed} {error instanceof Error ? error.message : String(error)}</p>
   {/await}
 </div>
+
+<style>
+  /* keeps child margins inside, so the measured height covers them */
+  div {
+    display: flow-root;
+  }
+</style>

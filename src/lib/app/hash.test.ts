@@ -37,6 +37,12 @@ describe('parseHash / formatHash', () => {
     });
   });
 
+  it('round-trips an ID containing ? and #', () => {
+    const path = 'ui/a?b#c/D';
+    expect(parseHash(formatHash('detail', path))).toEqual({ view: 'detail', path });
+    expect(parseHash(formatHash('preview', path, 'x#y'))).toEqual({ view: 'preview', path, section: 'x#y' });
+  });
+
   it('keeps a malformed escape as is', () => {
     expect(parseHash('#/ui/100%')).toEqual({ view: 'detail', path: 'ui/100%' });
   });

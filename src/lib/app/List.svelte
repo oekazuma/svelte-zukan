@@ -3,15 +3,21 @@
   import type { Entry } from '../types.js';
   import type { Messages } from './i18n.js';
 
-  let { entries, t }: { entries: Entry[]; t: Messages } = $props();
+  let { entries, searched, t }: { entries: Entry[]; searched: { group: string; dirs: string[] }[]; t: Messages } =
+    $props();
 </script>
 
 <h1>{t.listHeading}</h1>
 {#if entries.length}
   <EntryList {entries} />
 {:else}
-  <!-- ponytail: the searched groups and dirs are not passed to the app yet, so only the message is shown -->
   <p>{t.empty}</p>
+  <ul>
+    <!-- group names are not guaranteed unique, so key by index -->
+    {#each searched as { group, dirs }, i (i)}
+      <li>{group}: {dirs.join(', ')}</li>
+    {/each}
+  </ul>
 {/if}
 
 <style>

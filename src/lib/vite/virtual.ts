@@ -17,6 +17,8 @@ export function generateEntryModule(opts: {
   wrapper: string | null;
   title: string;
   locale: 'en' | 'ja';
+  /** dirs relative to the Vite root, shown when the catalog is empty */
+  searched: { group: string; dirs: string[] }[];
 }): string {
   const s = JSON.stringify;
   // the listener comes first and the app and the list are imported lazily,
@@ -33,7 +35,8 @@ export function generateEntryModule(opts: {
     `      logo: ${opts.logo ? 'logo' : 'null'},`,
     `      wrapper: ${opts.wrapper ? `() => import(${s(opts.wrapper)})` : 'null'},`,
     `      title: ${s(opts.title)},`,
-    `      locale: ${s(opts.locale)}`,
+    `      locale: ${s(opts.locale)},`,
+    `      searched: ${s(opts.searched)}`,
     `    }`,
     `  })`,
     `);`,

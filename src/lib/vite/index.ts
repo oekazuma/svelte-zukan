@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { marked } from 'marked';
 import { normalizePath, type Plugin } from 'vite';
 import type { CatalogGroup } from '../types.js';
@@ -18,6 +18,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   const { catalogId, isCatalogId, isCatalogFile, isDocFile, docFileOf, catalogFileOf } = createMatchers(
     options.suffix ?? 'zukan'
   );
+  let root = '';
   let groups: CatalogGroup[] = [];
   let resolved: ReturnType<typeof resolveOptions>;
   const scanned = () => groups.flatMap((g) => g.dirs);
@@ -26,7 +27,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     name: 'vite-plugin-svelte-zukan',
     enforce: 'pre',
     config(config) {
-      const root = normalizePath(resolve(config.root ?? process.cwd()));
+      root = normalizePath(resolve(config.root ?? process.cwd()));
       groups = discoverGroups(root, options.groups);
       const allow = extendFsAllow(root, [...scanned(), libDir], config.server?.fs?.allow);
       // mutated rather than returned: returned arrays are concatenated to the user's `allow`
@@ -40,7 +41,14 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     },
     load(id) {
       if (id === '\0' + CATALOG) return generateCatalogModule(listCatalog(groups, resolved.suffix));
-      if (id === '\0' + ENTRY) return generateEntryModule({ appFile: appFile('App.svelte'), ...resolved });
+      if (id === '\0' + ENTRY) {
+        // relative, so that absolute paths do not end up in the static build
+        const searched = groups.map((g) => ({
+          group: g.name,
+          dirs: g.dirs.map((dir) => normalizePath(relative(root, dir)) || '.')
+        }));
+        return generateEntryModule({ appFile: appFile('App.svelte'), ...resolved, searched });
+      }
     },
     configureServer(server) {
       const { root, base, logger } = server.config;
