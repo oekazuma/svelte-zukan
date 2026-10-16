@@ -40,7 +40,8 @@
   "files": [
     "dist",
     "!dist/**/*.test.*",
-    "!dist/**/*.spec.*"
+    "!dist/**/*.spec.*",
+    "!dist/**/zukan/**"
   ],
   "sideEffects": [
     "**/*.css"
@@ -62,6 +63,7 @@
     "#lib/*": "./src/lib/*"
   },
   "peerDependencies": {
+    "@sveltejs/kit": "^3.0.0",
     "svelte": "^5.0.0"
   },
   "dependencies": {
