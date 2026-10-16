@@ -14,5 +14,7 @@
 <div data-zukan-preview>
   {#await entry.load() then mod}
     <mod.default />
+  {:catch error}
+    <p>読み込めませんでした: {error instanceof Error ? error.message : String(error)}</p>
   {/await}
 </div>

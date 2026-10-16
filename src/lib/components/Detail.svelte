@@ -13,23 +13,27 @@
 
 <h1>{entry.name} <Badge label={entry.group} /></h1>
 
-{#await entry.load() then mod}
-  {@const meta = mod.__zukan}
-  {#if !meta}
-    <p>Vite プラグイン <code>zukan()</code> が登録されていません</p>
-  {:else}
-    {#if meta.doc}
-      <!-- the HTML comes from the user's own Document.md, rendered at build time -->
-      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      <div class="doc">{@html meta.doc}</div>
+{#key entry.path}
+  {#await entry.load() then mod}
+    {@const meta = mod.__zukan}
+    {#if !meta}
+      <p>Vite プラグイン <code>zukan()</code> が登録されていません</p>
+    {:else}
+      {#if meta.doc}
+        <!-- the HTML comes from the user's own Document.md, rendered at build time -->
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+        <div class="doc">{@html meta.doc}</div>
+      {/if}
+      {#each meta.sections as section (section.title)}
+        <h2>{section.title}</h2>
+        <PreviewFrame src={previewSrc(section.title)} title={section.title} />
+        <CodeBlock code={section.code} />
+      {/each}
     {/if}
-    {#each meta.sections as section (section.title)}
-      <h2>{section.title}</h2>
-      <PreviewFrame src={previewSrc(section.title)} title={section.title} />
-      <CodeBlock code={section.code} />
-    {/each}
-  {/if}
-{/await}
+  {:catch error}
+    <p>読み込めませんでした: {error instanceof Error ? error.message : String(error)}</p>
+  {/await}
+{/key}
 
 <style>
   h1 {

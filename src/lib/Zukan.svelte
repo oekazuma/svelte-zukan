@@ -24,9 +24,10 @@
   {/if}
 {:else}
   <div class="zukan">
-    <aside><EntryList {entries} {base} current={entry?.path} /></aside>
+    <nav aria-label="コンポーネント"><EntryList {entries} {base} current={entry?.path} /></nav>
     <main>
       {#if path === ''}
+        <h1>コンポーネント一覧</h1>
         <EntryList {entries} {base} />
       {:else if entry}
         <Detail {entry} {base} />
@@ -57,12 +58,17 @@
     font-family: var(--_font);
   }
 
-  aside {
+  nav {
     padding: 16px 8px;
     border-right: 1px solid var(--_border);
   }
 
   main {
     padding: 24px;
+  }
+
+  h1 {
+    margin: 0 0 16px;
+    font-size: 24px;
   }
 </style>
