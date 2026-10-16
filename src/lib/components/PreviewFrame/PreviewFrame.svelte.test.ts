@@ -11,6 +11,7 @@ function frameStyle(container: HTMLElement) {
 describe('PreviewFrame', () => {
   it('preset sets frame width', async () => {
     const screen = await render(PreviewFrame, { props });
+    screen.container.style.width = '1000px';
     await screen.getByRole('button', { name: '768', exact: true }).click();
     expect(frameStyle(screen.container).width).toBe('768px');
     await expect.element(screen.getByText('768px', { exact: true })).toBeInTheDocument();
@@ -22,6 +23,18 @@ describe('PreviewFrame', () => {
     expect(frameStyle(screen.container).width).toBe('375px');
     await screen.getByRole('button', { name: '100%', exact: true }).click();
     expect(frameStyle(screen.container).width).toBe('100%');
+  });
+
+  it('reports the effective width when the stage is narrower than the preset', async () => {
+    const screen = await render(PreviewFrame, { props });
+    screen.container.style.width = '600px';
+    await screen.getByRole('button', { name: '1280', exact: true }).click();
+    expect(frameStyle(screen.container).width).toBe('1280px');
+    await expect.element(screen.getByText('600px', { exact: true })).toBeInTheDocument();
+    await expect.element(screen.getByRole('separator')).toHaveAttribute('aria-valuenow', '600');
+    await expect
+      .element(screen.getByRole('button', { name: '1280', exact: true }))
+      .toHaveAttribute('aria-pressed', 'true');
   });
 
   it('presets are buttons with aria-pressed', async () => {

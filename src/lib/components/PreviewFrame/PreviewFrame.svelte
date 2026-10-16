@@ -18,13 +18,15 @@
   let iframe: HTMLIFrameElement;
   let observer: ResizeObserver | undefined;
 
-  const current = $derived(width ?? stageWidth);
+  // the frame is capped by max-width: 100%, so report the effective width once the stage is measured
+  const current = $derived(stageWidth ? Math.min(width ?? stageWidth, stageWidth) : (width ?? 0));
 
   function clamp(value: number) {
     return Math.min(stageWidth, Math.max(MIN_WIDTH, value));
   }
 
   function onpointerdown(e: PointerEvent) {
+    if (e.button !== 0) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     dragging = true;
     startX = e.clientX;
@@ -162,7 +164,7 @@
   .handle {
     position: absolute;
     top: 0;
-    right: -4px;
+    right: 0;
     bottom: 0;
     width: 8px;
     cursor: ew-resize;

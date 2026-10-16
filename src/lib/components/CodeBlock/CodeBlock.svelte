@@ -64,7 +64,7 @@
 
   pre {
     margin: 0;
-    padding: 10px;
+    padding: 10px 140px 10px 10px;
     overflow-x: auto;
     font-family: var(--_mono);
     font-size: 13px;

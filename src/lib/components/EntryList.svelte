@@ -3,6 +3,9 @@
   import Badge from './Badge/Badge.svelte';
 
   let { entries, base, current }: { entries: Entry[]; base: string; current?: string } = $props();
+
+  // names may contain '#', '?' or '%', so encode each segment
+  const href = (entry: Entry) => `${base}/${entry.path.split('/').map(encodeURIComponent).join('/')}`;
 </script>
 
 <ul>
@@ -10,7 +13,7 @@
     <li>
       <!-- base already includes paths.base (derived from page.url.pathname), so resolve() would double it -->
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-      <a href="{base}/{entry.path}" aria-current={entry.path === current ? 'page' : undefined}>
+      <a href={href(entry)} aria-current={entry.path === current ? 'page' : undefined}>
         <span>{entry.name}</span>
         <Badge label={entry.group} />
       </a>
