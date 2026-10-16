@@ -1,11 +1,12 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { marked } from 'marked';
 import { normalizePath, type Plugin } from 'vite';
 import type { CatalogGroup } from '../types.js';
 import { discoverGroups, listCatalog } from './discover.js';
 import { transformZukan } from './extract.js';
 import { renderHtml } from './html.js';
+import { detectSvelteKit } from './kit.js';
 import { SVELTE_STYLE_ID, createMatchers } from './matchers.js';
 import { appFile, extendFsAllow, isInside, libDir, resolveOptions, type ZukanOptions } from './options.js';
 import { CATALOG, ENTRY, generateCatalogModule, generateEntryModule } from './virtual.js';
@@ -21,20 +22,86 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   let root = '';
   let groups: CatalogGroup[] = [];
   let resolved: ReturnType<typeof resolveOptions>;
+  /** whether the user's config builds every environment (`builder`, or `vite build --app`) */
+  let appBuilder = false;
   const scanned = () => groups.flatMap((g) => g.dirs);
 
   return {
     name: 'vite-plugin-svelte-zukan',
     enforce: 'pre',
-    config(config) {
+    async config(config, { command }) {
       root = normalizePath(resolve(config.root ?? process.cwd()));
+      resolved = resolveOptions(root, options);
       groups = discoverGroups(root, options.groups);
       const allow = extendFsAllow(root, [...scanned(), libDir], config.server?.fs?.allow);
       // mutated rather than returned: returned arrays are concatenated to the user's `allow`
       if (allow) ((config.server ??= {}).fs ??= {}).allow = allow;
+      if (command !== 'build' || !resolved.build) return;
+      appBuilder = !!config.builder;
+
+      // set here, not in configResolved: a define added there does not reach the build
+      const kit = await detectSvelteKit(config.plugins ?? []);
+      return {
+        // without it, a plain `vite build` sets up only the app's environment
+        builder: {},
+        environments: {
+          zukan: {
+            consumer: 'client',
+            // replacements SvelteKit defines only for its client environment, used by `$app/*`
+            ...(kit && {
+              define: {
+                __SVELTEKIT_PAYLOAD__: 'undefined',
+                __SVELTEKIT_HAS_SERVER_LOAD__: 'false',
+                __SVELTEKIT_HAS_UNIVERSAL_LOAD__: 'false'
+              }
+            }),
+            build: {
+              outDir: resolved.build,
+              manifest: false,
+              // only the JS entry, with fixed names: SvelteKit shares `base` and its naming rules with every environment
+              rolldownOptions: {
+                input: { zukan: ENTRY },
+                output: {
+                  entryFileNames: 'assets/[name]-[hash].js',
+                  chunkFileNames: 'assets/[name]-[hash].js',
+                  assetFileNames: 'assets/[name]-[hash][extname]'
+                }
+              }
+            }
+          }
+        }
+      };
     },
-    configResolved(config) {
-      resolved = resolveOptions(config.root, options);
+    buildApp: {
+      // after the other hooks (e.g. SvelteKit's build), so that Vite's fallback below can be reproduced
+      order: 'post',
+      async handler(builder) {
+        const env = builder.environments.zukan;
+        if (!env || !resolved.build) return;
+        // Vite builds the app only when no hook built an environment, and this hook is about to build one
+        const others = Object.values(builder.environments).filter((e) => e !== env);
+        if (others.every((e) => !e.isBuilt)) {
+          // without `builder`, `vite build` builds a single environment
+          const app = appBuilder ? others : [builder.environments[builder.config.build.ssr ? 'ssr' : 'client']!];
+          for (const e of app) await builder.build(e);
+        }
+
+        const out = await builder.build(env);
+        const entry = (Array.isArray(out) ? out : [out])
+          .flatMap((o) => ('output' in o ? o.output : []))
+          .find((c) => c.type === 'chunk' && c.isEntry);
+        if (!entry) throw new Error('svelte-zukan: the catalog entry was not built');
+        const icon = readFileSync(appFile('icon.svg'), 'utf-8');
+        const html = renderHtml({
+          title: resolved.title,
+          locale: resolved.locale,
+          entrySrc: './' + entry.fileName,
+          icon
+        });
+        writeFileSync(join(resolved.build, 'index.html'), html);
+        // SvelteKit's plugins also write _app/version.json here
+        rmSync(join(resolved.build, '_app'), { recursive: true, force: true });
+      }
     },
     resolveId(id) {
       if (id === ENTRY || id === CATALOG) return '\0' + id;

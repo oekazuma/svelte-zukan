@@ -36,7 +36,7 @@ const file = (root: string, key: string, rel: string) => {
 };
 
 export function resolveOptions(root: string, options: ZukanOptions) {
-  const { suffix = 'zukan', locale = 'en', wrapper, logo } = options;
+  const { suffix = 'zukan', locale = 'en', wrapper, logo, build } = options;
   createMatchers(suffix);
   if (!LOCALES.includes(locale))
     throw new Error(`svelte-zukan: unknown locale "${locale}" (use ${LOCALES.map((l) => `"${l}"`).join(' or ')})`);
@@ -47,7 +47,8 @@ export function resolveOptions(root: string, options: ZukanOptions) {
     logo: logo === false ? null : logo === undefined ? appFile('logo.svg') : file(root, 'logo', logo),
     title: options.title ?? 'zukan',
     locale,
-    build: options.build ?? false
+    /** outDir of the static catalog, or false when it is not built */
+    build: build ? normalizePath(resolve(root, (build !== true && build.outDir) || 'zukan-dist')) : (false as const)
   };
 }
 
