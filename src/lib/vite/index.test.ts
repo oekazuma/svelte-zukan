@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { normalizePath } from 'vite';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { isZukanId, zukan } from './index.js';
 
@@ -97,7 +98,7 @@ describe('hotUpdate', () => {
   it('reloads client on Document.md create', () => {
     const { mod, ctx, run } = setup('client');
     expect(run('create', docFile)).toEqual([]);
-    expect(ctx.environment.moduleGraph.getModulesByFile).toHaveBeenCalledWith(zukanFile);
+    expect(ctx.environment.moduleGraph.getModulesByFile).toHaveBeenCalledWith(normalizePath(zukanFile));
     expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(mod);
     expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'full-reload' });
   });
@@ -121,6 +122,14 @@ describe('hotUpdate', () => {
     run('update', docFile);
     expect(ctx.environment.moduleGraph.invalidateModule).toHaveBeenCalled();
     expect(ctx.environment.hot.send).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when the zukan directory is gone', async () => {
+    const gone = path.join(await mkdtemp(path.join(tmpdir(), 'zukan-')), 'zukan', 'Document.md');
+    const { ctx, run } = setup('client');
+    expect(run('delete', gone)).toEqual([]);
+    expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
+    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'full-reload' });
   });
 
   it('ignores unrelated files', () => {

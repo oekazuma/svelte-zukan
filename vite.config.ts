@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-static';
@@ -8,11 +9,14 @@ import { zukan } from './src/lib/vite/index.js';
 export default defineConfig(({ command }) => ({
   // the DevTools server keeps the process alive, so `vite build` would never exit
   devtools: command === 'serve',
+  resolve: {
+    // exact match so that `svelte-zukan/vite` is not captured
+    alias: [{ find: /^svelte-zukan$/, replacement: fileURLToPath(new URL('./src/lib/index.ts', import.meta.url)) }]
+  },
   plugins: [
     Inspect(),
     zukan(),
     sveltekit({
-      alias: { 'svelte-zukan': './src/lib/index.ts' },
       compilerOptions: {
         // Force runes mode for the project, except for libraries. Can be removed in svelte 6.
         runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true)

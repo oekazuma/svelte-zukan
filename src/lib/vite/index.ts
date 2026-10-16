@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { marked } from 'marked';
-import type { Plugin } from 'vite';
+import { normalizePath, type Plugin } from 'vite';
 import { transformZukan } from './extract.js';
 
 const ZUKAN_ID = /^[^?#]+\.zukan\.svelte(?:[?#]|$)/;
@@ -35,9 +35,10 @@ export function zukan(): Plugin {
       let targets: Iterable<(typeof modules)[number]>;
       if (isDocument(file)) {
         const dir = path.dirname(file);
-        targets = readdirSync(dir)
+        // the whole directory may be gone (Document.md delete); the module graph is keyed by normalized paths
+        targets = (existsSync(dir) ? readdirSync(dir) : [])
           .filter((name) => name.endsWith('.zukan.svelte'))
-          .flatMap((name) => [...(moduleGraph.getModulesByFile(path.join(dir, name)) ?? [])]);
+          .flatMap((name) => [...(moduleGraph.getModulesByFile(normalizePath(path.join(dir, name))) ?? [])]);
       } else if (type === 'update' && file.endsWith('.zukan.svelte')) {
         targets = modules;
       } else return;

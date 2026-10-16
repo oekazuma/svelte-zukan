@@ -2,6 +2,7 @@
   "extends": "$app/tsconfig",
   "compilerOptions": {
     "strict": true,
+    "paths": { "svelte-zukan": ["./src/lib/index.ts"] },
     "types": ["$app/types", "node"]
   },
   "include": ["src", "vite.config.ts"]
