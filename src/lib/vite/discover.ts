@@ -2,7 +2,7 @@ import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'node
 import { basename, join, resolve } from 'node:path';
 import { normalizePath } from 'vite';
 import type { CatalogGroup, CatalogItem } from '../types.js';
-import { createMatchers } from './index.js';
+import { createMatchers } from './matchers.js';
 
 export type { CatalogGroup, CatalogItem };
 
@@ -17,7 +17,12 @@ const isDir = (p: string) => existsSync(p) && statSync(p).isDirectory();
 
 const readPackage = (dir: string): { name?: string; dependencies?: object; devDependencies?: object } => {
   const file = join(dir, 'package.json');
-  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf-8')) : {};
+  if (!existsSync(file)) return {};
+  try {
+    return JSON.parse(readFileSync(file, 'utf-8'));
+  } catch (e) {
+    throw new Error(`svelte-zukan: failed to parse ${normalizePath(file)}: ${(e as Error).message}`, { cause: e });
+  }
 };
 
 export function discoverGroups(root: string, groups?: Record<string, string | string[]>): CatalogGroup[] {
@@ -25,27 +30,30 @@ export function discoverGroups(root: string, groups?: Record<string, string | st
   if (groups) {
     return Object.entries(groups).map(([name, dirs]) => {
       checkGroupName(name);
-      return {
-        name,
-        dirs: [dirs].flat().map((d) => {
-          const abs = resolve(root, d);
-          if (!isDir(abs))
-            throw new Error(`svelte-zukan: directory not found for group "${name}": ${normalizePath(abs)}`);
-          return normalizePath(abs);
-        })
-      };
+      const seen = new Map<string, string>();
+      for (const d of [dirs].flat()) {
+        const abs = resolve(root, d);
+        if (!isDir(abs))
+          throw new Error(`svelte-zukan: directory not found for group "${name}": ${normalizePath(abs)}`);
+        const real = realpathSync(abs);
+        if (!seen.has(real)) seen.set(real, normalizePath(abs));
+      }
+      return { name, dirs: [...seen.values()] };
     });
   }
 
   const pkg = readPackage(root);
   const found: { name: string; dir: string }[] = [{ name: pkg.name ?? basename(root), dir: root }];
+  // several names may link to one package, or back to the app itself
+  const scanned = new Set([realpathSync(root)]);
   const deps = [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.devDependencies ?? {})];
   for (const dep of new Set(deps)) {
     const link = join(root, 'node_modules', dep);
     if (!existsSync(link)) continue;
     const real = realpathSync(link);
     // installed packages live under node_modules; only workspace links resolve outside of it
-    if (real.split(/[/\\]/).includes('node_modules')) continue;
+    if (real.split(/[/\\]/).includes('node_modules') || scanned.has(real)) continue;
+    scanned.add(real);
     found.push({ name: readPackage(real).name ?? basename(real), dir: real });
   }
   return found.flatMap(({ name, dir }) => {

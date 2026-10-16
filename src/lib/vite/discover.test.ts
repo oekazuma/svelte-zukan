@@ -75,6 +75,25 @@ describe('discoverGroups', () => {
     expect(names(discoverGroups(join(tmp, 'app')))).toEqual(['app', 'dep', 'dev']);
   });
 
+  it('scans a directory once even when several links point to it', () => {
+    pkg('app', { name: 'app', dependencies: { ui: 'workspace:*', 'ui-alias': 'workspace:*', self: 'link:.' } });
+    pkg('ui', { name: 'ui' });
+    write('app/src/a.zukan.svelte');
+    write('ui/src/b.zukan.svelte');
+    mkdirSync(join(tmp, 'app/node_modules'), { recursive: true });
+    symlinkSync(join(tmp, 'ui'), join(tmp, 'app/node_modules/ui'), 'dir');
+    symlinkSync(join(tmp, 'ui'), join(tmp, 'app/node_modules/ui-alias'), 'dir');
+    symlinkSync(join(tmp, 'app'), join(tmp, 'app/node_modules/self'), 'dir');
+    expect(names(discoverGroups(join(tmp, 'app')))).toEqual(['app', 'ui']);
+    expect(paths(join(tmp, 'app'))).toEqual(['app/a', 'ui/b']);
+    expect(discoverGroups(join(tmp, 'app'), { x: ['src', './src/'] })).toEqual([{ name: 'x', dirs: [p('app/src')] }]);
+  });
+
+  it('names the package.json that fails to parse', () => {
+    write('app/package.json', '{ nope');
+    expect(() => discoverGroups(join(tmp, 'app'))).toThrow(p('app/package.json'));
+  });
+
   it('groups option', () => {
     pkg('app', { name: 'app', dependencies: { x: 'workspace:*' } });
     write('app/src/a.zukan.svelte');

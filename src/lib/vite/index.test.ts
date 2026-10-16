@@ -1,9 +1,13 @@
+import { mkdirSync, realpathSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { normalizePath } from 'vite';
+import { fileURLToPath } from 'node:url';
+import { normalizePath, searchForWorkspaceRoot } from 'vite';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { createMatchers, escapeRegExp, zukan } from './index.js';
+import { extendFsAllow, generateCatalogModule, generateEntryModule, zukan } from './index.js';
+import { createMatchers, escapeRegExp } from './matchers.js';
+import { resolveOptions } from './options.js';
 
 // hooks are called with hand-made fakes, so the plugin is typed loosely
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -163,7 +167,8 @@ describe('hotUpdate', () => {
     expect(run(type, docFile)).toEqual([]);
     expect(ctx.environment.moduleGraph.getModulesByFile).toHaveBeenCalledWith(normalizePath(zukanFile));
     expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(mod);
-    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'full-reload' });
+    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
+    expect(ctx.environment.hot.send).not.toHaveBeenCalledWith({ type: 'full-reload' });
   });
 
   it('does not throw when the catalog file is not in the module graph', () => {
@@ -176,7 +181,7 @@ describe('hotUpdate', () => {
     const { mod, ctx, run } = setup('client');
     expect(run('update', zukanFile, [mod])).toEqual([]);
     expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(mod);
-    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'full-reload' });
+    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
   });
 
   it('server environment invalidates without sending', () => {
@@ -190,6 +195,244 @@ describe('hotUpdate', () => {
     const { ctx, run } = setup('client');
     expect(run('update', path.join(dir, 'Button.svelte'))).toBeUndefined();
     expect(run('update', path.join(dir, 'zukan', 'Document.md'))).toBeUndefined();
+    expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
+    expect(ctx.environment.hot.send).not.toHaveBeenCalled();
+  });
+});
+
+// a temporary app: <tmp>/app/src/A.zukan.svelte, <tmp>/outside/B.zukan.svelte
+const makeApp = async () => {
+  const tmp = realpathSync(await mkdtemp(path.join(tmpdir(), 'zukan-app-')));
+  const root = normalizePath(path.join(tmp, 'app'));
+  const outside = normalizePath(path.join(tmp, 'outside'));
+  mkdirSync(path.join(root, 'src'), { recursive: true });
+  mkdirSync(outside);
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'app' }));
+  await writeFile(path.join(root, 'src/A.zukan.svelte'), source);
+  await writeFile(path.join(outside, 'B.zukan.svelte'), source);
+  await writeFile(path.join(root, 'Wrapper.svelte'), '');
+  await writeFile(path.join(root, 'logo.png'), '');
+  return { root, outside };
+};
+
+// runs the hooks Vite calls before the server starts
+const boot = (root: string, options: Parameters<typeof zukan>[0] = {}) => {
+  const p = zukan(options) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const config: { root: string; server?: { fs?: { allow?: string[] } } } = { root };
+  p.config(config, { command: 'serve', mode: 'development' });
+  p.configResolved({ root });
+  return { p, config };
+};
+
+const fakeServer = (root: string, base = '/') => ({
+  config: { root, base, logger: { info: vi.fn() } },
+  middlewares: { use: vi.fn() },
+  watcher: { add: vi.fn() },
+  transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
+  printUrls: vi.fn(),
+  resolvedUrls: null as null | { local: string[]; network: string[] }
+});
+
+const bundled = (file: string) => normalizePath(fileURLToPath(new URL(`../app/${file}`, import.meta.url)));
+
+describe('generateCatalogModule', () => {
+  it('lists items with lazy imports', () => {
+    const code = generateCatalogModule([
+      { group: '@acme/ui', name: 'Card', dir: 'lib', path: '@acme/ui/lib/Card', file: '/abs/Card.zukan.svelte' }
+    ]);
+    expect(code).toContain('import("/abs/Card.zukan.svelte")');
+    expect(code).toContain('"path":"@acme/ui/lib/Card"');
+    expect(code).toContain('export const catalog');
+  });
+});
+
+describe('generateEntryModule', () => {
+  const base = { appFile: '/lib/app/App.svelte', title: 'zukan', locale: 'en' as const };
+
+  it('imports the logo as a URL and the wrapper lazily', () => {
+    const code = generateEntryModule({ ...base, logo: '/x/logo.svg', wrapper: '/x/Wrapper.svelte' });
+    expect(code).toContain('import App from "/lib/app/App.svelte"');
+    expect(code).toContain('from "virtual:svelte-zukan/catalog"');
+    expect(code).toContain('import logo from "/x/logo.svg?url"');
+    expect(code).toContain('wrapper: () => import("/x/Wrapper.svelte")');
+  });
+
+  it('passes null without a logo or a wrapper', () => {
+    const code = generateEntryModule({ ...base, logo: null, wrapper: null });
+    expect(code).not.toContain('?url');
+    expect(code).toContain('logo: null');
+    expect(code).toContain('wrapper: null');
+  });
+});
+
+describe('resolveOptions', () => {
+  it('fills in defaults', async () => {
+    const { root } = await makeApp();
+    expect(resolveOptions(root, {})).toEqual({
+      suffix: 'zukan',
+      groups: undefined,
+      wrapper: null,
+      logo: bundled('logo.svg'),
+      title: 'zukan',
+      locale: 'en',
+      build: false
+    });
+  });
+
+  it('resolves files from the root, and logo: false hides the logo', async () => {
+    const { root } = await makeApp();
+    expect(resolveOptions(root, { wrapper: 'Wrapper.svelte', logo: './logo.png' })).toMatchObject({
+      wrapper: `${root}/Wrapper.svelte`,
+      logo: `${root}/logo.png`
+    });
+    expect(resolveOptions(root, { logo: false }).logo).toBeNull();
+  });
+
+  it('rejects bad values', async () => {
+    const { root } = await makeApp();
+    // @ts-expect-error unknown locale
+    expect(() => resolveOptions(root, { locale: 'fr' })).toThrow(/locale "fr"/);
+    expect(() => resolveOptions(root, { suffix: 'a.b' })).toThrow(/suffix/);
+    expect(() => resolveOptions(root, { wrapper: 'Nope.svelte' })).toThrow(`wrapper not found: ${root}/Nope.svelte`);
+    expect(() => resolveOptions(root, { logo: 'nope.svg' })).toThrow(`logo not found: ${root}/nope.svg`);
+  });
+});
+
+describe('extendFsAllow', () => {
+  it('leaves allow alone when every dir is inside the workspace', async () => {
+    const { root } = await makeApp();
+    expect(extendFsAllow(root, [`${root}/src`], ['/x'])).toBeUndefined();
+  });
+
+  it('adds the workspace root, the existing allow and the outside dirs', async () => {
+    const { root, outside } = await makeApp();
+    const ws = searchForWorkspaceRoot(root);
+    expect(extendFsAllow(root, [`${root}/src`, outside], ['/x'])).toEqual([ws, '/x', outside]);
+    expect(extendFsAllow(root, [outside], undefined)).toEqual([ws, outside]);
+  });
+
+  it('is applied in the config hook', async () => {
+    const { root, outside } = await makeApp();
+    expect(boot(root).config.server).toBeUndefined();
+    const { config } = boot(root, { groups: { a: 'src', b: '../outside' } });
+    expect(config.server?.fs?.allow).toEqual([searchForWorkspaceRoot(root), outside]);
+  });
+});
+
+describe('virtual modules', () => {
+  it('resolves and loads the entry and the catalog', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    expect(p.resolveId('virtual:svelte-zukan/entry')).toBe('\0virtual:svelte-zukan/entry');
+    expect(p.resolveId('virtual:svelte-zukan/catalog')).toBe('\0virtual:svelte-zukan/catalog');
+    expect(p.resolveId('virtual:svelte-zukan/other')).toBeUndefined();
+    expect(p.load('\0virtual:svelte-zukan/catalog')).toContain(`import("${root}/src/A.zukan.svelte")`);
+    const entry = p.load('\0virtual:svelte-zukan/entry');
+    expect(entry).toContain(`import App from "${bundled('App.svelte')}"`);
+    expect(entry).toContain(`import logo from "${bundled('logo.svg')}?url"`);
+  });
+});
+
+describe('configureServer', () => {
+  type Res = { status?: string; body?: string; type?: string };
+  const request = (mw: (...a: unknown[]) => void, url: string) =>
+    new Promise<Res>((resolve) => {
+      const out: Res = {};
+      const res = {
+        setHeader: (k: string, v: string) => k.toLowerCase() === 'content-type' && (out.type = v),
+        end: (body: string) => resolve({ ...out, body })
+      };
+      mw({ url }, res, () => resolve({ status: 'next' }));
+    });
+
+  it('serves the catalog HTML at /__zukan/', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root, { title: 'My UI', locale: 'ja' });
+    const server = fakeServer(root);
+    p.configureServer(server);
+    const mw = server.middlewares.use.mock.calls[0][0];
+    for (const url of ['/__zukan/', '/__zukan/?x']) {
+      const res = await request(mw, url);
+      expect(res.type).toMatch(/^text\/html/);
+      expect(res.body).toContain('<html lang="ja">');
+      expect(res.body).toContain('<title>My UI</title>');
+      expect(res.body).toContain('src="/@id/__x00__virtual:svelte-zukan/entry"');
+    }
+    expect(server.transformIndexHtml).toHaveBeenCalledWith('/__zukan/', expect.any(String));
+    for (const url of ['/', '/__zukanx', '/__zukan/x']) expect(await request(mw, url)).toEqual({ status: 'next' });
+  });
+
+  it('follows base', async () => {
+    const { root } = await makeApp();
+    const server = fakeServer(root, '/app/');
+    boot(root).p.configureServer(server);
+    const mw = server.middlewares.use.mock.calls[0][0];
+    expect((await request(mw, '/app/__zukan/')).body).toContain('<html');
+    expect(await request(mw, '/__zukan/')).toEqual({ status: 'next' });
+  });
+
+  it('watches only the dirs outside the root', async () => {
+    const { root, outside } = await makeApp();
+    const server = fakeServer(root);
+    boot(root, { groups: { a: 'src', b: '../outside' } }).p.configureServer(server);
+    expect(server.watcher.add).toHaveBeenCalledTimes(1);
+    expect(server.watcher.add).toHaveBeenCalledWith([outside]);
+  });
+
+  it('prints the catalog URL after the server URLs', async () => {
+    const { root } = await makeApp();
+    const server = fakeServer(root, '/app/');
+    const original = server.printUrls;
+    boot(root).p.configureServer(server);
+    server.resolvedUrls = { local: ['http://localhost:5173/app/'], network: [] };
+    server.printUrls();
+    expect(original).toHaveBeenCalled();
+    expect(server.config.logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('http://localhost:5173/app/__zukan/')
+    );
+  });
+});
+
+describe('hotUpdate of the catalog list', () => {
+  const setup = async (consumer: 'client' | 'server' = 'client') => {
+    const { root, outside } = await makeApp();
+    const { p } = boot(root);
+    const catalogMod = { id: '\0virtual:svelte-zukan/catalog' };
+    const ctx = {
+      environment: {
+        config: { consumer },
+        hot: { send: vi.fn() },
+        moduleGraph: {
+          getModuleById: vi.fn((id: string) => (id === catalogMod.id ? catalogMod : undefined)),
+          getModulesByFile: vi.fn(() => undefined),
+          invalidateModule: vi.fn()
+        }
+      }
+    };
+    const run = (type: string, file: string) => p.hotUpdate.call(ctx, { type, file, modules: [], timestamp: 1 });
+    return { root, outside, ctx, run, catalogMod };
+  };
+
+  it.each(['create', 'delete'])('invalidates the list on %s inside a scanned dir', async (type) => {
+    const { root, ctx, run, catalogMod } = await setup();
+    expect(run(type, `${root}/src/lib/New.zukan.svelte`)).toEqual([]);
+    expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(catalogMod);
+    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
+    expect(ctx.environment.hot.send).not.toHaveBeenCalledWith({ type: 'full-reload' });
+  });
+
+  it('server environment invalidates without sending', async () => {
+    const { root, ctx, run } = await setup('server');
+    run('create', `${root}/src/New.zukan.svelte`);
+    expect(ctx.environment.moduleGraph.invalidateModule).toHaveBeenCalled();
+    expect(ctx.environment.hot.send).not.toHaveBeenCalled();
+  });
+
+  it('ignores files created outside the scanned dirs', async () => {
+    const { root, outside, ctx, run } = await setup();
+    expect(run('create', `${outside}/New.zukan.svelte`)).toBeUndefined();
+    expect(run('create', `${root}/New.zukan.svelte`)).toBeUndefined();
+    expect(run('create', `${root}/src-other/New.zukan.svelte`)).toBeUndefined();
     expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
     expect(ctx.environment.hot.send).not.toHaveBeenCalled();
   });
