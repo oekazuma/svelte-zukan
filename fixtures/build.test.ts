@@ -14,7 +14,7 @@ const build = (dir: string) => {
   for (const out of ['zukan-dist', 'build', 'dist', '.svelte-kit'])
     rmSync(join(dir, out), { recursive: true, force: true });
   const r = spawnSync(process.execPath, [vite, 'build'], { cwd: dir, env, encoding: 'utf8', timeout: 110_000 });
-  expect(r.status, r.stderr || r.error?.message).toBe(0);
+  expect(r.status, [r.error?.message, r.stderr, r.stdout?.slice(-4000)].filter(Boolean).join('\n')).toBe(0);
 };
 
 /** the IDs (and group names) missing from the built catalog; the minifier picks the quotes */

@@ -7,6 +7,7 @@ const repo = resolve(here, '../..');
 
 // `svelte-zukan` is linked but not declared in the catalog app's package.json:
 // declared, the link would look like a workspace package and the repo's own `src` would be scanned as a group
+// the links point at the repo root: never run a link-following recursive delete on fixtures/**/node_modules
 const links = [
   ['apps/catalog/node_modules/@fixture/ui', resolve(here, 'packages/ui')],
   ['apps/catalog/node_modules/svelte-zukan', repo],
