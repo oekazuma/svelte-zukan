@@ -11,7 +11,10 @@ export function buildEntries(groups: Groups): Entry[] {
     const seen = new Map<string, string>();
     const groupEntries: Entry[] = [];
     for (const [file, load] of Object.entries(files)) {
-      const name = file.slice(file.lastIndexOf('/') + 1).slice(0, -SUFFIX.length);
+      if (!file.endsWith(SUFFIX)) {
+        throw new Error(`Unexpected zukan file '${file}': must end with '${SUFFIX}'`);
+      }
+      const name = file.slice(file.lastIndexOf('/') + 1, -SUFFIX.length);
       const other = seen.get(name);
       if (other) {
         throw new Error(`Duplicate zukan name '${name}' in group '${group}': ${other} and ${file}`);
@@ -35,6 +38,7 @@ export function zukanEntries(groups: Groups): { path: string }[] {
 }
 
 export function resolveBase(pathname: string, path: string): string {
-  const trimmed = pathname.replace(/\/+$/, '');
-  return path && trimmed.endsWith(`/${path}`) ? trimmed.slice(0, -(path.length + 1)) : trimmed;
+  // pathname stays percent-encoded while path is decoded, so compare segment counts, not strings
+  const segments = pathname.replace(/\/+$/, '').split('/');
+  return segments.slice(0, segments.length - (path ? path.split('/').length : 0)).join('/');
 }

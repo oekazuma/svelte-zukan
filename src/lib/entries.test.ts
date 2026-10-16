@@ -23,6 +23,10 @@ describe('buildEntries', () => {
     expect(() => buildEntries({ g: { [a]: loader, [b]: loader } })).toThrow(new RegExp(`${a}[\\s\\S]*${b}`));
   });
 
+  it('throws on a key without the .zukan.svelte suffix', () => {
+    expect(() => buildEntries({ g: { '/x/A.svelte': loader } })).toThrow(/\/x\/A\.svelte/);
+  });
+
   it('same name in different groups is allowed', () => {
     const entries = buildEntries({
       g: { '/x/A/zukan/A.zukan.svelte': loader },
@@ -50,7 +54,9 @@ describe('resolveBase', () => {
     ['/app/zukan', '', '/app/zukan'],
     ['/zukan/', '', '/zukan'],
     ['/', '', ''],
-    ['/zukan/preview/a/B', 'preview/a/B', '/zukan']
+    ['/zukan/preview/a/B', 'preview/a/B', '/zukan'],
+    ['/zukan/components/%E3%83%9C%E3%82%BF%E3%83%B3', 'components/ボタン', '/zukan'],
+    ['/zukan/ui/My%20Button', 'ui/My Button', '/zukan']
   ])('%s + %s -> %s', (pathname, path, expected) => {
     expect(resolveBase(pathname, path)).toBe(expected);
   });
