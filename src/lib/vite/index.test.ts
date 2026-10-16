@@ -10,7 +10,7 @@ import { zukan } from './index.js';
 import { detectSvelteKit } from './kit.js';
 import { createMatchers, escapeRegExp } from './matchers.js';
 import { extendFsAllow, libDir, resolveOptions } from './options.js';
-import { generateCatalogModule, generateEntryModule } from './virtual.js';
+import { ENTRY, generateCatalogModule, generateEntryModule } from './virtual.js';
 
 // hooks are called with hand-made fakes, so the plugin is typed loosely
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -226,15 +226,17 @@ const boot = (root: string, options: Parameters<typeof zukan>[0] = {}, allow?: s
     root,
     ...(allow && { server: { fs: { allow } } })
   };
-  p.config(config, { command: 'serve', mode: 'development' });
+  p.config.handler(config, { command: 'serve', mode: 'development' });
   return { p, config };
 };
 
 // runs the config hook of `vite build` and returns what it adds
 const bootBuild = async (root: string, options: Parameters<typeof zukan>[0] = {}, user: object = {}) => {
   const p = zukan(options) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const added = await p.config({ root, ...user }, { command: 'build', mode: 'production' });
-  return { p, added };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const config: any = { root, ...user };
+  const added = await p.config.handler(config, { command: 'build', mode: 'production' });
+  return { p, added, config };
 };
 
 const fakeServer = (root: string, base = '/') => ({
@@ -525,12 +527,21 @@ describe('build', () => {
     expect(resolveOptions(root, { build: { outDir: 'out/catalog' } }).build).toBe(`${root}/out/catalog`);
   });
 
-  it('adds nothing when disabled or when serving', async () => {
+  it('runs the config hook after the other plugins', () => {
+    // so that a `builder` or a `renderBuiltUrl` set by another plugin is seen
+    expect(plugin.config.order).toBe('post');
+  });
+
+  it('adds nothing when disabled, when serving or on an SSR build', async () => {
     const { root } = await makeApp();
     expect((await bootBuild(root)).added).toBeUndefined();
     expect((await bootBuild(root, { build: false })).added).toBeUndefined();
+    // step 2 of Vite's SSR build: `vite build --ssr src/entry-server.ts`
+    const ssr = await bootBuild(root, { build: true }, { build: { ssr: 'src/entry-server.ts' } });
+    expect(ssr.added).toBeUndefined();
+    expect(ssr.config).not.toHaveProperty('experimental');
     const p = zukan({ build: true }) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    expect(await p.config({ root }, { command: 'serve', mode: 'development' })).toBeUndefined();
+    expect(await p.config.handler({ root }, { command: 'serve', mode: 'development' })).toBeUndefined();
   });
 
   it('adds the zukan environment', async () => {
@@ -543,12 +554,13 @@ describe('build', () => {
       build: {
         outDir: `${root}/out/catalog`,
         manifest: false,
+        copyPublicDir: false,
         rolldownOptions: {
           input: { zukan: 'virtual:svelte-zukan/entry' },
           output: {
-            entryFileNames: 'assets/[name]-[hash].js',
-            chunkFileNames: 'assets/[name]-[hash].js',
-            assetFileNames: 'assets/[name]-[hash][extname]'
+            entryFileNames: '_zukan/[name]-[hash].js',
+            chunkFileNames: '_zukan/[name]-[hash].js',
+            assetFileNames: '_zukan/[name]-[hash][extname]'
           }
         }
       }
@@ -569,17 +581,53 @@ describe('build', () => {
     expect(plain.added.environments.zukan).not.toHaveProperty('define');
   });
 
+  it('keeps the app build settings out of the zukan environment', async () => {
+    const { root } = await makeApp();
+    const { p } = await bootBuild(root, { build: true });
+    const inherited = () => ({
+      build: {
+        ssr: 'src/entry-server.ts',
+        lib: { entry: 'src/index.ts' },
+        rolldownOptions: { input: { main: 'index.html', nested: 'nested/index.html', zukan: ENTRY } }
+      }
+    });
+    const env = inherited();
+    p.configEnvironment('zukan', env);
+    expect(env.build).toEqual({ ssr: false, lib: false, rolldownOptions: { input: { zukan: ENTRY } } });
+    const client = inherited();
+    p.configEnvironment('client', client);
+    expect(client).toEqual(inherited());
+  });
+
+  it('makes the URLs of the catalog files relative, and leaves the others to the existing renderBuiltUrl', async () => {
+    const { root } = await makeApp();
+    const ctx = { hostId: 'assets/index.js', hostType: 'js', type: 'asset', ssr: false };
+    const own = vi.fn(() => 'https://cdn.example/x.js');
+    const { config } = await bootBuild(root, { build: true }, { experimental: { renderBuiltUrl: own } });
+    const render = config.experimental.renderBuiltUrl;
+    expect(render('_zukan/App-1.js', { ...ctx, hostId: '_zukan/zukan-1.js' })).toEqual({ relative: true });
+    expect(render('_zukan/App-1.css', ctx)).toEqual({ relative: true });
+    expect(own).not.toHaveBeenCalled();
+    expect(render('assets/index-1.js', ctx)).toBe('https://cdn.example/x.js');
+    expect(own).toHaveBeenCalledWith('assets/index-1.js', ctx);
+    // without one, the app's files get Vite's default
+    const plain = await bootBuild(root, { build: true });
+    expect(plain.config.experimental.renderBuiltUrl('assets/index-1.js', ctx)).toBeUndefined();
+  });
+
   type Env = { isBuilt: boolean };
-  const fakeBuilder = (fileName: string, others: Record<string, Env>, { array = false, ssr = false } = {}) => {
+  const fakeBuilder = (fileName: string, others: Record<string, Env>, { array = false, watch = false } = {}) => {
     const zukanEnv = { isBuilt: false };
     const output = {
       output: [
-        { type: 'chunk', isEntry: false, fileName: 'assets/App-1.js' },
-        { type: 'chunk', isEntry: true, fileName }
+        // an entry of the app's own input that leaked in would also be an entry
+        { type: 'chunk', isEntry: true, name: 'main', fileName: '_zukan/main-1.js' },
+        { type: 'chunk', isEntry: false, name: 'App', fileName: '_zukan/App-1.js' },
+        { type: 'chunk', isEntry: true, name: 'zukan', fileName }
       ]
     };
     const builder = {
-      config: { build: { ssr } },
+      config: { build: { watch: watch ? {} : null }, logger: { warn: vi.fn() } },
       environments: { zukan: zukanEnv, ...others } as Record<string, Env>,
       build: vi.fn(async (env: Env) => {
         env.isBuilt = true;
@@ -593,10 +641,12 @@ describe('build', () => {
     expect(plugin.buildApp.order).toBe('post');
   });
 
-  it('does nothing when disabled', async () => {
-    const { builder } = fakeBuilder('assets/zukan-abc.js', {});
+  it('builds nothing when disabled', async () => {
+    const { root } = await makeApp();
+    const { p } = await bootBuild(root, { build: false });
+    const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: false } });
     delete builder.environments.zukan;
-    await plugin.buildApp.handler(builder);
+    await p.buildApp.handler(builder);
     expect(builder.build).not.toHaveBeenCalled();
   });
 
@@ -606,31 +656,53 @@ describe('build', () => {
     mkdirSync(`${outDir}/_app`, { recursive: true });
     await writeFile(`${outDir}/_app/version.json`, '{}');
     const { p } = await bootBuild(root, { build: true, title: 'My UI', locale: 'ja' });
-    const { builder, zukanEnv } = fakeBuilder('assets/zukan-abc.js', { client: { isBuilt: true } }, { array });
+    const { builder, zukanEnv } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } }, { array });
     await p.buildApp.handler(builder);
     expect(builder.build).toHaveBeenCalledTimes(1);
     expect(builder.build).toHaveBeenCalledWith(zukanEnv);
     const html = readFileSync(`${outDir}/index.html`, 'utf-8');
-    expect(html).toContain('<script type="module" src="./assets/zukan-abc.js"></script>');
+    expect(html).toContain('<script type="module" src="./_zukan/zukan-abc.js"></script>');
     expect(html).toContain('<html lang="ja">');
     expect(html).toContain('<title>My UI</title>');
     expect(existsSync(`${outDir}/_app`)).toBe(false);
   });
 
+  it('removes only version.json from _app when other files are there', async () => {
+    const { root } = await makeApp();
+    const outDir = `${root}/zukan-dist`;
+    mkdirSync(`${outDir}/_app/immutable/workers`, { recursive: true });
+    await writeFile(`${outDir}/_app/version.json`, '{}');
+    await writeFile(`${outDir}/_app/immutable/workers/w.js`, '');
+    const { p } = await bootBuild(root, { build: true });
+    const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
+    await p.buildApp.handler(builder);
+    expect(existsSync(`${outDir}/_app/version.json`)).toBe(false);
+    expect(existsSync(`${outDir}/_app/immutable/workers/w.js`)).toBe(true);
+  });
+
+  it('skips the catalog with a warning in watch mode', async () => {
+    const { root } = await makeApp();
+    const { p } = await bootBuild(root, { build: true });
+    const client = { isBuilt: false };
+    const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client }, { watch: true });
+    await p.buildApp.handler(builder);
+    expect(builder.build.mock.calls.map(([env]) => env)).toEqual([client]);
+    expect(builder.config.logger.warn).toHaveBeenCalledWith(expect.stringMatching(/svelte-zukan: .*watch/));
+  });
+
   // Vite builds the app only when no buildApp hook built an environment
   it.each([
-    ['client', {}, false],
-    ['ssr', {}, true],
-    ['every', { builder: {} }, false]
-  ] as const)('builds the %s environment of the app first when no other hook did', async (which, user, ssr) => {
+    ['client', {}],
+    ['every', { builder: {} }]
+  ] as const)('builds the %s environment of the app first when no other hook did', async (which, user) => {
     const { root } = await makeApp();
     mkdirSync(`${root}/zukan-dist`);
     const { p } = await bootBuild(root, { build: true }, user);
     const client = { isBuilt: false };
     const server = { isBuilt: false };
-    const { builder, zukanEnv } = fakeBuilder('assets/zukan-abc.js', { client, ssr: server }, { ssr });
+    const { builder, zukanEnv } = fakeBuilder('_zukan/zukan-abc.js', { client, ssr: server });
     await p.buildApp.handler(builder);
-    const app = { client: [client], ssr: [server], every: [client, server] }[which];
+    const app = { client: [client], every: [client, server] }[which];
     expect(builder.build.mock.calls.map(([env]) => env)).toEqual([...app, zukanEnv]);
   });
 });

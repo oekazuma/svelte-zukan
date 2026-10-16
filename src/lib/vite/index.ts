@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { marked } from 'marked';
 import { normalizePath, type Plugin } from 'vite';
@@ -14,6 +14,8 @@ import { CATALOG, ENTRY, generateCatalogModule, generateEntryModule } from './vi
 export type { ZukanOptions };
 
 const ENTRY_SRC = '/@id/__x00__' + ENTRY;
+/** where the static catalog puts its files: apart from the app's, so that their URLs can be made relative */
+const OUT_PREFIX = '_zukan/';
 
 export function zukan(options: ZukanOptions = {}): Plugin {
   const { catalogId, isCatalogId, isCatalogFile, isDocFile, docFileOf, catalogFileOf } = createMatchers(
@@ -29,48 +31,65 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   return {
     name: 'vite-plugin-svelte-zukan',
     enforce: 'pre',
-    async config(config, { command }) {
-      root = normalizePath(resolve(config.root ?? process.cwd()));
-      resolved = resolveOptions(root, options);
-      groups = discoverGroups(root, options.groups);
-      const allow = extendFsAllow(root, [...scanned(), libDir], config.server?.fs?.allow);
-      // mutated rather than returned: returned arrays are concatenated to the user's `allow`
-      if (allow) ((config.server ??= {}).fs ??= {}).allow = allow;
-      if (command !== 'build' || !resolved.build) return;
-      appBuilder = !!config.builder;
+    config: {
+      // after the other plugins, so that a `builder` or a `renderBuiltUrl` they set is seen
+      order: 'post',
+      async handler(config, { command }) {
+        root = normalizePath(resolve(config.root ?? process.cwd()));
+        resolved = resolveOptions(root, options);
+        groups = discoverGroups(root, options.groups);
+        const allow = extendFsAllow(root, [...scanned(), libDir], config.server?.fs?.allow);
+        // mutated rather than returned: returned arrays are concatenated to the user's `allow`
+        if (allow) ((config.server ??= {}).fs ??= {}).allow = allow;
+        // `config.build.ssr` is the server half of an SSR build (`vite build --ssr`)
+        if (command !== 'build' || !resolved.build || config.build?.ssr) return;
+        appBuilder = !!config.builder;
 
-      // set here, not in configResolved: a define added there does not reach the build
-      const kit = await detectSvelteKit(config.plugins ?? []);
-      return {
-        // without it, a plain `vite build` sets up only the app's environment
-        builder: {},
-        environments: {
-          zukan: {
-            consumer: 'client',
-            // replacements SvelteKit defines only for its client environment, used by `$app/*`
-            ...(kit && {
-              define: {
-                __SVELTEKIT_PAYLOAD__: 'undefined',
-                __SVELTEKIT_HAS_SERVER_LOAD__: 'false',
-                __SVELTEKIT_HAS_UNIVERSAL_LOAD__: 'false'
-              }
-            }),
-            build: {
-              outDir: resolved.build,
-              manifest: false,
-              // only the JS entry, with fixed names: SvelteKit shares `base` and its naming rules with every environment
-              rolldownOptions: {
-                input: { zukan: ENTRY },
-                output: {
-                  entryFileNames: 'assets/[name]-[hash].js',
-                  chunkFileNames: 'assets/[name]-[hash].js',
-                  assetFileNames: 'assets/[name]-[hash][extname]'
+        // relative, so that the catalog also works under a subpath; `base` can not be set per environment
+        const renderBuiltUrl = config.experimental?.renderBuiltUrl;
+        (config.experimental ??= {}).renderBuiltUrl = (filename, ctx) =>
+          filename.startsWith(OUT_PREFIX) ? { relative: true } : renderBuiltUrl?.(filename, ctx);
+
+        // set here, not in configResolved: a define added there does not reach the build
+        const kit = await detectSvelteKit(config.plugins ?? []);
+        return {
+          // without it, a plain `vite build` sets up only the app's environment
+          builder: {},
+          environments: {
+            zukan: {
+              consumer: 'client',
+              // replacements SvelteKit defines only for its client environment, used by `$app/*`
+              ...(kit && {
+                define: {
+                  __SVELTEKIT_PAYLOAD__: 'undefined',
+                  __SVELTEKIT_HAS_SERVER_LOAD__: 'false',
+                  __SVELTEKIT_HAS_UNIVERSAL_LOAD__: 'false'
+                }
+              }),
+              build: {
+                outDir: resolved.build,
+                manifest: false,
+                copyPublicDir: false,
+                // only the JS entry, with fixed names: SvelteKit shares `base` and its naming rules with every environment
+                rolldownOptions: {
+                  input: { zukan: ENTRY },
+                  output: {
+                    entryFileNames: `${OUT_PREFIX}[name]-[hash].js`,
+                    chunkFileNames: `${OUT_PREFIX}[name]-[hash].js`,
+                    assetFileNames: `${OUT_PREFIX}[name]-[hash][extname]`
+                  }
                 }
               }
             }
           }
-        }
-      };
+        };
+      }
+    },
+    configEnvironment(name, config) {
+      if (name !== 'zukan' || !config.build) return;
+      // the environment starts from the app's top-level `build`; mutated, since a returned value would be merged into it
+      Object.assign(config.build, { ssr: false, lib: false });
+      config.build.rolldownOptions = { ...config.build.rolldownOptions, input: { zukan: ENTRY } };
     },
     buildApp: {
       // after the other hooks (e.g. SvelteKit's build), so that Vite's fallback below can be reproduced
@@ -81,15 +100,19 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         // Vite builds the app only when no hook built an environment, and this hook is about to build one
         const others = Object.values(builder.environments).filter((e) => e !== env);
         if (others.every((e) => !e.isBuilt)) {
-          // without `builder`, `vite build` builds a single environment
-          const app = appBuilder ? others : [builder.environments[builder.config.build.ssr ? 'ssr' : 'client']!];
+          // without `builder`, `vite build` builds only the client (the catalog is not built with `--ssr`)
+          const app = appBuilder ? others : [builder.environments.client!];
           for (const e of app) await builder.build(e);
+        }
+        if (builder.config.build.watch) {
+          builder.config.logger.warn('svelte-zukan: the catalog is not built in watch mode');
+          return;
         }
 
         const out = await builder.build(env);
         const entry = (Array.isArray(out) ? out : [out])
           .flatMap((o) => ('output' in o ? o.output : []))
-          .find((c) => c.type === 'chunk' && c.isEntry);
+          .find((c) => c.type === 'chunk' && c.name === 'zukan');
         if (!entry) throw new Error('svelte-zukan: the catalog entry was not built');
         const icon = readFileSync(appFile('icon.svg'), 'utf-8');
         const html = renderHtml({
@@ -100,7 +123,9 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         });
         writeFileSync(join(resolved.build, 'index.html'), html);
         // SvelteKit's plugins also write _app/version.json here
-        rmSync(join(resolved.build, '_app'), { recursive: true, force: true });
+        const kitDir = join(resolved.build, '_app');
+        rmSync(join(kitDir, 'version.json'), { force: true });
+        if (existsSync(kitDir) && readdirSync(kitDir).length === 0) rmSync(kitDir, { recursive: true });
       }
     },
     resolveId(id) {
