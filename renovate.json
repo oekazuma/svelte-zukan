@@ -1,0 +1,38 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":disablePeerDependencies"],
+  "minimumReleaseAge": "3 days",
+  "labels": ["renovate"],
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "rangeStrategy": "bump",
+  "platformAutomerge": true,
+  "packageRules": [
+    {
+      "description": "Auto-merge everything except major updates (those need review) — CI still has to pass first.",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "automerge": true
+    },
+    {
+      "groupName": "dependencies",
+      "matchDepTypes": ["dependencies"]
+    },
+    {
+      "groupName": "devDependencies",
+      "matchDepTypes": ["devDependencies"]
+    },
+    {
+      "groupName": "linters",
+      "matchPackageNames": ["eslint{/,}**", "@eslint{/,}**", "typescript-eslint{/,}**", "globals{/,}**"]
+    },
+    {
+      "groupName": "typescript",
+      "matchPackageNames": ["typescript"]
+    },
+    {
+      "groupName": "Svelte",
+      "matchPackageNames": ["@sveltejs/{/,}**", "svelte{/,}**"]
+    }
+  ]
+}
