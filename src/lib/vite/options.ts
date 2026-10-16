@@ -1,7 +1,7 @@
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { normalizePath } from 'vite';
+import { normalizePath, searchForWorkspaceRoot } from 'vite';
 import { createMatchers } from './matchers.js';
 
 export type ZukanOptions = {
@@ -24,11 +24,14 @@ export type ZukanOptions = {
 /** a file of the catalog SPA shipped with this library (`src/lib/app/` here, `dist/app/` when published) */
 export const appFile = (name: string) => normalizePath(fileURLToPath(new URL(`../app/${name}`, import.meta.url)));
 
+/** the library's own directory (`src/lib/` here, `dist/` when published); the SPA imports files from all over it */
+export const libDir = normalizePath(fileURLToPath(new URL('..', import.meta.url))).replace(/\/$/, '');
+
 const LOCALES = ['en', 'ja'];
 
 const file = (root: string, key: string, rel: string) => {
   const abs = normalizePath(resolve(root, rel));
-  if (!existsSync(abs)) throw new Error(`svelte-zukan: ${key} not found: ${abs}`);
+  if (!existsSync(abs) || !statSync(abs).isFile()) throw new Error(`svelte-zukan: ${key} not found: ${abs}`);
   return abs;
 };
 
@@ -46,4 +49,16 @@ export function resolveOptions(root: string, options: ZukanOptions) {
     locale,
     build: options.build ?? false
   };
+}
+
+export const isInside = (dir: string, parent: string) =>
+  dir === parent || dir.startsWith(parent.replace(/\/$/, '') + '/');
+
+/**
+ * `server.fs.allow` with the dirs outside the root added, or undefined when nothing has to be added.
+ * Compared with the root, not the workspace root: SvelteKit sets an explicit allow list, so Vite's default is not used there.
+ */
+export function extendFsAllow(root: string, dirs: string[], allow: string[] | undefined): string[] | undefined {
+  const outside = dirs.filter((dir) => !isInside(normalizePath(dir), normalizePath(root)));
+  return outside.length ? [searchForWorkspaceRoot(root), ...(allow ?? []), ...outside] : undefined;
 }

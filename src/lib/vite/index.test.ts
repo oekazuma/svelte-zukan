@@ -5,9 +5,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizePath, searchForWorkspaceRoot } from 'vite';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { extendFsAllow, generateCatalogModule, generateEntryModule, zukan } from './index.js';
+import * as api from './index.js';
+import { zukan } from './index.js';
 import { createMatchers, escapeRegExp } from './matchers.js';
-import { resolveOptions } from './options.js';
+import { extendFsAllow, libDir, resolveOptions } from './options.js';
+import { generateCatalogModule, generateEntryModule } from './virtual.js';
 
 // hooks are called with hand-made fakes, so the plugin is typed loosely
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -207,18 +209,22 @@ const makeApp = async () => {
   const outside = normalizePath(path.join(tmp, 'outside'));
   mkdirSync(path.join(root, 'src'), { recursive: true });
   mkdirSync(outside);
+  await writeFile(path.join(tmp, 'pnpm-workspace.yaml'), '');
   await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'app' }));
   await writeFile(path.join(root, 'src/A.zukan.svelte'), source);
   await writeFile(path.join(outside, 'B.zukan.svelte'), source);
   await writeFile(path.join(root, 'Wrapper.svelte'), '');
   await writeFile(path.join(root, 'logo.png'), '');
-  return { root, outside };
+  return { tmp: normalizePath(tmp), root, outside };
 };
 
 // runs the hooks Vite calls before the server starts
-const boot = (root: string, options: Parameters<typeof zukan>[0] = {}) => {
+const boot = (root: string, options: Parameters<typeof zukan>[0] = {}, allow?: string[]) => {
   const p = zukan(options) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const config: { root: string; server?: { fs?: { allow?: string[] } } } = { root };
+  const config: { root: string; server?: { fs?: { allow?: string[] } } } = {
+    root,
+    ...(allow && { server: { fs: { allow } } })
+  };
   p.config(config, { command: 'serve', mode: 'development' });
   p.configResolved({ root });
   return { p, config };
@@ -251,10 +257,19 @@ describe('generateEntryModule', () => {
 
   it('imports the logo as a URL and the wrapper lazily', () => {
     const code = generateEntryModule({ ...base, logo: '/x/logo.svg', wrapper: '/x/Wrapper.svelte' });
-    expect(code).toContain('import App from "/lib/app/App.svelte"');
-    expect(code).toContain('from "virtual:svelte-zukan/catalog"');
+    expect(code).toContain('import("/lib/app/App.svelte")');
+    expect(code).toContain('import("virtual:svelte-zukan/catalog")');
     expect(code).toContain('import logo from "/x/logo.svg?url"');
     expect(code).toContain('wrapper: () => import("/x/Wrapper.svelte")');
+  });
+
+  it('listens for zukan:reload before loading the app and the catalog', () => {
+    const code = generateEntryModule({ ...base, logo: null, wrapper: null });
+    const listen = code.indexOf("import.meta.hot.on('zukan:reload'");
+    expect(listen).toBeGreaterThan(-1);
+    expect(listen).toBeLessThan(code.indexOf('import("virtual:svelte-zukan/catalog")'));
+    expect(listen).toBeLessThan(code.indexOf('import("/lib/app/App.svelte")'));
+    expect(code).not.toMatch(/^import .* from "(virtual:svelte-zukan\/catalog|\/lib\/app\/App\.svelte)"/m);
   });
 
   it('passes null without a logo or a wrapper', () => {
@@ -295,27 +310,39 @@ describe('resolveOptions', () => {
     expect(() => resolveOptions(root, { suffix: 'a.b' })).toThrow(/suffix/);
     expect(() => resolveOptions(root, { wrapper: 'Nope.svelte' })).toThrow(`wrapper not found: ${root}/Nope.svelte`);
     expect(() => resolveOptions(root, { logo: 'nope.svg' })).toThrow(`logo not found: ${root}/nope.svg`);
+    // directories are not files
+    expect(() => resolveOptions(root, { wrapper: '' })).toThrow(`wrapper not found: ${root}`);
+    expect(() => resolveOptions(root, { logo: 'src' })).toThrow(`logo not found: ${root}/src`);
   });
 });
 
 describe('extendFsAllow', () => {
-  it('leaves allow alone when every dir is inside the workspace', async () => {
+  it('leaves allow alone when every dir is inside the root', async () => {
     const { root } = await makeApp();
     expect(extendFsAllow(root, [`${root}/src`], ['/x'])).toBeUndefined();
   });
 
-  it('adds the workspace root, the existing allow and the outside dirs', async () => {
-    const { root, outside } = await makeApp();
+  it('adds the workspace root, the existing allow and the dirs outside the root', async () => {
+    const { tmp, root, outside } = await makeApp();
     const ws = searchForWorkspaceRoot(root);
+    // inside the workspace still counts: SvelteKit sets an explicit allow list without the workspace root
+    expect(normalizePath(ws)).toBe(tmp);
     expect(extendFsAllow(root, [`${root}/src`, outside], ['/x'])).toEqual([ws, '/x', outside]);
     expect(extendFsAllow(root, [outside], undefined)).toEqual([ws, outside]);
   });
 
   it('is applied in the config hook', async () => {
     const { root, outside } = await makeApp();
-    expect(boot(root).config.server).toBeUndefined();
-    const { config } = boot(root, { groups: { a: 'src', b: '../outside' } });
-    expect(config.server?.fs?.allow).toEqual([searchForWorkspaceRoot(root), outside]);
+    const ws = searchForWorkspaceRoot(root);
+    // the library itself (src/lib here) is outside the temporary root
+    expect(boot(root).config.server?.fs?.allow).toEqual([ws, libDir]);
+    const { config } = boot(root, { groups: { a: 'src', b: '../outside' } }, ['/x']);
+    expect(config.server?.fs?.allow).toEqual([ws, '/x', outside, libDir]);
+  });
+
+  it('leaves allow alone when everything is inside the root', () => {
+    const repo = normalizePath(path.resolve(libDir, '../..'));
+    expect(boot(repo, { groups: { a: 'src' } }).config.server).toBeUndefined();
   });
 });
 
@@ -328,19 +355,25 @@ describe('virtual modules', () => {
     expect(p.resolveId('virtual:svelte-zukan/other')).toBeUndefined();
     expect(p.load('\0virtual:svelte-zukan/catalog')).toContain(`import("${root}/src/A.zukan.svelte")`);
     const entry = p.load('\0virtual:svelte-zukan/entry');
-    expect(entry).toContain(`import App from "${bundled('App.svelte')}"`);
+    expect(entry).toContain(`import("${bundled('App.svelte')}")`);
     expect(entry).toContain(`import logo from "${bundled('logo.svg')}?url"`);
   });
 });
 
 describe('configureServer', () => {
-  type Res = { status?: string; body?: string; type?: string };
+  type Res = { status?: string | number; body?: string; type?: string; location?: string };
   const request = (mw: (...a: unknown[]) => void, url: string) =>
     new Promise<Res>((resolve) => {
       const out: Res = {};
       const res = {
-        setHeader: (k: string, v: string) => k.toLowerCase() === 'content-type' && (out.type = v),
-        end: (body: string) => resolve({ ...out, body })
+        statusCode: 200,
+        setHeader: (k: string, v: string) => {
+          if (k.toLowerCase() === 'content-type') out.type = v;
+          if (k.toLowerCase() === 'location') out.location = v;
+        },
+        end(body?: string) {
+          resolve({ ...out, ...(this.statusCode !== 200 && { status: this.statusCode }), body });
+        }
       };
       mw({ url }, res, () => resolve({ status: 'next' }));
     });
@@ -351,14 +384,15 @@ describe('configureServer', () => {
     const server = fakeServer(root);
     p.configureServer(server);
     const mw = server.middlewares.use.mock.calls[0][0];
-    for (const url of ['/__zukan/', '/__zukan/?x']) {
+    for (const url of ['/__zukan/', '/__zukan/?x', '/__zukan/?y#z']) {
       const res = await request(mw, url);
       expect(res.type).toMatch(/^text\/html/);
       expect(res.body).toContain('<html lang="ja">');
       expect(res.body).toContain('<title>My UI</title>');
       expect(res.body).toContain('src="/@id/__x00__virtual:svelte-zukan/entry"');
     }
-    expect(server.transformIndexHtml).toHaveBeenCalledWith('/__zukan/', expect.any(String));
+    // the query is dropped
+    for (const [url] of server.transformIndexHtml.mock.calls) expect(url).toBe('/__zukan/');
     for (const url of ['/', '/__zukanx', '/__zukan/x']) expect(await request(mw, url)).toEqual({ status: 'next' });
   });
 
@@ -369,6 +403,19 @@ describe('configureServer', () => {
     const mw = server.middlewares.use.mock.calls[0][0];
     expect((await request(mw, '/app/__zukan/')).body).toContain('<html');
     expect(await request(mw, '/__zukan/')).toEqual({ status: 'next' });
+  });
+
+  it.each([
+    ['/', '/__zukan', '/__zukan/'],
+    ['/', '/__zukan?a=1', '/__zukan/?a=1'],
+    ['/app/', '/app/__zukan', '/app/__zukan/'],
+    ['/app/', '/app/__zukan?a=1', '/app/__zukan/?a=1']
+  ])('redirects with base %s from %s to %s', async (base, url, location) => {
+    const { root } = await makeApp();
+    const server = fakeServer(root, base);
+    boot(root).p.configureServer(server);
+    const mw = server.middlewares.use.mock.calls[0][0];
+    expect(await request(mw, url)).toMatchObject({ status: 302, location });
   });
 
   it('watches only the dirs outside the root', async () => {
@@ -435,5 +482,11 @@ describe('hotUpdate of the catalog list', () => {
     expect(run('create', `${root}/src-other/New.zukan.svelte`)).toBeUndefined();
     expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
     expect(ctx.environment.hot.send).not.toHaveBeenCalled();
+  });
+});
+
+describe('public API', () => {
+  it('exports only zukan', () => {
+    expect(Object.keys(api)).toEqual(['zukan']);
   });
 });

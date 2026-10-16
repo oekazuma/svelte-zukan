@@ -1,63 +1,18 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { marked } from 'marked';
-import { normalizePath, searchForWorkspaceRoot, type Plugin } from 'vite';
-import type { CatalogGroup, CatalogItem } from '../types.js';
+import { normalizePath, type Plugin } from 'vite';
+import type { CatalogGroup } from '../types.js';
 import { discoverGroups, listCatalog } from './discover.js';
 import { transformZukan } from './extract.js';
 import { renderHtml } from './html.js';
 import { SVELTE_STYLE_ID, createMatchers } from './matchers.js';
-import { appFile, resolveOptions, type ZukanOptions } from './options.js';
+import { appFile, extendFsAllow, isInside, libDir, resolveOptions, type ZukanOptions } from './options.js';
+import { CATALOG, ENTRY, generateCatalogModule, generateEntryModule } from './virtual.js';
 
 export type { ZukanOptions };
 
-const ENTRY = 'virtual:svelte-zukan/entry';
-const CATALOG = 'virtual:svelte-zukan/catalog';
 const ENTRY_SRC = '/@id/__x00__' + ENTRY;
-
-const isInside = (dir: string, parent: string) => dir === parent || dir.startsWith(parent.replace(/\/$/, '') + '/');
-
-/** `server.fs.allow` with the dirs outside the default allow list, or undefined when nothing has to be added */
-export function extendFsAllow(root: string, dirs: string[], allow: string[] | undefined): string[] | undefined {
-  const workspace = searchForWorkspaceRoot(root);
-  const outside = dirs.filter((dir) => !isInside(normalizePath(dir), normalizePath(workspace)));
-  return outside.length ? [workspace, ...(allow ?? []), ...outside] : undefined;
-}
-
-export function generateCatalogModule(items: CatalogItem[]): string {
-  // `file` is left out so that absolute paths do not end up in the static build
-  const entries = items.map(
-    ({ file, ...item }) => `  { ...${JSON.stringify(item)}, load: () => import(${JSON.stringify(file)}) }`
-  );
-  return `export const catalog = [\n${entries.join(',\n')}\n];\n`;
-}
-
-export function generateEntryModule(opts: {
-  appFile: string;
-  logo: string | null;
-  wrapper: string | null;
-  title: string;
-  locale: 'en' | 'ja';
-}): string {
-  const s = JSON.stringify;
-  return [
-    `import { mount } from 'svelte';`,
-    `import App from ${s(opts.appFile)};`,
-    `import { catalog } from ${s(CATALOG)};`,
-    ...(opts.logo ? [`import logo from ${s(opts.logo + '?url')};`] : []),
-    `mount(App, {`,
-    `  target: document.body,`,
-    `  props: {`,
-    `    catalog,`,
-    `    logo: ${opts.logo ? 'logo' : 'null'},`,
-    `    wrapper: ${opts.wrapper ? `() => import(${s(opts.wrapper)})` : 'null'},`,
-    `    title: ${s(opts.title)},`,
-    `    locale: ${s(opts.locale)}`,
-    `  }`,
-    `});`,
-    ''
-  ].join('\n');
-}
 
 export function zukan(options: ZukanOptions = {}): Plugin {
   const { catalogId, isCatalogId, isCatalogFile, isDocFile, docFileOf, catalogFileOf } = createMatchers(
@@ -73,7 +28,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     config(config) {
       const root = normalizePath(resolve(config.root ?? process.cwd()));
       groups = discoverGroups(root, options.groups);
-      const allow = extendFsAllow(root, scanned(), config.server?.fs?.allow);
+      const allow = extendFsAllow(root, [...scanned(), libDir], config.server?.fs?.allow);
       // mutated rather than returned: returned arrays are concatenated to the user's `allow`
       if (allow) ((config.server ??= {}).fs ??= {}).allow = allow;
     },
@@ -95,11 +50,17 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       // called directly (not in a returned hook) to run before SvelteKit's middleware
       server.middlewares.use((req, res, next) => {
         const url = req.url ?? '';
-        if (url.split(/[?#]/)[0] !== `${base}__zukan/`) return next();
+        const path = url.split(/[?#]/)[0];
+        if (path === `${base}__zukan`) {
+          res.statusCode = 302;
+          res.setHeader('location', `${path}/${url.slice(path.length)}`);
+          return res.end();
+        }
+        if (path !== `${base}__zukan/`) return next();
         const icon = readFileSync(appFile('icon.svg'), 'utf-8');
         const html = renderHtml({ title: resolved.title, locale: resolved.locale, entrySrc: ENTRY_SRC, icon });
         server
-          .transformIndexHtml(url, html)
+          .transformIndexHtml(path, html)
           .then((out) => {
             res.setHeader('content-type', 'text/html');
             res.end(out);
