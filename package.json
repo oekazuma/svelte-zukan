@@ -12,7 +12,8 @@
     "svelte",
     "sveltekit",
     "component-catalog",
-    "styleguide"
+    "styleguide",
+    "vite-plugin"
   ],
   "type": "module",
   "packageManager": "pnpm@12.10.1",
@@ -50,6 +51,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "svelte": "./dist/index.js"
+    },
+    "./vite": {
+      "types": "./dist/vite/index.d.ts",
+      "default": "./dist/vite/index.js"
     }
   },
   "imports": {
