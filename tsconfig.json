@@ -5,5 +5,5 @@
     "paths": { "svelte-zukan": ["./src/lib/index.ts"] },
     "types": ["$app/types", "node"]
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", ".zukan/**/*", "vite.config.ts"]
 }

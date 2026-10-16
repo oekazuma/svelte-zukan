@@ -15,7 +15,12 @@ export default defineConfig(({ command }) => ({
   },
   plugins: [
     Inspect(),
-    zukan(),
+    zukan({
+      groups: { ui: 'src/lib', examples: 'src/examples' },
+      wrapper: '.zukan/Wrapper.svelte',
+      build: true,
+      locale: 'ja'
+    }),
     sveltekit({
       compilerOptions: {
         // Force runes mode for the project, except for libraries. Can be removed in svelte 6.

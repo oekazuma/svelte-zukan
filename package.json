@@ -1,7 +1,7 @@
 {
   "name": "svelte-zukan",
   "version": "0.0.1",
-  "description": "Colocated component catalog for SvelteKit",
+  "description": "Colocated component catalog for Svelte, served by a Vite plugin",
   "license": "MIT",
   "author": "oekazuma",
   "repository": {
@@ -10,10 +10,10 @@
   },
   "keywords": [
     "svelte",
-    "sveltekit",
+    "vite-plugin",
     "component-catalog",
     "styleguide",
-    "vite-plugin"
+    "sveltekit"
   ],
   "type": "module",
   "packageManager": "pnpm@12.10.1",
@@ -41,7 +41,9 @@
     "dist",
     "!dist/**/*.test.*",
     "!dist/**/*.spec.*",
-    "!dist/**/zukan/**"
+    "!dist/**/*.zukan.svelte",
+    "!dist/**/*.zukan.svelte.d.ts",
+    "!dist/**/*.zukan.md"
   ],
   "sideEffects": [
     "**/*.css"

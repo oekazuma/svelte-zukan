@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Section } from 'svelte-zukan';
-  import CodeBlock from '../CodeBlock.svelte';
+  import CodeBlock from './CodeBlock.svelte';
 </script>
 
 <Section title="基本">

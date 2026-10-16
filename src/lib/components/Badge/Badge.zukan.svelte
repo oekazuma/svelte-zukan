@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Section } from 'svelte-zukan';
-  import Badge from '../Badge.svelte';
+  import Badge from './Badge.svelte';
 </script>
 
 <Section title="基本">

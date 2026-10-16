@@ -30,6 +30,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
 
   return {
     name: 'vite-plugin-svelte-zukan',
+    // 'pre' puts this plugin's buildApp (order: 'post') ahead of SvelteKit's adapter `finalise`, which rewrites a shared `experimental.renderBuiltUrl`
     enforce: 'pre',
     config: {
       // after the other plugins, so that a `builder` or a `renderBuiltUrl` they set is seen

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Section } from 'svelte-zukan';
-  import Button from '../Button.svelte';
+  import Button from './Button.svelte';
 
   let count = $state(0);
   const label = $derived(`${count} 回押した`);
