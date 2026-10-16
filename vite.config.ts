@@ -18,6 +18,7 @@ export default defineConfig(({ command }) => ({
     zukan({
       groups: { ui: 'src/lib', examples: 'src/examples' },
       wrapper: '.zukan/Wrapper.svelte',
+      logo: '.zukan/logo.svg',
       build: true,
       locale: 'ja'
     }),

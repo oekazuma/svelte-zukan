@@ -34,8 +34,13 @@ function dedent(text: string) {
 
 function identifiersOf(value: unknown) {
   const names = new Set<string>();
+  // `obj.label` and `{ label: 1 }` name no variable; `walk` sees a parent before its children
+  const skip = new Set<unknown>();
   walk(value, (n) => {
-    if (n.type === 'Identifier') names.add(n.name as string);
+    if (n.type === 'MemberExpression' && !n.computed) skip.add(n.property);
+    else if (['Property', 'MethodDefinition', 'PropertyDefinition'].includes(n.type) && !n.computed && !n.shorthand)
+      skip.add(n.key);
+    else if (n.type === 'Identifier' && !skip.has(n)) names.add(n.name as string);
     else if (['Component', 'UseDirective', 'TransitionDirective', 'AnimateDirective'].includes(n.type))
       names.add((n.name as string).split('.')[0]);
   });
@@ -71,7 +76,11 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
   const top = (ast.fragment.nodes as unknown as Node[]).filter(isSection);
   const topSet = new Set<Node>(top);
   walk(ast.fragment.nodes, (n) => {
-    if (isSection(n) && !topSet.has(n)) fail(n.start, '<Section> must not be nested');
+    if (isSection(n) && !topSet.has(n))
+      fail(
+        n.start,
+        '<Section> must not be nested (if this is your own component named "Section", import it under another name)'
+      );
   });
   if (!top.length) return [];
 
@@ -141,12 +150,32 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
   });
 }
 
+/**
+ * Runs before vite-plugin-svelte preprocesses the file, so the contents of `<style>` (e.g. SCSS) are blanked out first.
+ * Same length, newlines kept: offsets and line numbers still point into `source`.
+ */
+function parseZukan(source: string, filename: string): Ast {
+  // ponytail: a "<style>" inside a comment or a string is blanked too; harmless unless a "</style>" follows it
+  const blanked = source.replace(
+    /(<style\b[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
+    (_, open: string, css: string, close: string) => open + css.replace(/[^\r\n]/g, ' ') + close
+  );
+  try {
+    return parse(blanked, { modern: true, filename });
+  } catch (e) {
+    throw new Error(
+      `svelte-zukan: could not parse ${filename} (catalog files must be plain Svelte markup; preprocessor languages are only supported inside <style>): ${(e as Error).message}`,
+      { cause: e }
+    );
+  }
+}
+
 export function extractSections(source: string, filename: string): ZukanSection[] {
-  return sectionsFrom(parse(source, { modern: true, filename }), source, filename);
+  return sectionsFrom(parseZukan(source, filename), source, filename);
 }
 
 export function transformZukan(source: string, filename: string, doc: string | null) {
-  const ast = parse(source, { modern: true, filename });
+  const ast = parseZukan(source, filename);
   const meta: ZukanMeta = { sections: sectionsFrom(ast, source, filename), doc };
   // `<` is escaped so a "</script>" inside the code strings cannot end the script block
   const exported = `export const __zukan = ${JSON.stringify(meta).replace(/</g, '\\u003c')};`;

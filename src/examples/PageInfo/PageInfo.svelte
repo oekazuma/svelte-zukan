@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { resolve } from '$app/paths';
+  import { asset, resolve } from '$app/paths';
 </script>
 
 <dl>
@@ -8,4 +8,6 @@
   <dd>{JSON.stringify(page.url.pathname)}</dd>
   <dt>resolve('/')</dt>
   <dd>{JSON.stringify(resolve('/'))}</dd>
+  <dt>asset('favicon.svg')</dt>
+  <dd>{JSON.stringify(asset('favicon.svg'))}</dd>
 </dl>

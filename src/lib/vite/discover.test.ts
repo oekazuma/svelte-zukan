@@ -194,6 +194,14 @@ describe('listCatalog IDs', () => {
     expect(paths(join(tmp, 'app'))).toEqual(['@acme/ui/lib/Card']);
   });
 
+  it('skips node_modules inside a searched dir', () => {
+    write('app/ui/Foo.zukan.svelte');
+    write('app/ui/node_modules/x/Foo.zukan.svelte');
+    write('app/ui/a/node_modules/y/Bar.zukan.svelte');
+    const items = listCatalog(discoverGroups(join(tmp, 'app'), { ui: 'ui' }), 'zukan');
+    expect(items.map((i) => i.path)).toEqual(['ui/Foo']);
+  });
+
   it('rel may contain preview', () => {
     write('app/ui/preview/Foo.zukan.svelte');
     const items = listCatalog(discoverGroups(join(tmp, 'app'), { ui: 'ui' }), 'zukan');

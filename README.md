@@ -62,6 +62,8 @@ export default defineConfig({ plugins: [zukan(), sveltekit()] });
 
 dev サーバーを起動して `/__zukan/` を開きます。起動時にターミナルへ出る URL 一覧にも、カタログの URL が載ります。
 
+Vite の `base` や SvelteKit の `paths.base` を設定しているときは、カタログは `<base>__zukan/`（例: `base: '/app/'` なら `/app/__zukan/`）に移ります。ターミナルの URL 一覧には、移った先の URL が出ます。
+
 ## カタログファイルの書き方
 
 コンポーネントの隣に `<Name>.zukan.svelte` を置きます。`<Name>.zukan.md` は任意です（`zukan/` のようなサブディレクトリは使いません）。
@@ -109,11 +111,13 @@ src/lib/Button/
 
 ID は `<グループ名>/<相対パス>` です。相対パスは、探索ディレクトリからカタログファイルまでのパスから `.<suffix>.svelte` を除いたものです。
 
-- `src/lib/forms/Button.zukan.svelte` → `lib/forms/Button`
-- 最後の 2 セグメントが同じとき（`Button/Button`）は 1 つにまとめます。`src/lib/Button/Button.zukan.svelte` → `lib/Button`
+- グループ名が `my-app` のとき、`src/lib/forms/Button.zukan.svelte` → `my-app/lib/forms/Button`
+- 最後の 2 セグメントが同じとき（`Button/Button`）は 1 つにまとめます。`src/lib/Button/Button.zukan.svelte` → `my-app/lib/Button`
 - 同名のカタログファイル（`forms/Button.zukan.svelte` と `nav/Button.zukan.svelte`）も、ディレクトリが違えば別の ID になります。一覧には名前（`Button`）を主に、ディレクトリ（`lib/forms`）を控えめな色で添えて表示するので、見分けられます
 - グループ名が `preview` か `preview/` で始まるとエラーです（URL の予約語）
-- ID が重複するとエラーになり、両方のファイルパスが出ます。たとえば `lib/Button.zukan.svelte` と `lib/Button/Button.zukan.svelte` は、まとめた結果が同じになります
+- ID が重複するとエラーになり、両方のファイルパスが出ます。重複するのは、たとえば次の場合です
+  - `lib/Button.zukan.svelte` と `lib/Button/Button.zukan.svelte`。まとめた結果が同じ `my-app/lib/Button` になります
+  - グループ `@acme` の `ui/Card.zukan.svelte` と、グループ `@acme/ui` の `Card.zukan.svelte`。どちらも `@acme/ui/Card` になります
 
 ID はファイルを動かさない限り変わりません。自動探索で `lib/` が付くのは `src` 全体を探すためです。気になるときは `groups` で `src/lib` を指定してください。
 
@@ -153,6 +157,7 @@ zukan({
 2. そのアプリの `package.json` の `dependencies` → `devDependencies` の順に、依存しているワークスペースパッケージの `src`
 
 - グループ名はパッケージの `package.json` の `name` です。カタログファイルがないパッケージはグループになりません
+- 依存パッケージは、カタログ用のアプリ自身の `node_modules/<依存名>` にあるリンクから探します（pnpm のワークスペースはこの形でリンクします）。npm や yarn のワークスペースでは、リンクがワークスペースのルートの `node_modules` にできるので見つかりません。その場合は `groups` で指定してください
 - 推移的な依存は探しません。アプリの依存に宣言していないアプリやパッケージ（たとえばカタログ用のアプリ `apps/catalog` から、別のアプリ `apps/web` のコンポーネントを見せたいとき）は、`groups` で指定します
 
 ```ts
@@ -204,6 +209,7 @@ zukan({ build: true });
 - `$app/env` の `browser`: `true`
 - `$app/navigation` の `goto` など: reject するだけで、画面は移動しません
 - `$app/paths` の `resolve`: アプリの `paths.base` を前提にした URL を返します（`paths.base` が空なら `resolve('/')` は `/`）。カタログ自身の URL ではありません
+- `$app/paths` の `asset`: TODO(controller): 確認結果で差し替える
 
 現在のページで表示が変わるナビゲーションなどは、カタログでは既定値のままで描画されます。SvelteKit を使っているアプリでは、静的に書き出したカタログでもこの動きは同じです。
 

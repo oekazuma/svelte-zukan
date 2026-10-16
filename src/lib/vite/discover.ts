@@ -76,7 +76,7 @@ export function listCatalog(groups: CatalogGroup[], suffix: string): CatalogItem
   groups.forEach(({ name: group, dirs }, order) => {
     checkGroupName(group);
     for (const dir of dirs) {
-      for (const found of globSync(`**/*${ext}`, { cwd: dir })) {
+      for (const found of globSync(`**/*${ext}`, { cwd: dir, exclude: ['**/node_modules/**'] })) {
         const file = normalizePath(join(dir, found));
         if (!isCatalogFile(file)) continue;
         const segments = normalizePath(found).slice(0, -ext.length).split('/');

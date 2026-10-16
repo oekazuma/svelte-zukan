@@ -95,6 +95,59 @@ describe('extractSections', () => {
     expect(code).not.toContain('unused');
   });
 
+  it('does not take member names and object keys for variables', () => {
+    const source = `<script>
+  const label = 'unrelated';
+  const key = 'k';
+  const obj = { label: 1, key };
+</script>
+
+<Section title="member"><p>{obj.label}</p></Section>
+<Section title="shorthand"><A value={{ label }} /></Section>
+<Section title="computed"><p>{obj[label]}</p></Section>`;
+    const [member, shorthand, computed] = extractSections(source, FILE).map((s) => s.code);
+    expect(member).toContain('const obj = { label: 1, key };');
+    expect(member).toContain("const key = 'k';");
+    expect(member).not.toContain("const label = 'unrelated';");
+    expect(shorthand).toContain("const label = 'unrelated';");
+    expect(shorthand).not.toContain('const obj');
+    expect(computed).toContain("const label = 'unrelated';");
+    expect(computed).toContain('const obj');
+  });
+
+  it('parses a catalog file with SCSS in <style>', () => {
+    const source = `<script>
+  import Button from './Button.svelte';
+</script>
+
+<Section title="a"><Button /></Section>
+
+<style lang="scss">
+  $c: red;
+  .a {
+    color: $c;
+    &:hover { color: darken($c, 10%); }
+  }
+</style>
+
+<Section title="b">
+  <p class="a">x</p>
+</Section>`;
+    expect(extractSections(source, FILE)).toEqual([
+      { title: 'a', code: "<script>\n  import Button from './Button.svelte';\n</script>\n\n<Button />" },
+      { title: 'b', code: '<p class="a">x</p>' }
+    ]);
+    // line numbers still count the blanked lines
+    const dup = source.replace('title="b"', 'title="a"');
+    expect(() => extractSections(dup, FILE)).toThrow(/Button\.zukan\.svelte:15 /);
+  });
+
+  it('names the file and the cause when the markup does not parse', () => {
+    expect(() => extractSections('<Section title="a">\n<A />', FILE)).toThrow(
+      /^svelte-zukan: could not parse Button\.zukan\.svelte \(catalog files must be plain Svelte markup; preprocessor languages are only supported inside <style>\): .+/
+    );
+  });
+
   it('dedents mixed indentation by common prefix', () => {
     const source = '<Section title="a">\n\t\t<A />\n\n\t\t\t<B />\n</Section>';
     expect(extractSections(source, FILE)[0].code).toBe('<A />\n\n\t<B />');
@@ -126,7 +179,7 @@ describe('extractSections', () => {
 
   it('throws on nested Section', () => {
     const nested = '<Section title="a">\n<Section title="b"><A /></Section>\n</Section>';
-    expect(() => extractSections(nested, FILE)).toThrow(/Button\.zukan\.svelte:2/);
+    expect(() => extractSections(nested, FILE)).toThrow(/Button\.zukan\.svelte:2 .*import it under another name/);
     const inIf = '<p></p>\n{#if true}\n<Section title="a"><A /></Section>\n{/if}';
     expect(() => extractSections(inIf, FILE)).toThrow(/Button\.zukan\.svelte:3/);
   });
@@ -153,6 +206,17 @@ describe('transformZukan', () => {
     const source = `<script module>export const x = 1; // comment</script>\n\n<Section title="a"><A /></Section>`;
     const { code: out } = transformZukan(source, FILE, null);
     expect(compile(out, { filename: FILE, generate: 'client' }).js.code).toContain('__zukan');
+  });
+
+  it('keeps a SCSS <style> verbatim', () => {
+    const style = '<style lang="scss">\n  $c: red;\n  .a { &:hover { color: $c; } }\n</style>';
+    const source = `<script module>export const x = 1;</script>\n\n<Section title="a"><A /></Section>\n\n${style}\n`;
+    const { code: out } = transformZukan(source, FILE, null);
+    expect(out).toContain(style);
+    expect(out.startsWith('<script module>export const __zukan = ')).toBe(true);
+    expect(out).toContain(';export const x = 1;</script>');
+    const plain = '<Section title="a"><A /></Section>\n' + style;
+    expect(transformZukan(plain, FILE, null).code.startsWith(plain)).toBe(true);
   });
 
   it('returns a source map', () => {

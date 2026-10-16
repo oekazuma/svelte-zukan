@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { marked } from 'marked';
 import { normalizePath, type Plugin } from 'vite';
 import type { CatalogGroup } from '../types.js';
@@ -39,11 +39,19 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         root = normalizePath(resolve(config.root ?? process.cwd()));
         resolved = resolveOptions(root, options);
         groups = discoverGroups(root, options.groups);
-        const allow = extendFsAllow(root, [...scanned(), libDir], config.server?.fs?.allow);
+        // the bundled logo is inside libDir
+        const files = [resolved.wrapper, options.logo ? resolved.logo : null].filter((f) => f !== null);
+        const allow = extendFsAllow(root, [...scanned(), libDir, ...files.map(dirname)], config.server?.fs?.allow);
         // mutated rather than returned: returned arrays are concatenated to the user's `allow`
         if (allow) ((config.server ??= {}).fs ??= {}).allow = allow;
         // `config.build.ssr` is the server half of an SSR build (`vite build --ssr`)
         if (command !== 'build' || !resolved.build || config.build?.ssr) return;
+        // Vite empties both outDirs, so they must not overlap each other or the project
+        const appOut = normalizePath(resolve(root, config.build?.outDir ?? 'dist'));
+        if (isInside(root, resolved.build) || isInside(resolved.build, appOut) || isInside(appOut, resolved.build))
+          throw new Error(
+            `svelte-zukan: build.outDir of the catalog (${resolved.build}) must not be the Vite root or overlap the app's build.outDir (${appOut})`
+          );
         appBuilder = !!config.builder;
 
         // relative, so that the catalog also works under a subpath; `base` can not be set per environment

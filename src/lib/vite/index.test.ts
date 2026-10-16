@@ -355,6 +355,19 @@ describe('extendFsAllow', () => {
     expect(config.server?.fs?.allow).toEqual([ws, '/x', outside, libDir]);
   });
 
+  it('adds the dirs of a wrapper and a logo outside the root', async () => {
+    const { root, outside } = await makeApp();
+    const assets = normalizePath(path.join(outside, 'assets'));
+    mkdirSync(assets);
+    await writeFile(path.join(outside, 'W.svelte'), '');
+    await writeFile(path.join(assets, 'logo.svg'), '');
+    const ws = searchForWorkspaceRoot(root);
+    const { config } = boot(root, { wrapper: '../outside/W.svelte', logo: '../outside/assets/logo.svg' });
+    expect(config.server?.fs?.allow).toEqual([ws, libDir, outside, assets]);
+    // inside the root, nothing is added for them
+    expect(boot(root, { wrapper: 'Wrapper.svelte', logo: 'logo.png' }).config.server?.fs?.allow).toEqual([ws, libDir]);
+  });
+
   it('leaves allow alone when everything is inside the root', () => {
     const repo = normalizePath(path.resolve(libDir, '../..'));
     expect(boot(repo, { groups: { a: 'src' } }).config.server).toBeUndefined();
@@ -525,6 +538,24 @@ describe('build', () => {
     expect(resolveOptions(root, { build: true }).build).toBe(`${root}/zukan-dist`);
     expect(resolveOptions(root, { build: {} }).build).toBe(`${root}/zukan-dist`);
     expect(resolveOptions(root, { build: { outDir: 'out/catalog' } }).build).toBe(`${root}/out/catalog`);
+  });
+
+  it('rejects a catalog outDir that is the root or overlaps the app outDir', async () => {
+    const { root, tmp } = await makeApp();
+    const reject = (outDir: string, user: object = {}) =>
+      expect(bootBuild(root, { build: { outDir } }, user)).rejects.toThrow(
+        /svelte-zukan: build\.outDir of the catalog/
+      );
+    await reject('.');
+    await reject(tmp);
+    // the app's default outDir is dist
+    await reject('dist');
+    await reject('dist/zukan');
+    await reject('out', { build: { outDir: 'out/app' } });
+    await reject('out/zukan', { build: { outDir: 'out' } });
+    // SvelteKit sets an absolute outDir
+    await reject('.svelte-kit/output/zukan', { build: { outDir: `${root}/.svelte-kit/output` } });
+    expect((await bootBuild(root, { build: { outDir: 'out' } }, { build: { outDir: 'output' } })).added).toBeDefined();
   });
 
   it('runs the config hook after the other plugins', () => {
