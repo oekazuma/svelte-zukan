@@ -203,7 +203,7 @@ zukan({ build: true });
 - `$app/state` の `page`: `url.pathname` は空文字、`params` は `{}`、`data` は `{}`
 - `$app/env` の `browser`: `true`
 - `$app/navigation` の `goto` など: reject するだけで、画面は移動しません
-- `$app/paths` の `resolve` / `asset`: TODO(controller): 確認結果で差し替える
+- `$app/paths` の `resolve`: アプリの `paths.base` を前提にした URL を返します（`paths.base` が空なら `resolve('/')` は `/`）。カタログ自身の URL ではありません
 
 現在のページで表示が変わるナビゲーションなどは、カタログでは既定値のままで描画されます。SvelteKit を使っているアプリでは、静的に書き出したカタログでもこの動きは同じです。
 
