@@ -142,6 +142,15 @@ describe('extractSections', () => {
     expect(() => extractSections(dup, FILE)).toThrow(/Button\.zukan\.svelte:15 /);
   });
 
+  it('does not take a custom element such as <style-guide> for <style>', () => {
+    const source =
+      '<Section title="a"><style-guide>x</style-guide></Section>\n\n<Section title="b"><B /></Section>\n\n<style>p{}</style>\n';
+    expect(extractSections(source, FILE)).toEqual([
+      { title: 'a', code: '<style-guide>x</style-guide>' },
+      { title: 'b', code: '<B />' }
+    ]);
+  });
+
   it('names the file and the cause when the markup does not parse', () => {
     expect(() => extractSections('<Section title="a">\n<A />', FILE)).toThrow(
       /^svelte-zukan: could not parse Button\.zukan\.svelte \(catalog files must be plain Svelte markup; preprocessor languages are only supported inside <style>\): .+/
