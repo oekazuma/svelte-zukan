@@ -22,13 +22,14 @@ export type ZukanOptions = {
 
 const SVELTE_STYLE_ID = /[?&]svelte&type=style/;
 
+export const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export function createMatchers(suffix: string) {
   if (!/^[a-z0-9-]+$/i.test(suffix))
     throw new Error(`svelte-zukan: invalid suffix "${suffix}" (use letters, digits and "-")`);
   const ext = `.${suffix}.svelte`;
   const docExt = `.${suffix}.md`;
-  // the suffix only has [a-z0-9-], so it needs no regex escaping
-  const catalogId = new RegExp(`^[^?#]+\\.${suffix}\\.svelte(?:[?#]|$)`, 'i');
+  const catalogId = new RegExp(`^[^?#]+\\.${escapeRegExp(suffix)}\\.svelte(?:[?#]|$)`);
   const isCatalogFile = (file: string) => file.endsWith(ext);
   return {
     catalogId,

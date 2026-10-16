@@ -109,23 +109,14 @@ describe('extractSections', () => {
     expect(() => extractSections(source, FILE)).toThrow(/Button\.zukan\.svelte:3/);
   });
 
-  it.each(['title=""', 'title="  "'])('throws on empty title (%s)', (attr) => {
+  it.each(['title=""', 'title="  "', 'title'])('throws on empty title (%s)', (attr) => {
     expect(() => extractSections(`<Section ${attr}><A /></Section>`, FILE)).toThrow(/Button\.zukan\.svelte:1 .*empty/);
   });
 
   it('missing and dynamic title have different messages', () => {
-    const message = (source: string) => {
-      try {
-        extractSections(source, FILE);
-      } catch (e) {
-        return (e as Error).message;
-      }
-    };
-    const missing = message('<Section><A /></Section>');
-    const dynamic = message('<script>let x = "a";</script>\n<Section title={x}><A /></Section>');
-    expect(missing).toMatch(/Button\.zukan\.svelte:1 /);
-    expect(dynamic).toMatch(/Button\.zukan\.svelte:2 /);
-    expect(missing!.split(' ').slice(1).join(' ')).not.toBe(dynamic!.split(' ').slice(1).join(' '));
+    expect(() => extractSections('<Section><A /></Section>', FILE)).toThrow(/Button\.zukan\.svelte:1 .*needs a title/);
+    const dynamic = '<script>let x = "a";</script>\n<Section title={x}><A /></Section>';
+    expect(() => extractSections(dynamic, FILE)).toThrow(/Button\.zukan\.svelte:2 .*static string/);
   });
 
   it('throws on duplicate title', () => {

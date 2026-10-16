@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { normalizePath } from 'vite';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { createMatchers, zukan } from './index.js';
+import { createMatchers, escapeRegExp, zukan } from './index.js';
 
 // hooks are called with hand-made fakes, so the plugin is typed loosely
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,8 +59,16 @@ describe('createMatchers', () => {
     expect(catalogFileOf('/a/Foo.zukan.md')).toBe('/a/Foo.zukan.svelte');
   });
 
-  it('escapes the suffix in the patterns', () => {
-    expect(createMatchers('a-b').isCatalogId('/a/Foo.a-b.svelte')).toBe(true);
+  it('escapes regex metacharacters', () => {
+    const re = new RegExp(`^${escapeRegExp('a.b*')}$`);
+    expect(re.test('a.b*')).toBe(true);
+    expect(re.test('axbb')).toBe(false);
+  });
+
+  it('is case-sensitive, using the suffix verbatim', () => {
+    const { isCatalogId, isCatalogFile } = createMatchers('zukan');
+    expect(isCatalogId('/a/Foo.ZUKAN.svelte')).toBe(false);
+    expect(isCatalogFile('/a/Foo.ZUKAN.svelte')).toBe(false);
   });
 
   it.each(['a.b', '', 'a b', 'a|b'])('rejects invalid suffix %j', (suffix) => {
