@@ -21,8 +21,9 @@
       "automerge": false
     },
     {
+      "description": "Dev dependencies are `catalog:` references, which Renovate reports from pnpm-workspace.yaml as pnpm.catalog.default.",
       "groupName": "devDependencies",
-      "matchDepTypes": ["devDependencies"]
+      "matchDepTypes": ["devDependencies", "pnpm.catalog.default"]
     },
     {
       "groupName": "linters",
