@@ -2,14 +2,14 @@ import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync 
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { marked } from 'marked';
 import { normalizePath, type Plugin, type PreviewServer, type ViteDevServer } from 'vite';
-import type { CatalogGroup } from '../types.js';
+import type { CatalogGroup, CatalogItem } from '../types.js';
 import { discoverGroups, listCatalog } from './discover.js';
 import { extractSections } from './extract.js';
 import { renderHtml } from './html.js';
 import { detectSvelteKit } from './kit.js';
 import { createMatchers } from './matchers.js';
 import { appFile, extendFsAllow, isInside, libDir, resolveOptions, type ZukanOptions } from './options.js';
-import { CATALOG, ENTRY, META, generateCatalogModule, generateEntryModule } from './virtual.js';
+import { CATALOG, ENTRY, META, generateCatalogModule, generateEntryModule, pathOfMeta } from './virtual.js';
 
 export type { ZukanOptions };
 
@@ -49,7 +49,14 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   let kitAppDir: string | null = null;
   /** printed once in buildApp: Vite resolves the config again for every environment */
   let warning: string | null = null;
+  /** path → item, from the last listing; dropped when a catalog file is created or deleted */
+  let items: Map<string, CatalogItem> | null = null;
   const scanned = () => groups.flatMap((g) => g.dirs);
+  const relist = () => {
+    const all = listCatalog(groups, resolved.suffix);
+    items = new Map(all.map((i) => [i.path, i]));
+    return all;
+  };
 
   return {
     name: 'vite-plugin-svelte-zukan',
@@ -60,6 +67,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       order: 'post',
       async handler(config, { command }) {
         kitAppDir = null;
+        items = null;
         root = normalizePath(resolve(config.root ?? process.cwd()));
         resolved = resolveOptions(root, options);
         groups = discoverGroups(root, options.groups);
@@ -188,16 +196,10 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     load(id) {
       if (id.startsWith('\0' + META)) {
         const raw = id.slice(META.length + 1);
-        // the dev server may already have decoded part of the id (e.g. `%20`)
-        let path = raw;
-        try {
-          path = decodeURIComponent(raw);
-        } catch {
-          // keep the raw id
-        }
-        // listed again on every load, so that files added after the start are found
-        const item = listCatalog(groups, resolved.suffix).find((i) => i.path === path);
-        if (!item) throw new Error(`svelte-zukan: no catalog file for ID "${path}"`);
+        const path = pathOfMeta(raw);
+        // a miss lists again, so that files added after the last listing are found
+        const item = path === null ? undefined : (items?.get(path) ?? (relist(), items!.get(path)));
+        if (!item) throw new Error(`svelte-zukan: no catalog file for ID "${path ?? raw}"`);
         this.addWatchFile(item.file);
         const docPath = docFileOf(item.file);
         let doc: string | null = null;
@@ -208,7 +210,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         const sections = extractSections(readFileSync(item.file, 'utf-8'), item.file);
         return `export default ${JSON.stringify({ sections, doc })};\n`;
       }
-      if (id === '\0' + CATALOG) return generateCatalogModule(listCatalog(groups, resolved.suffix));
+      if (id === '\0' + CATALOG) return generateCatalogModule(relist());
       if (id === '\0' + ENTRY) {
         // relative, so that absolute paths do not end up in the static build
         const searched = groups.map((g) => ({
@@ -286,7 +288,9 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         targets = [...modules, ...metas()];
       } else if (isCatalogFile(file) && scanned().some((dir) => isInside(normalizePath(file), dir))) {
         // created or deleted: the list is rebuilt when the module is loaded again, and Vite does not
-        // invalidate the file's own module on add or unlink, so a re-created file would keep its old module
+        // invalidate the file's own module on add or unlink, so a re-created file would keep its old module;
+        // the lookup map would still serve a deleted file
+        items = null;
         const list = moduleGraph.getModuleById('\0' + CATALOG);
         targets = [...modules, ...metas(), ...(list ? [list] : [])];
       } else return;

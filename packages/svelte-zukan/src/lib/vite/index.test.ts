@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,7 +11,7 @@ import { zukan } from './index.js';
 import { detectSvelteKit } from './kit.js';
 import { createMatchers } from './matchers.js';
 import { extendFsAllow, libDir, resolveOptions } from './options.js';
-import { ENTRY, generateCatalogModule, generateEntryModule } from './virtual.js';
+import { ENTRY, META, generateCatalogModule, generateEntryModule, metaId, pathOfMeta } from './virtual.js';
 
 // hooks are called with hand-made fakes, so the plugin is typed loosely
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,6 +170,18 @@ describe('generateCatalogModule', () => {
     expect(code).toContain('"path":"@acme/ui/lib/Card"');
     expect(code).toContain('export const catalog');
   });
+
+  it('encodes the metadata ID so the dev server leaves it alone', () => {
+    const path = '@acme/ui/lib/100%.css';
+    const code = generateCatalogModule([
+      { group: '@acme/ui', name: '100%.css', dir: 'lib', path, file: '/abs/x.zukan.svelte' }
+    ]);
+    const spec = code.match(/import\("(virtual:svelte-zukan\/meta\/[^"]+)"\)/)![1];
+    expect(spec).toBe(metaId(path));
+    expect(decodeURI(spec)).toBe(spec);
+    expect(spec.slice(META.length)).toMatch(/^[0-9a-f]+$/);
+    expect(pathOfMeta(spec.slice(META.length))).toBe(path);
+  });
 });
 
 describe('generateEntryModule', () => {
@@ -308,20 +320,20 @@ describe('virtual modules', () => {
 });
 
 describe('metadata modules', () => {
-  const meta = (path: string) => `\0virtual:svelte-zukan/meta/${path}`;
+  const meta = (path: string) => '\0' + metaId(path);
 
   it('resolves the metadata of an entry and lists it in the catalog', async () => {
     const { root } = await makeApp();
     const { p } = boot(root);
-    expect(p.resolveId('virtual:svelte-zukan/meta/app%2FA')).toBe(meta('app%2FA'));
-    expect(p.load('\0virtual:svelte-zukan/catalog')).toContain('import("virtual:svelte-zukan/meta/app%2FA")');
+    expect(p.resolveId(metaId('app/A'))).toBe(meta('app/A'));
+    expect(p.load('\0virtual:svelte-zukan/catalog')).toContain(`import("${metaId('app/A')}")`);
   });
 
   it('exports the sections and no absolute path', async () => {
     const { tmp, root } = await makeApp();
     const { p } = boot(root);
     const addWatchFile = vi.fn();
-    const code = p.load.call({ addWatchFile }, meta('app%2FA'));
+    const code = p.load.call({ addWatchFile }, meta('app/A'));
     expect(code).toContain('"title":"Foo"');
     expect(code).toContain('"doc":null');
     expect(code).not.toContain(tmp);
@@ -333,7 +345,7 @@ describe('metadata modules', () => {
     await writeFile(path.join(root, 'src/A.zukan.md'), '# A');
     const { p } = boot(root);
     const addWatchFile = vi.fn();
-    expect(p.load.call({ addWatchFile }, meta('app%2FA'))).toContain('<h1>A</h1>');
+    expect(p.load.call({ addWatchFile }, meta('app/A'))).toContain('<h1>A</h1>');
     expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/A.zukan.md`);
   });
 
@@ -343,21 +355,51 @@ describe('metadata modules', () => {
     await writeFile(path.join(root, 'src/B.catalog.md'), '# B');
     const { p } = boot(root, { suffix: 'catalog' });
     const addWatchFile = vi.fn();
-    expect(p.load.call({ addWatchFile }, meta('app%2FB'))).toContain('<h1>B</h1>');
+    expect(p.load.call({ addWatchFile }, meta('app/B'))).toContain('<h1>B</h1>');
     expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/B.catalog.md`);
   });
 
   it('throws for an unknown ID', async () => {
     const { root } = await makeApp();
     const { p } = boot(root);
-    expect(() => p.load.call({ addWatchFile: vi.fn() }, meta('app%2FNope'))).toThrow(/no catalog file/);
+    expect(() => p.load.call({ addWatchFile: vi.fn() }, meta('app/Nope'))).toThrow(/no catalog file/);
   });
 
-  it.each(['app%2FMy%20Button', 'app%2FMy Button'])('finds an ID with a space (%s)', async (id) => {
+  it.each(['My Button', '100%', 'theme.css', 'ボタン'])('finds the file %s', async (name) => {
     const { root } = await makeApp();
-    await writeFile(path.join(root, 'src/My Button.zukan.svelte'), '<Section title="B"><p>b</p></Section>');
+    await writeFile(path.join(root, `src/${name}.zukan.svelte`), '<Section title="B"><p>b</p></Section>');
     const { p } = boot(root);
-    expect(p.load.call({ addWatchFile: vi.fn() }, meta(id))).toContain('"title":"B"');
+    expect(p.load.call({ addWatchFile: vi.fn() }, meta(`app/${name}`))).toContain('"title":"B"');
+  });
+
+  it('rejects an ID that is not hex', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    expect(() => p.load.call({ addWatchFile: vi.fn() }, '\0' + META + 'zz')).toThrow(/no catalog file/);
+  });
+
+  it('finds a file created after the first load, without an HMR event', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    p.load.call({ addWatchFile: vi.fn() }, meta('app/A'));
+    await writeFile(path.join(root, 'src/C.zukan.svelte'), '<Section title="C"><p>c</p></Section>');
+    expect(p.load.call({ addWatchFile: vi.fn() }, meta('app/C'))).toContain('"title":"C"');
+  });
+
+  it('does not serve a file deleted with an HMR event', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    p.load.call({ addWatchFile: vi.fn() }, meta('app/A'));
+    rmSync(path.join(root, 'src/A.zukan.svelte'));
+    const ctx = {
+      environment: {
+        config: { consumer: 'client' },
+        hot: { send: vi.fn() },
+        moduleGraph: { getModuleById: vi.fn(), idToModuleMap: new Map(), invalidateModule: vi.fn() }
+      }
+    };
+    p.hotUpdate.call(ctx, { type: 'delete', file: `${root}/src/A.zukan.svelte`, modules: [], timestamp: 1 });
+    expect(() => p.load.call({ addWatchFile: vi.fn() }, meta('app/A'))).toThrow(/no catalog file/);
   });
 });
 

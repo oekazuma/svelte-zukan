@@ -4,11 +4,16 @@ export const ENTRY = 'virtual:svelte-zukan/entry';
 export const CATALOG = 'virtual:svelte-zukan/catalog';
 export const META = 'virtual:svelte-zukan/meta/';
 
+/** hex of the UTF-8 ID: the dev server's decodeURI leaves it alone, and it never ends like a file extension */
+export const metaId = (path: string) => META + Buffer.from(path, 'utf8').toString('hex');
+export const pathOfMeta = (hex: string) =>
+  /^(?:[0-9a-f]{2})*$/.test(hex) ? Buffer.from(hex, 'hex').toString('utf8') : null;
+
 export function generateCatalogModule(items: CatalogItem[]): string {
   // `file` is left out so that absolute paths do not end up in the static build
   const entries = items.map(
     ({ file, ...item }) =>
-      `  { ...${JSON.stringify(item)}, load: () => import(${JSON.stringify(file)}), meta: () => import(${JSON.stringify(META + encodeURIComponent(item.path))}) }`
+      `  { ...${JSON.stringify(item)}, load: () => import(${JSON.stringify(file)}), meta: () => import(${JSON.stringify(metaId(item.path))}) }`
   );
   return `export const catalog = [\n${entries.join(',\n')}\n];\n`;
 }
