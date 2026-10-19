@@ -9,10 +9,6 @@ on:
       - '.vscode/**'
       - '**/.github/**/*.md'
   pull_request:
-    paths-ignore:
-      - '.changeset/**'
-      - '.vscode/**'
-      - '**/.github/**/*.md'
   # release.yml starts it on the Version Packages branch: a pull request opened with GITHUB_TOKEN triggers no workflow
   workflow_dispatch:
 
