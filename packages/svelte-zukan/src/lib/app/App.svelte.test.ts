@@ -2,6 +2,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
+import type { ZukanMeta } from '../types.js';
 import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
 import Wrapper from './Wrapper.test.svelte';
@@ -14,12 +15,13 @@ async function setHash(hash: string) {
   await tick();
 }
 
-const load = () => Promise.resolve({ default: Catalog, __zukan: { sections: [], doc: null } });
+const load = () => Promise.resolve({ default: Catalog });
+const meta = () => Promise.resolve<{ default: ZukanMeta }>({ default: { sections: [], doc: null } });
 
 function setup(hash: string) {
   location.hash = hash;
   const wrapper = vi.fn(() => Promise.resolve({ default: Wrapper }));
-  const catalog = [{ group: 'ui', name: 'Card', dir: '', path: 'ui/Card', load }];
+  const catalog = [{ group: 'ui', name: 'Card', dir: '', path: 'ui/Card', load, meta }];
   const searched = [{ group: 'ui', dirs: ['src', '../lib'] }];
   return { wrapper, props: { catalog, logo: null, wrapper, title: 'zukan', locale: 'en' as 'en' | 'ja', searched } };
 }
@@ -85,9 +87,19 @@ describe('App', () => {
 
   it('a load error is shown', async () => {
     const { props } = setup('#/ui/Card');
-    props.catalog[0].load = () => Promise.reject(new Error('boom'));
+    props.catalog[0].meta = () => Promise.reject(new Error('boom'));
     const screen = await render(App, { props });
     await expect.element(screen.getByText('Failed to load: boom')).toBeInTheDocument();
+  });
+
+  it('a detail page reads the metadata, not the component', async () => {
+    const { props } = setup('#/ui/Card');
+    const spy = vi.fn(load);
+    props.catalog[0].load = spy;
+    props.catalog[0].meta = () => Promise.resolve({ default: { sections: [], doc: '<p>Doc text</p>' } });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByText('Doc text')).toBeInTheDocument();
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it('follows hashchange', async () => {
@@ -126,7 +138,7 @@ describe('App', () => {
 
   it('the search filters the sidebar', async () => {
     const { props } = setup('');
-    props.catalog.push({ group: 'ui', name: 'Button', dir: 'forms', path: 'ui/forms/Button', load });
+    props.catalog.push({ group: 'ui', name: 'Button', dir: 'forms', path: 'ui/forms/Button', load, meta });
     const screen = await render(App, { props });
     const nav = screen.getByRole('navigation', { name: 'Components' });
     await screen.getByRole('searchbox', { name: 'Search' }).fill('FORMS');
@@ -148,7 +160,7 @@ describe('App', () => {
     const screen = await render(App, { props });
     const nav = screen.getByRole('navigation', { name: 'Components' });
     await expect.element(nav.getByRole('list', { name: 'ui' })).not.toBeInTheDocument();
-    props.catalog.push({ group: 'examples', name: 'Demo', dir: '', path: 'examples/Demo', load });
+    props.catalog.push({ group: 'examples', name: 'Demo', dir: '', path: 'examples/Demo', load, meta });
     await screen.rerender({ catalog: [...props.catalog] });
     await expect.element(nav.getByRole('list', { name: 'ui' })).toBeInTheDocument();
     await expect.element(nav.getByRole('list', { name: 'examples' })).toHaveTextContent('Demo');

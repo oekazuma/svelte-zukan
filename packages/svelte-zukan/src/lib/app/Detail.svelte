@@ -17,13 +17,13 @@
 
 <!-- recreate everything on navigation so no PreviewFrame keeps the previous entry's width or height -->
 {#key entry.path}
-  {#await entry.load() then mod}
-    {#if mod.__zukan?.doc}
-      <!-- the HTML comes from the user's own Document.md, rendered at build time -->
+  {#await entry.meta() then { default: meta }}
+    {#if meta.doc}
+      <!-- the HTML comes from the user's own .md file, rendered by the plugin -->
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      <div class="doc">{@html mod.__zukan.doc}</div>
+      <div class="doc">{@html meta.doc}</div>
     {/if}
-    {#each mod.__zukan?.sections ?? [] as section (section.title)}
+    {#each meta.sections as section (section.title)}
       <h2>{section.title}</h2>
       <PreviewFrame src="./{formatHash('preview', entry.path, section.title)}" title={section.title} labels={t} />
       <CodeBlock code={section.code} labels={t} />
