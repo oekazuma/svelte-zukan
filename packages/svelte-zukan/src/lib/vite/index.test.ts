@@ -277,7 +277,7 @@ describe('extendFsAllow', () => {
     expect(config.server?.fs?.allow).toEqual(['/x', outside, libDir]);
   });
 
-  it('adds the dirs of a wrapper and a logo outside the root', async () => {
+  it('adds the dir of a wrapper and the logo file outside the root', async () => {
     const { root, outside } = await makeApp();
     const assets = normalizePath(path.join(outside, 'assets'));
     mkdirSync(assets);
@@ -285,7 +285,7 @@ describe('extendFsAllow', () => {
     await writeFile(path.join(assets, 'logo.svg'), '');
     const ws = searchForWorkspaceRoot(root);
     const { config } = boot(root, { wrapper: '../outside/W.svelte', logo: '../outside/assets/logo.svg' });
-    expect(config.server?.fs?.allow).toEqual([ws, libDir, outside, assets]);
+    expect(config.server?.fs?.allow).toEqual([ws, libDir, outside, `${assets}/logo.svg`]);
     // inside the root, nothing is added for them
     expect(boot(root, { wrapper: 'Wrapper.svelte', logo: 'logo.png' }).config.server?.fs?.allow).toEqual([ws, libDir]);
   });

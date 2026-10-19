@@ -77,9 +77,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         root = normalizePath(resolve(config.root ?? process.cwd()));
         resolved = resolveOptions(root, options);
         groups = discoverGroups(root, options.groups);
-        // the bundled logo is inside libDir
-        const files = [resolved.wrapper, options.logo ? resolved.logo : null].filter((f) => f !== null);
-        const allow = extendFsAllow(root, [...scanned(), libDir, ...files.map(dirname)], config.server?.fs?.allow);
+        // the wrapper's directory, for CSS and assets imported next to it; the logo is one file (the bundled one is inside libDir)
+        const extra = [
+          ...(resolved.wrapper ? [dirname(resolved.wrapper)] : []),
+          ...(options.logo && resolved.logo ? [resolved.logo] : [])
+        ];
+        const allow = extendFsAllow(root, [...scanned(), libDir, ...extra], config.server?.fs?.allow);
         // mutated rather than returned: returned arrays are concatenated to the user's `allow`
         if (allow) ((config.server ??= {}).fs ??= {}).allow = allow;
         // `config.build.ssr` is the server half of an SSR build (`vite build --ssr`)
