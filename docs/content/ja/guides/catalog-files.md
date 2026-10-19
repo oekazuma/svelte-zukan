@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-コンポーネントの隣に `<Name>.zukan.svelte` を置きます。`<Name>.zukan.md` は任意です。`zukan/` のようなサブディレクトリは使いません。
+コンポーネントの隣に `<Name>.zukan.svelte` を置きます。`<Name>.zukan.md` は任意です。`zukan/` のような専用のディレクトリは要りません。
 
 ```text
 src/lib/Button/
@@ -38,8 +38,9 @@ src/lib/Button/
 
 - `<Section>` はトップレベル（他の要素やブロックの中ではない位置）に置きます
 - `title` は空でない静的な文字列で、同じファイル内で重複できません
+- マークアップと `<script>` は素の Svelte で書きます（`lang="ts"` の TypeScript は使えます）。SCSS などのプリプロセッサの言語は `<style>` の中でだけ使えます
 
-`title` がない、動的、空、同じファイル内で重複、トップレベル以外、のいずれもビルドエラーになります（ファイル名と行つき）。
+`title` がない、動的、空、同じファイル内で重複、トップレベル以外、のいずれもビルドエラーになります（ファイル名と行つき）。素の Svelte として読めないファイルも、ファイル名つきのビルドエラーになります。
 
 ## コード表示
 
@@ -47,7 +48,7 @@ src/lib/Button/
 
 ## Markdown の説明
 
-`Button.zukan.md` は、同じディレクトリにある `Button.zukan.svelte` だけに対応します。あれば詳細ページの上部に HTML として表示します。
+`Button.zukan.md` は、同じディレクトリにある `Button.zukan.svelte` だけに対応します。あれば詳細ページの上部に HTML として表示します。`.md` 内の生の HTML も含めてそのまま挿入するので、カタログを公開する前に `.md` もコードと同じようにレビューしてください。
 
 ```md
 <!-- src/lib/Button/Button.zukan.md -->
