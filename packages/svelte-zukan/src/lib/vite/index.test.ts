@@ -9,7 +9,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import * as api from './index.js';
 import { zukan } from './index.js';
 import { detectSvelteKit } from './kit.js';
-import { createMatchers, escapeRegExp } from './matchers.js';
+import { createMatchers } from './matchers.js';
 import { extendFsAllow, libDir, resolveOptions } from './options.js';
 import { ENTRY, generateCatalogModule, generateEntryModule } from './virtual.js';
 
@@ -40,16 +40,9 @@ describe('createMatchers', () => {
     expect(isDocFile('/a/Document.md')).toBe(false);
   });
 
-  it('maps catalog files and doc files one to one', () => {
-    const { docFileOf, catalogFileOf } = createMatchers('zukan');
+  it('maps a catalog file to its doc file', () => {
+    const { docFileOf } = createMatchers('zukan');
     expect(docFileOf('/a/Foo.zukan.svelte')).toBe('/a/Foo.zukan.md');
-    expect(catalogFileOf('/a/Foo.zukan.md')).toBe('/a/Foo.zukan.svelte');
-  });
-
-  it('escapes regex metacharacters', () => {
-    const re = new RegExp(`^${escapeRegExp('a.b*')}$`);
-    expect(re.test('a.b*')).toBe(true);
-    expect(re.test('axbb')).toBe(false);
   });
 
   it('is case-sensitive, using the suffix verbatim', () => {
@@ -219,7 +212,6 @@ describe('resolveOptions', () => {
     const { root } = await makeApp();
     expect(resolveOptions(root, {})).toEqual({
       suffix: 'zukan',
-      groups: undefined,
       wrapper: null,
       logo: bundled('logo.svg'),
       title: 'zukan',
@@ -241,7 +233,6 @@ describe('resolveOptions', () => {
     const { root } = await makeApp();
     // @ts-expect-error unknown locale
     expect(() => resolveOptions(root, { locale: 'fr' })).toThrow(/locale "fr"/);
-    expect(() => resolveOptions(root, { suffix: 'a.b' })).toThrow(/suffix/);
     expect(() => resolveOptions(root, { wrapper: 'Nope.svelte' })).toThrow(`wrapper not found: ${root}/Nope.svelte`);
     expect(() => resolveOptions(root, { logo: 'nope.svg' })).toThrow(`logo not found: ${root}/nope.svg`);
     // directories are not files

@@ -2,7 +2,6 @@ import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizePath, searchForWorkspaceRoot } from 'vite';
-import { createMatchers } from './matchers.js';
 
 export type ZukanOptions = {
   /** catalog file suffix: `Foo.<suffix>.svelte` / `Foo.<suffix>.md` (default 'zukan') */
@@ -37,12 +36,10 @@ const file = (root: string, key: string, rel: string) => {
 
 export function resolveOptions(root: string, options: ZukanOptions) {
   const { suffix = 'zukan', locale = 'en', wrapper, logo, build } = options;
-  createMatchers(suffix);
   if (!LOCALES.includes(locale))
     throw new Error(`svelte-zukan: unknown locale "${locale}" (use ${LOCALES.map((l) => `"${l}"`).join(' or ')})`);
   return {
     suffix,
-    groups: options.groups,
     wrapper: wrapper === undefined ? null : file(root, 'wrapper', wrapper),
     logo: logo === false ? null : logo === undefined ? appFile('logo.svg') : file(root, 'logo', logo),
     title: options.title ?? 'zukan',

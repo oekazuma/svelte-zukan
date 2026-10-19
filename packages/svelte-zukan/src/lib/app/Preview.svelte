@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { Component, Snippet } from 'svelte';
-  import { setPreviewSection } from '../context.js';
+  import { setContext, type Component, type Snippet } from 'svelte';
+  import { PREVIEW_SECTION_KEY } from '../context.js';
   import type { Entry } from '../types.js';
   import type { Messages } from './i18n.js';
 
@@ -18,7 +18,7 @@
 
   // the parent keys this component on the hash, so reading the initial value is enough
   // svelte-ignore state_referenced_locally
-  if (section !== null) setPreviewSection(section);
+  if (section !== null) setContext(PREVIEW_SECTION_KEY, section);
 </script>
 
 <!-- the wrapper is imported only here, so its global CSS never reaches the catalog UI -->

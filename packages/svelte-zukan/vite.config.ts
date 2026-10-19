@@ -41,8 +41,7 @@ export default defineConfig(({ command }) => ({
             provider: playwright(),
             instances: [{ browser: 'chromium', headless: true }]
           },
-          include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
-          exclude: ['src/lib/server/**']
+          include: ['src/**/*.svelte.{test,spec}.{js,ts}']
         }
       },
 

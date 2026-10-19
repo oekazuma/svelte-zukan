@@ -2,9 +2,6 @@ import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'node
 import { basename, join, resolve } from 'node:path';
 import { normalizePath, searchForWorkspaceRoot } from 'vite';
 import type { CatalogGroup, CatalogItem } from '../types.js';
-import { createMatchers } from './matchers.js';
-
-export type { CatalogGroup, CatalogItem };
 
 const checkGroupName = (name: string) => {
   if (name === 'preview' || name.startsWith('preview/'))
@@ -73,17 +70,14 @@ const collator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' })
 const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 export function listCatalog(groups: CatalogGroup[], suffix: string): CatalogItem[] {
-  const { isCatalogFile } = createMatchers(suffix);
   const ext = `.${suffix}.svelte`;
   const items: (CatalogItem & { rel: string; order: number })[] = [];
   const seen = new Map<string, string>();
 
   groups.forEach(({ name: group, dirs }, order) => {
-    checkGroupName(group);
     for (const dir of dirs) {
       for (const found of globSync(`**/*${ext}`, { cwd: dir, exclude: ['**/node_modules/**'] })) {
         const file = normalizePath(join(dir, found));
-        if (!isCatalogFile(file)) continue;
         const segments = normalizePath(found).slice(0, -ext.length).split('/');
         const name = segments[segments.length - 1];
         // `Button/Button` is written as `Button`
