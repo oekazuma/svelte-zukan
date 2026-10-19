@@ -34,7 +34,7 @@ export default defineConfig(
     }
   },
   {
-    // the build fixtures and the example have no tsconfig of their own ready at lint time; no rule in use needs type information
+    // the build fixtures and the example have no tsconfig of their own ready at lint time; rules that need type information (such as svelte/no-unused-props) are skipped there
     files: ['tests/build/**/*.svelte', 'example/**/*.svelte'],
     languageOptions: { parserOptions: { projectService: false } }
   }
