@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import { userEvent } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import PreviewFrame from './PreviewFrame.svelte';
 
 const props = { src: 'about:blank', title: 'preview' };
@@ -127,9 +127,58 @@ describe('PreviewFrame resizing', () => {
 
   it('labels come from props', async () => {
     const screen = await render(PreviewFrame, {
-      props: { ...props, labels: { previewWidth: 'Frame width', fullWidth: 'Full' } }
+      props: {
+        ...props,
+        labels: {
+          previewWidth: 'Frame width',
+          fullWidth: 'Full',
+          background: 'Backdrop',
+          light: 'Day',
+          dark: 'Night',
+          openInNewTab: 'Pop out'
+        }
+      }
     });
     await expect.element(screen.getByRole('separator', { name: 'Frame width' })).toBeInTheDocument();
     await expect.element(screen.getByRole('button', { name: 'Full' })).toBeInTheDocument();
+    await expect.element(screen.getByRole('group', { name: 'Backdrop' })).toBeInTheDocument();
+    await expect.element(screen.getByRole('button', { name: 'Night' })).toBeInTheDocument();
+    await expect.element(screen.getByRole('link', { name: 'Pop out' })).toBeInTheDocument();
+  });
+});
+
+describe('PreviewFrame toolbar', () => {
+  it('the background switch applies to every preview on the page', async () => {
+    const targets = [0, 1].map(() => document.body.appendChild(document.createElement('div')));
+    for (const target of targets) await render(PreviewFrame, { props, target });
+    const [first, second] = targets.map((t) => page.elementLocator(t));
+    const iframes = targets.map((t) => t.querySelector('iframe')!);
+    for (const iframe of iframes) await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+
+    await first.getByRole('button', { name: 'Dark', exact: true }).click();
+    for (const iframe of iframes) {
+      await expect.poll(() => iframe.contentDocument!.documentElement.style.colorScheme).toBe('dark');
+      expect(iframe.style.colorScheme).toBe('dark');
+      expect(iframe.contentDocument!.documentElement.style.backgroundColor).toBe('rgb(13, 17, 23)');
+    }
+    await expect
+      .element(second.getByRole('button', { name: 'Dark', exact: true }))
+      .toHaveAttribute('aria-pressed', 'true');
+
+    await second.getByRole('button', { name: 'Light', exact: true }).click();
+    await expect.poll(() => iframes[0].contentDocument!.documentElement.style.colorScheme).toBe('light');
+    for (const target of targets) target.remove();
+  });
+
+  it('links to the preview in a new tab', async () => {
+    const screen = await render(PreviewFrame, { props: { ...props, src: './#/preview/ui/Card?section=One' } });
+    const link = screen.getByRole('link', { name: 'Open in new tab' });
+    await expect.element(link).toHaveAttribute('href', './#/preview/ui/Card?section=One');
+    await expect.element(link).toHaveAttribute('target', '_blank');
+  });
+
+  it('loads the iframe lazily', async () => {
+    const screen = await render(PreviewFrame, { props });
+    expect(screen.container.querySelector('iframe')!.getAttribute('loading')).toBe('lazy');
   });
 });
