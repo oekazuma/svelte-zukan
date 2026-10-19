@@ -24,7 +24,14 @@
     searched: { group: string; dirs: string[] }[];
   } = $props();
 
-  let hash = $state(location.hash);
+  // an ignored hash stays in the URL; the history entry keeps the catalog route so a reload can return to it
+  const KEY = 'zukanHash';
+  const remembered = () => {
+    const state = history.state as Record<string, unknown> | null;
+    return typeof state?.[KEY] === 'string' ? (state[KEY] as string) : null;
+  };
+
+  let hash = $state(remembered() ?? location.hash);
 
   const t = $derived(messages[locale]);
   const route = $derived(parseHash(hash));
@@ -33,8 +40,13 @@
   // components in a preview and links in a doc can change the hash too; only catalog routes navigate
   function onhashchange() {
     const next = location.hash;
-    if (next !== '' && !next.startsWith('#/')) return;
-    if (route.view === 'preview' && parseHash(next).view !== 'preview') return;
+    const foreign =
+      (next !== '' && !next.startsWith('#/')) || (route.view === 'preview' && parseHash(next).view !== 'preview');
+    if (foreign) {
+      const state = typeof history.state === 'object' && history.state ? history.state : {};
+      history.replaceState({ ...state, [KEY]: hash }, '');
+      return;
+    }
     hash = next;
     // the browser keeps the scroll position on a hash change; the previous page's position means nothing on the next
     if (route.view !== 'preview') tick().then(() => scrollTo(0, 0));

@@ -145,6 +145,28 @@ describe('App', () => {
     await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
   });
 
+  it.each(['#details', '#'])('a reload after %s in a preview shows the preview again', async (hash) => {
+    const { props } = setup('#/preview/ui/Card?section=Two');
+    const first = await render(App, { props });
+    await expect.element(first.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+    // the app must be mounted while the hash changes, as on a real page
+    await setHash(hash);
+    await first.unmount();
+    // a reload mounts the app again with the same URL and history entry
+    const again = await render(App, { props });
+    await expect.element(again.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+  });
+
+  it('a reload after an in-page anchor in a doc shows the detail page again', async () => {
+    const { props } = setup('#/ui/Card');
+    const first = await render(App, { props });
+    await expect.element(first.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    await setHash('#usage');
+    await first.unmount();
+    const again = await render(App, { props });
+    await expect.element(again.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+  });
+
   it('an empty hash still shows the list', async () => {
     const { props } = setup('#/ui/Card');
     const screen = await render(App, { props });
