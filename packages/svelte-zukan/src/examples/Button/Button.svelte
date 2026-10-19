@@ -9,9 +9,11 @@
 <style>
   button {
     padding: 6px 14px;
-    border: 1px solid #d1d9e0;
+    /* light-dark() follows the catalog's preview background switch */
+    border: 1px solid light-dark(#d1d9e0, #3d444d);
     border-radius: 6px;
-    background: #f6f8fa;
+    background: light-dark(#f6f8fa, #212830);
+    color: light-dark(#1f2328, #f0f6fc);
     font: inherit;
     cursor: pointer;
   }

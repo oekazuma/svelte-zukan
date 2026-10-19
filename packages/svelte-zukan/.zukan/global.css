@@ -1,3 +1,4 @@
 body {
-  background: #fffbe6;
+  /* follows the preview background switch, which sets color-scheme on the preview page */
+  background: light-dark(#fffbe6, #2b2614);
 }
