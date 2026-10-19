@@ -127,9 +127,9 @@ describe('PreviewFrame resizing', () => {
 
   it('labels come from props', async () => {
     const screen = await render(PreviewFrame, {
-      props: { ...props, labels: { previewWidth: 'プレビューの幅', fullWidth: '全幅' } }
+      props: { ...props, labels: { previewWidth: 'Frame width', fullWidth: 'Full' } }
     });
-    await expect.element(screen.getByRole('separator', { name: 'プレビューの幅' })).toBeInTheDocument();
-    await expect.element(screen.getByRole('button', { name: '全幅' })).toBeInTheDocument();
+    await expect.element(screen.getByRole('separator', { name: 'Frame width' })).toBeInTheDocument();
+    await expect.element(screen.getByRole('button', { name: 'Full' })).toBeInTheDocument();
   });
 });

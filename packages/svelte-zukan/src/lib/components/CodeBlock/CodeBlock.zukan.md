@@ -1,1 +1,1 @@
-折りたたみ式のコード表示。開くとコピーボタンが出る。
+A collapsible code view. Opening it reveals a copy button.

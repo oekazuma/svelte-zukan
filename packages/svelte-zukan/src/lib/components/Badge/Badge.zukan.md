@@ -1,1 +1,1 @@
-グループ名などを表示する小さなラベル。
+A small label that shows something like a group name.

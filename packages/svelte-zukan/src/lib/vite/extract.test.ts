@@ -6,10 +6,10 @@ const FILE = 'Button.zukan.svelte';
 
 describe('extractSections', () => {
   it('extracts title and dedented body', () => {
-    const source = `<Section title="基本">
-    <Button>押す</Button>
+    const source = `<Section title="Basic">
+    <Button>Press</Button>
   </Section>`;
-    expect(extractSections(source, FILE)).toEqual([{ title: '基本', code: '<Button>押す</Button>' }]);
+    expect(extractSections(source, FILE)).toEqual([{ title: 'Basic', code: '<Button>Press</Button>' }]);
   });
 
   it('prepends referenced definitions in source order', () => {
@@ -23,12 +23,12 @@ describe('extractSections', () => {
   let unused = 1;
 </script>
 
-<Section title="基本">
+<Section title="Basic">
   <Button onclick={() => count++}>{label}</Button>
 </Section>`;
     expect(extractSections(source, FILE)).toEqual([
       {
-        title: '基本',
+        title: 'Basic',
         code: `<script lang="ts">
   import Button from '../Button.svelte';
   let count = $state(0);
