@@ -225,5 +225,7 @@ function parseZukan(source: string, filename: string): Ast {
 }
 
 export function extractSections(source: string, filename: string): ZukanSection[] {
-  return sectionsFrom(parseZukan(source, filename), source, filename);
+  // Windows checkouts are often CRLF; the code view joins its parts with \n
+  const lf = source.replace(/\r\n?/g, '\n');
+  return sectionsFrom(parseZukan(lf, filename), lf, filename);
 }
