@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import type { OutgoingHttpHeaders, ServerResponse } from 'node:http';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { marked } from 'marked';
 import { normalizePath, type Plugin, type PreviewServer, type ViteDevServer } from 'vite';
@@ -27,6 +28,11 @@ const CONTENT_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.woff2': 'font/woff2',
   '.json': 'application/json'
+};
+
+/** Vite adds these to its own responses; the catalog's responses are the same pages */
+const setHeaders = (res: ServerResponse, headers: OutgoingHttpHeaders | undefined) => {
+  for (const [name, value] of Object.entries(headers ?? {})) if (value !== undefined) res.setHeader(name, value);
 };
 
 const printCatalogUrl = (server: ViteDevServer | PreviewServer) => {
@@ -240,6 +246,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         server
           .transformIndexHtml(path, html)
           .then((out) => {
+            setHeaders(res, server.config.server.headers);
             res.setHeader('content-type', 'text/html');
             res.end(out);
           })
@@ -272,6 +279,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         }
         const file = normalizePath(resolve(out, rel));
         if (!isInside(file, out) || !existsSync(file) || !statSync(file).isFile()) return next();
+        setHeaders(res, server.config.preview.headers);
         res.setHeader('content-type', CONTENT_TYPES[extname(file)] ?? 'application/octet-stream');
         res.end(readFileSync(file));
       });

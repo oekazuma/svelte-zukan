@@ -150,8 +150,8 @@ const bootBuild = async (root: string, options: Parameters<typeof zukan>[0] = {}
   return { p, added, config };
 };
 
-const fakeServer = (root: string, base = '/') => ({
-  config: { root, base, logger: { info: vi.fn() } },
+const fakeServer = (root: string, base = '/', headers?: Record<string, string | string[]>) => ({
+  config: { root, base, logger: { info: vi.fn() }, server: { headers }, preview: { headers } },
   middlewares: { use: vi.fn() },
   watcher: { add: vi.fn() },
   transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
@@ -403,7 +403,13 @@ describe('metadata modules', () => {
   });
 });
 
-type Res = { status?: string | number; body?: string; type?: string; location?: string };
+type Res = {
+  status?: string | number;
+  body?: string;
+  type?: string;
+  location?: string;
+  headers?: Record<string, unknown>;
+};
 const request = (mw: (...a: unknown[]) => void, url: string) =>
   new Promise<Res>((resolve) => {
     const out: Res = {};
@@ -411,7 +417,8 @@ const request = (mw: (...a: unknown[]) => void, url: string) =>
       statusCode: 200,
       setHeader: (k: string, v: string) => {
         if (k.toLowerCase() === 'content-type') out.type = v;
-        if (k.toLowerCase() === 'location') out.location = v;
+        else if (k.toLowerCase() === 'location') out.location = v;
+        else out.headers = { ...out.headers, [k.toLowerCase()]: v };
       },
       end(body?: string | Buffer) {
         resolve({ ...out, ...(this.statusCode !== 200 && { status: this.statusCode }), body: body?.toString() });
@@ -437,6 +444,15 @@ describe('configureServer', () => {
     // the query is dropped
     for (const [url] of server.transformIndexHtml.mock.calls) expect(url).toBe('/__zukan/');
     for (const url of ['/', '/__zukanx', '/__zukan/x']) expect(await request(mw, url)).toEqual({ status: 'next' });
+  });
+
+  it('sends the configured server.headers', async () => {
+    const { root } = await makeApp();
+    const server = fakeServer(root, '/', { 'cross-origin-embedder-policy': 'require-corp', 'x-test': ['a', 'b'] });
+    boot(root).p.configureServer(server);
+    const res = await request(server.middlewares.use.mock.calls[0][0], '/__zukan/');
+    expect(res.type).toMatch(/^text\/html/);
+    expect(res.headers).toEqual({ 'cross-origin-embedder-policy': 'require-corp', 'x-test': ['a', 'b'] });
   });
 
   it('follows base', async () => {
@@ -484,12 +500,16 @@ describe('configureServer', () => {
 });
 
 describe('configurePreviewServer', () => {
-  const setup = async (base = '/', options: Parameters<typeof zukan>[0] = { build: true }) => {
+  const setup = async (
+    base = '/',
+    options: Parameters<typeof zukan>[0] = { build: true },
+    headers?: Record<string, string>
+  ) => {
     const { root } = await makeApp();
     mkdirSync(path.join(root, 'zukan-dist/_zukan'), { recursive: true });
     await writeFile(path.join(root, 'zukan-dist/index.html'), '<html>catalog</html>');
     await writeFile(path.join(root, 'zukan-dist/_zukan/zukan-abc.js'), 'export {}');
-    const server = fakeServer(root, base);
+    const server = fakeServer(root, base, headers);
     boot(root, options).p.configurePreviewServer(server);
     return { server, mw: server.middlewares.use.mock.calls[0]?.[0] };
   };
@@ -500,6 +520,14 @@ describe('configurePreviewServer', () => {
     expect(html.body).toContain('catalog');
     expect(html.type).toMatch(/^text\/html/);
     expect((await request(mw, '/__zukan/_zukan/zukan-abc.js')).type).toMatch(/javascript/);
+  });
+
+  it('sends the configured preview.headers', async () => {
+    const { mw } = await setup('/', { build: true }, { 'x-frame-options': 'DENY' });
+    expect((await request(mw, '/__zukan/')).headers).toEqual({ 'x-frame-options': 'DENY' });
+    const js = await request(mw, '/__zukan/_zukan/zukan-abc.js');
+    expect(js.type).toMatch(/javascript/);
+    expect(js.headers).toEqual({ 'x-frame-options': 'DENY' });
   });
 
   it('redirects /__zukan to /__zukan/', async () => {
