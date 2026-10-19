@@ -1,6 +1,6 @@
 {
   "name": "svelte-zukan",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Colocated component catalog for Svelte, served by a Vite plugin",
   "license": "MIT",
   "author": "oekazuma",
