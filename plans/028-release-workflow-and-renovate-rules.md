@@ -17,7 +17,7 @@
 - Priority: P3
 - Effort: S
 - Risk: LOW
-- Depends on: none (the Renovate part only matters once Renovate is running; see Step 0)
+- Depends on: none
 - Category: dx / security
 - Planned at: commit `293f5a4`, 2026-10-20
 
@@ -72,7 +72,7 @@ Three small CI/dependency settings, each with a concrete cost:
   ```
   Later rules win in Renovate, so a rule appended at the end overrides the first one.
 - `AGENTS.md:101` says actions are SHA-pinned "(Renovate keeps them updated)"; `AGENTS.md:112` says "Renovate does not auto-merge its updates" for `marked`.
-- At planning time the repository showed no Renovate activity at all: no PRs from Renovate, no `renovate/*` branches, no Dependency Dashboard issue.
+- At planning time the repository showed no Renovate activity at all. The maintainer enabled the Renovate GitHub App on 2026-10-20, after the audit, so its first PRs (and a Dependency Dashboard issue) may already exist when you run this plan.
 
 ## Commands you will need
 
@@ -93,7 +93,6 @@ Three small CI/dependency settings, each with a concrete cost:
 
 - Any other workflow, any action version or SHA.
 - Renovate rules for devDependencies or the catalog.
-- Enabling the Renovate GitHub App: a repository-settings action for the maintainer.
 
 ## Git workflow
 
@@ -103,12 +102,6 @@ Three small CI/dependency settings, each with a concrete cost:
 - Do not push or open a PR unless told to.
 
 ## Steps
-
-### Step 0: Check whether Renovate is running (report only)
-
-Run `gh pr list --state all --author app/renovate --limit 5` and `gh issue list --state all --search "Dependency Dashboard" --limit 5`.
-
-**Verify**: note the result in your report. If both are empty, write in your report: "Renovate shows no activity; the maintainer should check that the Renovate GitHub App is installed for this repository." Continue either way. The config changes are harmless when Renovate is off.
 
 ### Step 1: Concurrency and timeout for the release workflow
 
@@ -157,7 +150,6 @@ No automated tests cover workflow or Renovate config. The checks are the validat
 - [ ] `grep -n '"update-lockfile"' renovate.json` prints one line, inside the `dependencies` rule
 - [ ] `grep -n '"matchManagers": \["github-actions"\]' renovate.json` prints one line, in the last rule
 - [ ] `pnpm run lint` exits 0
-- [ ] The report says whether Renovate shows activity (Step 0)
 - [ ] `git status` shows only in-scope files changed
 - [ ] `plans/README.md` status row updated
 

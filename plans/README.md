@@ -66,9 +66,9 @@ Second batch (015–031):
 - 018 and 024 before 027: 027 extends the routing that 018 changes and the `Detail.svelte` line that 024 changes.
 - 030 after every plan that adds tests to `index.test.ts`: it moves describe blocks out of that file.
 - 031 last: it documents the live code, after all the other changes.
-- 028 and 029 share no lines with other plans (028's `AGENTS.md:101` edit is one that 031 steers around) and can run at any point. 028's Renovate rules only matter once Renovate is running (see below).
+- 028 and 029 share no lines with other plans (028's `AGENTS.md:101` edit is one that 031 steers around) and can run at any point.
 - Changesets: 015–021, 024 and 025 are `patch`; 026 and 027 are `minor`. 022, 023, 028, 029, 030 and 031 need none.
-- Before 028: at planning time the repository showed no Renovate activity at all (no PRs, no `renovate/*` branches, no Dependency Dashboard issue) despite updates past the cooldown (`@sveltejs/kit` 3.1.0, `blume` 2.2.4). The maintainer should check that the Renovate GitHub App is installed.
+- Renovate: at planning time the repository showed no Renovate activity at all (no PRs, no `renovate/*` branches, no Dependency Dashboard issue). The maintainer enabled the Renovate GitHub App on 2026-10-20, after the audit, so 028's rules apply from its first run.
 
 ## Findings considered and rejected
 
