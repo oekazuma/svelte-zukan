@@ -1,6 +1,6 @@
 import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { normalizePath } from 'vite';
+import { normalizePath, searchForWorkspaceRoot } from 'vite';
 import type { CatalogGroup, CatalogItem } from '../types.js';
 import { createMatchers } from './matchers.js';
 
@@ -47,9 +47,11 @@ export function discoverGroups(root: string, groups?: Record<string, string | st
   // several names may link to one package, or back to the app itself
   const scanned = new Set([realpathSync(root)]);
   const deps = [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.devDependencies ?? {})];
+  const ws = searchForWorkspaceRoot(root);
   for (const dep of new Set(deps)) {
-    const link = join(root, 'node_modules', dep);
-    if (!existsSync(link)) continue;
+    // pnpm links workspace packages in the app's node_modules; npm, yarn and bun in the workspace root's
+    const link = [join(root, 'node_modules', dep), join(ws, 'node_modules', dep)].find((l) => existsSync(l));
+    if (!link) continue;
     const real = realpathSync(link);
     // installed packages live under node_modules; only workspace links resolve outside of it
     if (real.split(/[/\\]/).includes('node_modules') || scanned.has(real)) continue;

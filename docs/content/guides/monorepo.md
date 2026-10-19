@@ -13,9 +13,9 @@ The group name is the `name` in the package's `package.json`, or the directory n
 
 ## How dependencies are found
 
-Dependency packages are found through the links in the catalog app's own `node_modules/<dependency name>`, which is how pnpm workspaces link them.
+Dependency packages are found through the links in the catalog app's own `node_modules/<dependency name>` (pnpm), or in the workspace root's `node_modules/<dependency name>` (npm, yarn and bun).
 
-- With npm or yarn workspaces, the links are created in the workspace root's `node_modules`, so they are not found. Use `groups` instead
+- Yarn Plug'n'Play has no `node_modules`, so packages are not found there. Use `groups` instead
 - Transitive dependencies are not scanned. For apps or packages that the app does not declare as dependencies, use `groups`
 
 ## Choosing directories with `groups`

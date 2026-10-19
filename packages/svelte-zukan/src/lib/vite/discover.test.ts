@@ -46,6 +46,57 @@ describe('discoverGroups', () => {
     ]);
   });
 
+  it('workspace dependency linked at the workspace root (npm, yarn, bun)', () => {
+    pkg('', { name: 'root', private: true, workspaces: ['app', 'ui'] });
+    pkg('app', { name: 'app', dependencies: { '@acme/ui': '*' } });
+    pkg('ui', { name: '@acme/ui' });
+    write('app/src/a.zukan.svelte');
+    write('ui/src/b.zukan.svelte');
+    mkdirSync(join(tmp, 'node_modules/@acme'), { recursive: true });
+    symlinkSync(join(tmp, 'ui'), join(tmp, 'node_modules/@acme/ui'), 'dir');
+    expect(discoverGroups(join(tmp, 'app'))).toEqual([
+      { name: 'app', dirs: [p('app/src')] },
+      { name: '@acme/ui', dirs: [p('ui/src')] }
+    ]);
+  });
+
+  it('a hoisted installed package at the workspace root is skipped', () => {
+    pkg('', { name: 'root', private: true, workspaces: ['app'] });
+    pkg('app', { name: 'app', dependencies: { lodash: '^4' } });
+    write('app/src/a.zukan.svelte');
+    pkg('node_modules/lodash', { name: 'lodash' });
+    write('node_modules/lodash/src/x.zukan.svelte');
+    expect(names(discoverGroups(join(tmp, 'app')))).toEqual(['app']);
+  });
+
+  it("the app's own link wins over the workspace root", () => {
+    pkg('', { name: 'root', private: true, workspaces: ['app', 'ui', 'ui2'] });
+    pkg('app', { name: 'app', dependencies: { '@acme/ui': '*' } });
+    pkg('ui', { name: '@acme/ui' });
+    pkg('ui2', { name: '@acme/ui' });
+    write('app/src/a.zukan.svelte');
+    write('ui/src/b.zukan.svelte');
+    write('ui2/src/c.zukan.svelte');
+    mkdirSync(join(tmp, 'app/node_modules/@acme'), { recursive: true });
+    mkdirSync(join(tmp, 'node_modules/@acme'), { recursive: true });
+    symlinkSync(join(tmp, 'ui'), join(tmp, 'app/node_modules/@acme/ui'), 'dir');
+    symlinkSync(join(tmp, 'ui2'), join(tmp, 'node_modules/@acme/ui'), 'dir');
+    expect(discoverGroups(join(tmp, 'app'))).toEqual([
+      { name: 'app', dirs: [p('app/src')] },
+      { name: '@acme/ui', dirs: [p('ui/src')] }
+    ]);
+  });
+
+  it('no workspace root: nothing changes', () => {
+    pkg('app', { name: 'app', dependencies: { '@acme/ui': '*' } });
+    pkg('ui', { name: '@acme/ui' });
+    write('app/src/a.zukan.svelte');
+    write('ui/src/b.zukan.svelte');
+    mkdirSync(join(tmp, 'node_modules/@acme'), { recursive: true });
+    symlinkSync(join(tmp, 'ui'), join(tmp, 'node_modules/@acme/ui'), 'dir');
+    expect(names(discoverGroups(join(tmp, 'app')))).toEqual(['app']);
+  });
+
   it('skips installed packages', () => {
     pkg('app', { name: 'app', dependencies: { lodash: '^4' } });
     write('app/src/a.zukan.svelte');
