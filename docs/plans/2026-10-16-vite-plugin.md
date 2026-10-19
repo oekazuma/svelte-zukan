@@ -10,9 +10,9 @@
 
 **Spec:** `docs/specs/2026-10-16-catalog.md`（今回の改訂版）
 
-**旧計画の積み残し:** 旧計画のレビューで後回しにした軽微な指摘は、この計画の各タスクに割り振った（直すもの）か、spec の「やらないこと」に理由付きで入れた
+**旧計画の積み残し:** 旧計画（ルートファイル方式の実装計画。ファイルは削除済みで、git の履歴にだけ残る）のレビューで後回しにした軽微な指摘は、この計画の各タスクに割り振った（直すもの）か、spec の「やらないこと」に理由付きで入れた
 
-**前提:** ロゴの SVG（`src/lib/app/logo.svg`、`src/lib/app/icon.svg`、`.github/logo.svg`、`.github/logo-dark.svg`、`static/favicon.svg`）は controller が配置済みで、Task 4 と Task 6 のコミットに含める。旧計画 `docs/plans/2026-10-16-catalog.md` の Task 1〜6 は完了している。Task 7 で先に積まれたコミット（2fb60eb, 509917c）は、この計画の Task 6 で作り直す。spec の「スパイクで確かめたこと」は controller が実施済み（コードはコミットしていない）。
+**前提:** ロゴの SVG（`src/lib/app/logo.svg`、`src/lib/app/icon.svg`、`.github/logo.svg`、`.github/logo-dark.svg`、`static/favicon.svg`）は controller が配置済みで、Task 4 と Task 6 のコミットに含める。旧計画の Task 1〜6 は完了している。Task 7 で先に積まれたコミット（2fb60eb, 509917c）は、この計画の Task 6 で作り直す。spec の「スパイクで確かめたこと」は controller が実施済み（コードはコミットしていない）。
 
 ## Global Constraints
 

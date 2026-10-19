@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40" width="200" height="40">
-  <rect width="40" height="40" rx="8" fill="#ff3e00" />
-  <rect x="10" y="10" width="20" height="20" rx="3" fill="#fff" />
-  <text x="50" y="27" font-family="system-ui, sans-serif" font-size="18" font-weight="700" fill="#ff3e00">svelte-zukan</text>
-</svg>
