@@ -674,6 +674,7 @@ describe('build', () => {
       build: {
         ssr: 'src/entry-server.ts',
         lib: { entry: 'src/index.ts' },
+        cssCodeSplit: false,
         rolldownOptions: { input: { main: 'index.html', nested: 'nested/index.html', zukan: ENTRY } }
       }
     });
@@ -683,6 +684,7 @@ describe('build', () => {
       ssr: false,
       lib: false,
       emptyOutDir: false,
+      cssCodeSplit: true,
       rolldownOptions: { input: { zukan: ENTRY } }
     });
     const client = inherited();
