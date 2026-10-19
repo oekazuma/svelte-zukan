@@ -25,7 +25,7 @@ svelte-zukan does one thing: it shows your Svelte components in a catalog. It is
 | Tests and a11y checks     | No                                                           | Yes (interaction tests, a11y addon, visual tests)      | No                                                        |
 | SvelteKit `$app/*`        | The real modules, in their default state                     | Mocked, including `$app/state`                         | —                                                         |
 | Static export             | `build: true` in your own `vite build`; works under any path | `storybook build`                                      | `histoire build`                                          |
-| Requirements              | Vite 8+, Svelte 5, SvelteKit 3+ (or plain Vite + Svelte)     | Several bundlers and frameworks                        | Vite; Vue and Svelte 3/4                                  |
+| Requirements              | Vite 8+, Svelte 5.20+, SvelteKit 3+ (or plain Vite + Svelte) | Several bundlers and frameworks                        | Vite; Vue and Svelte 3/4                                  |
 
 <sup>1</sup> Measured on 2026-10-19 with `npm install` in an empty directory, leaving out the peer dependencies every option shares (`svelte`, `vite`, `@sveltejs/kit`). Storybook is `storybook` and `@storybook/sveltekit` without any addon. Histoire is `histoire` and `@histoire/plugin-svelte`.
 
