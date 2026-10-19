@@ -182,6 +182,43 @@ describe('extractSections', () => {
     ]);
   });
 
+  it('finds a Section alias imported in <script module>', () => {
+    const source = `<script module>
+  import { Section as Example } from 'svelte-zukan';
+</script>
+
+<Example title="A"><p>one</p></Example>`;
+    expect(extractSections(source, FILE)).toEqual([{ title: 'A', code: '<p>one</p>' }]);
+  });
+
+  it('names the alias in title errors', () => {
+    const source = `<script>
+  import { Section as Example } from 'svelte-zukan';
+</script>
+
+<Example><p>one</p></Example>`;
+    expect(() => extractSections(source, FILE)).toThrow(/<Example> needs a title/);
+  });
+
+  it('gives the same code for CRLF line endings', () => {
+    const lf = `<script>
+  import { Section } from 'svelte-zukan';
+  const f = (x) => {
+    return x;
+  };
+</script>
+
+<Section title="A">
+  <p>{f(1)}</p>
+  <p>two</p>
+</Section>`;
+    expect(extractSections(lf.replace(/\n/g, '\r\n'), FILE)).toEqual(extractSections(lf, FILE));
+  });
+
+  it('reports the line of an error in a CRLF file', () => {
+    expect(() => extractSections('<p></p>\r\n<Section><A /></Section>', FILE)).toThrow(/Button\.zukan\.svelte:2 /);
+  });
+
   it('includes TypeScript types the section uses', () => {
     const source = `<script lang="ts">
   type Item = { id: number };
