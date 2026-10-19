@@ -3,6 +3,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sveltekit } from '@sveltejs/kit/vite';
 import { normalizePath, searchForWorkspaceRoot } from 'vite';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import * as api from './index.js';
@@ -524,9 +525,10 @@ describe('hotUpdate of the catalog list', () => {
 
 describe('detectSvelteKit', () => {
   it('finds sveltekit() in nested arrays and promises', async () => {
-    expect(await detectSvelteKit([Promise.resolve([{ name: 'vite-plugin-sveltekit-setup' }])])).toBe(true);
-    expect(await detectSvelteKit([[{ name: 'vite-plugin-svelte' }], null, false])).toBe(false);
-    expect(await detectSvelteKit([])).toBe(false);
+    const setup = { name: 'vite-plugin-sveltekit-setup', api: { options: {} } };
+    expect(await detectSvelteKit([{ name: 'vite-plugin-sveltekit-guard' }, Promise.resolve([setup])])).toBe(setup);
+    expect(await detectSvelteKit([[{ name: 'vite-plugin-svelte' }], null, false])).toBeUndefined();
+    expect(await detectSvelteKit([])).toBeUndefined();
   });
 });
 
@@ -557,6 +559,37 @@ describe('build', () => {
     await reject('.svelte-kit/output/zukan', { build: { outDir: `${root}/.svelte-kit/output` } });
     expect((await bootBuild(root, { build: { outDir: 'out' } }, { build: { outDir: 'output' } })).added).toBeDefined();
   });
+
+  // the shape of the real plugin: Kit 3 keeps `kit.outDir` at `api.options.outDir`
+  const kitPlugins = (options: object = {}) => [
+    Promise.resolve([{ name: 'vite-plugin-sveltekit-setup', api: { options } }])
+  ];
+
+  it("rejects a catalog outDir that overlaps SvelteKit's kit.outDir", async () => {
+    const { root } = await makeApp();
+    const reject = (outDir: string, kit?: object) =>
+      expect(bootBuild(root, { build: { outDir } }, { plugins: kitPlugins(kit) })).rejects.toThrow(
+        /svelte-zukan: build\.outDir of the catalog .* must not overlap SvelteKit's kit\.outDir/
+      );
+    // the default is .svelte-kit
+    await reject('.svelte-kit');
+    await reject('.svelte-kit/zukan');
+    // Kit resolves its outDir to an absolute path
+    await reject('gen', { outDir: `${root}/gen` });
+    await reject('gen/zukan', { outDir: `${root}/gen` });
+    await reject('gen', { outDir: `${root}/gen/kit` });
+    const ok = await bootBuild(root, { build: { outDir: '.svelte-kit' } }, { plugins: kitPlugins({ outDir: 'gen' }) });
+    expect(ok.added).toBeDefined();
+    // the real plugin
+    const real = (outDir: string) =>
+      bootBuild(root, { build: { outDir } }, { plugins: [sveltekit({ outDir: 'gen' })] });
+    await expect(real('gen/zukan')).rejects.toThrow(/must not overlap SvelteKit's kit\.outDir/);
+    expect((await real('.svelte-kit')).added).toBeDefined();
+    // without Kit, .svelte-kit is just a directory
+    expect((await bootBuild(root, { build: { outDir: '.svelte-kit/zukan' } })).added).toBeDefined();
+  });
+
+  type Env = { isBuilt: boolean };
 
   it('runs the config hook after the other plugins', () => {
     // so that a `builder` or a `renderBuiltUrl` set by another plugin is seen
@@ -624,7 +657,12 @@ describe('build', () => {
     });
     const env = inherited();
     p.configEnvironment('zukan', env);
-    expect(env.build).toEqual({ ssr: false, lib: false, rolldownOptions: { input: { zukan: ENTRY } } });
+    expect(env.build).toEqual({
+      ssr: false,
+      lib: false,
+      emptyOutDir: false,
+      rolldownOptions: { input: { zukan: ENTRY } }
+    });
     const client = inherited();
     p.configEnvironment('client', client);
     expect(client).toEqual(inherited());
@@ -646,7 +684,6 @@ describe('build', () => {
     expect(plain.config.experimental.renderBuiltUrl('assets/index-1.js', ctx)).toBeUndefined();
   });
 
-  type Env = { isBuilt: boolean };
   const fakeBuilder = (fileName: string, others: Record<string, Env>, { array = false, watch = false } = {}) => {
     const zukanEnv = { isBuilt: false };
     const output = {
@@ -709,6 +746,51 @@ describe('build', () => {
     await p.buildApp.handler(builder);
     expect(existsSync(`${outDir}/_app/version.json`)).toBe(false);
     expect(existsSync(`${outDir}/_app/immutable/workers/w.js`)).toBe(true);
+  });
+
+  it('removes only the files of the previous catalog', async () => {
+    const { root } = await makeApp();
+    const outDir = `${root}/zukan-dist`;
+    mkdirSync(`${outDir}/_zukan`, { recursive: true });
+    await writeFile(`${outDir}/_zukan/old.js`, '');
+    await writeFile(`${outDir}/index.html`, 'old');
+    await writeFile(`${outDir}/keep.txt`, '');
+    const { p } = await bootBuild(root, { build: true });
+    const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
+    await p.buildApp.handler(builder);
+    expect(existsSync(`${outDir}/_zukan/old.js`)).toBe(false);
+    expect(existsSync(`${outDir}/keep.txt`)).toBe(true);
+    expect(readFileSync(`${outDir}/index.html`, 'utf-8')).toContain('./_zukan/zukan-abc.js');
+  });
+
+  it.each([
+    ['build', true],
+    ['build/zukan', true],
+    ['zukan-dist', false],
+    ['built', false]
+  ])('with SvelteKit, warns once about a catalog outDir %s overlapping build/: %s', async (outDir, warns) => {
+    const { root } = await makeApp();
+    mkdirSync(`${root}/${outDir}`, { recursive: true });
+    const { p } = await bootBuild(root, { build: { outDir } }, { plugins: kitPlugins() });
+    const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
+    await p.buildApp.handler(builder);
+    const warned = builder.config.logger.warn.mock.calls.map(([m]) => m);
+    expect(warned).toEqual(
+      warns
+        ? [
+            `svelte-zukan: build.outDir of the catalog (${root}/${outDir}) overlaps ${root}/build, which SvelteKit adapters usually empty after the catalog is written; set another one with \`build: { outDir }\``
+          ]
+        : []
+    );
+  });
+
+  it('does not warn about build/ without SvelteKit', async () => {
+    const { root } = await makeApp();
+    mkdirSync(`${root}/build`);
+    const { p } = await bootBuild(root, { build: { outDir: 'build' } });
+    const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
+    await p.buildApp.handler(builder);
+    expect(builder.config.logger.warn).not.toHaveBeenCalled();
   });
 
   it('skips the catalog with a warning in watch mode', async () => {

@@ -199,6 +199,7 @@ zukan({ build: true });
 - 出力のパスは相対パスなので、どのサブパス（例: `/docs/zukan/`）に置いても動きます。サーバー側の書き換え設定は要りません
 - `build` を有効にすると、`vite build` は Vite の builder モード（Environment API）で動き、全環境が 1 回の実行でビルドされます
 - `vite build --watch` ではカタログを書き出しません（警告を出して飛ばします）
+- 書き出しの前に、前回のカタログ（出力先の `_zukan/` と `index.html`）だけを消します。SvelteKit では、adapter が `build/` を空にすることが多いので、出力先が `build/` と重なると警告を出します
 - `/zukan-dist` は `.gitignore` に足してください
 
 ## SvelteKit の実行時 API

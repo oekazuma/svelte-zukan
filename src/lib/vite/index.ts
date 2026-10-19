@@ -26,6 +26,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   let resolved: ReturnType<typeof resolveOptions>;
   /** whether the user's config builds every environment (`builder`, or `vite build --app`) */
   let appBuilder = false;
+  /** printed once in buildApp: Vite resolves the config again for every environment */
+  let warning: string | null = null;
   const scanned = () => groups.flatMap((g) => g.dirs);
 
   return {
@@ -46,12 +48,27 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         if (allow) ((config.server ??= {}).fs ??= {}).allow = allow;
         // `config.build.ssr` is the server half of an SSR build (`vite build --ssr`)
         if (command !== 'build' || !resolved.build || config.build?.ssr) return;
-        // Vite empties both outDirs, so they must not overlap each other or the project
-        const appOut = normalizePath(resolve(root, config.build?.outDir ?? 'dist'));
-        if (isInside(root, resolved.build) || isInside(resolved.build, appOut) || isInside(appOut, resolved.build))
+        // set here, not in configResolved: a define added there does not reach the build
+        const kit = await detectSvelteKit(config.plugins ?? []);
+        const out = resolved.build;
+        const overlaps = (dir: string) => isInside(out, dir) || isInside(dir, out);
+        const dirOf = (rel: string) => normalizePath(resolve(root, rel));
+        // the catalog writes and removes index.html and _zukan/ in its outDir; the app's and Kit's outDirs are rewritten on every build
+        if (isInside(root, out))
           throw new Error(
-            `svelte-zukan: build.outDir of the catalog (${resolved.build}) must not be the Vite root or overlap the app's build.outDir (${appOut})`
+            `svelte-zukan: build.outDir of the catalog (${out}) must not be the Vite root (${root}) or contain it`
           );
+        for (const [what, dir] of [
+          ["the app's build.outDir", dirOf(config.build?.outDir ?? 'dist')],
+          ...(kit ? [["SvelteKit's kit.outDir", dirOf(kit.api?.options?.outDir ?? '.svelte-kit')]] : [])
+        ])
+          if (overlaps(dir))
+            throw new Error(`svelte-zukan: build.outDir of the catalog (${out}) must not overlap ${what} (${dir})`);
+        // adapters usually empty `build/`, but their outDir can not be read from here
+        warning =
+          kit && overlaps(dirOf('build'))
+            ? `svelte-zukan: build.outDir of the catalog (${out}) overlaps ${dirOf('build')}, which SvelteKit adapters usually empty after the catalog is written; set another one with \`build: { outDir }\``
+            : null;
         appBuilder = !!config.builder;
 
         // relative, so that the catalog also works under a subpath; `base` can not be set per environment
@@ -59,8 +76,6 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         (config.experimental ??= {}).renderBuiltUrl = (filename, ctx) =>
           filename.startsWith(OUT_PREFIX) ? { relative: true } : renderBuiltUrl?.(filename, ctx);
 
-        // set here, not in configResolved: a define added there does not reach the build
-        const kit = await detectSvelteKit(config.plugins ?? []);
         return {
           // without it, a plain `vite build` sets up only the app's environment
           builder: {},
@@ -97,7 +112,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     configEnvironment(name, config) {
       if (name !== 'zukan' || !config.build) return;
       // the environment starts from the app's top-level `build`; mutated, since a returned value would be merged into it
-      Object.assign(config.build, { ssr: false, lib: false });
+      // `emptyOutDir: false` also because Kit sets it for the whole build; buildApp removes only the catalog's own files
+      Object.assign(config.build, { ssr: false, lib: false, emptyOutDir: false });
       config.build.rolldownOptions = { ...config.build.rolldownOptions, input: { zukan: ENTRY } };
     },
     buildApp: {
@@ -106,6 +122,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       async handler(builder) {
         const env = builder.environments.zukan;
         if (!env || !resolved.build) return;
+        if (warning) builder.config.logger.warn(warning);
         // Vite builds the app only when no hook built an environment, and this hook is about to build one
         const others = Object.values(builder.environments).filter((e) => e !== env);
         if (others.every((e) => !e.isBuilt)) {
@@ -118,6 +135,9 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           return;
         }
 
+        // only what this plugin writes: the outDir may be shared with other files
+        rmSync(join(resolved.build, OUT_PREFIX), { recursive: true, force: true });
+        rmSync(join(resolved.build, 'index.html'), { force: true });
         const out = await builder.build(env);
         const entry = (Array.isArray(out) ? out : [out])
           .flatMap((o) => ('output' in o ? o.output : []))
