@@ -35,6 +35,7 @@ describe('createMatchers', () => {
     const { isCatalogFile, isDocFile } = createMatchers('catalog');
     expect(isCatalogFile('/a/Foo.catalog.svelte')).toBe(true);
     expect(isCatalogFile('/a/Foo.zukan.svelte')).toBe(false);
+    expect(isDocFile('/a/Foo.catalog.md')).toBe(true);
     expect(isDocFile('/a/Foo.zukan.md')).toBe(false);
     expect(isDocFile('/a/Document.md')).toBe(false);
   });
@@ -342,6 +343,16 @@ describe('metadata modules', () => {
     const addWatchFile = vi.fn();
     expect(p.load.call({ addWatchFile }, meta('app%2FA'))).toContain('<h1>A</h1>');
     expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/A.zukan.md`);
+  });
+
+  it('reads B.<suffix>.md for a custom suffix', async () => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/B.catalog.svelte'), '<Section title="B"><p>b</p></Section>');
+    await writeFile(path.join(root, 'src/B.catalog.md'), '# B');
+    const { p } = boot(root, { suffix: 'catalog' });
+    const addWatchFile = vi.fn();
+    expect(p.load.call({ addWatchFile }, meta('app%2FB'))).toContain('<h1>B</h1>');
+    expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/B.catalog.md`);
   });
 
   it('throws for an unknown ID', async () => {
