@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
@@ -13,6 +14,10 @@ function setup(hash: string) {
   const searched = [{ group: 'ui', dirs: ['src', '../lib'] }];
   return { wrapper, props: { catalog, logo: null, wrapper, title: 'zukan', locale: 'en' as 'en' | 'ja', searched } };
 }
+
+beforeEach(async () => {
+  await page.viewport(1280, 800);
+});
 
 afterEach(() => {
   history.replaceState(null, '', location.pathname + location.search);
@@ -80,6 +85,49 @@ describe('App', () => {
     const { props } = setup('');
     const screen = await render(App, { props });
     location.hash = '#/ui/Card';
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+  });
+
+  it('the search filters the sidebar', async () => {
+    const { props } = setup('');
+    props.catalog.push({ group: 'ui', name: 'Button', dir: 'forms', path: 'ui/forms/Button', load });
+    const screen = await render(App, { props });
+    const nav = screen.getByRole('navigation', { name: 'Components' });
+    await screen.getByRole('searchbox', { name: 'Search' }).fill('FORMS');
+    await expect.element(nav.getByRole('link', { name: /Button/ })).toBeInTheDocument();
+    await expect.element(nav.getByRole('link', { name: 'Card' })).not.toBeInTheDocument();
+    await screen.getByRole('searchbox', { name: 'Search' }).fill('nothing');
+    await expect.element(nav.getByText('No matches')).toBeInTheDocument();
+  });
+
+  it('/ focuses the search', async () => {
+    const { props } = setup('');
+    const screen = await render(App, { props });
+    await userEvent.keyboard('/');
+    await expect.element(screen.getByRole('searchbox', { name: 'Search' })).toHaveFocus();
+  });
+
+  it('groups are labelled only when there are several', async () => {
+    const { props } = setup('');
+    const screen = await render(App, { props });
+    const nav = screen.getByRole('navigation', { name: 'Components' });
+    await expect.element(nav.getByRole('list', { name: 'ui' })).not.toBeInTheDocument();
+    props.catalog.push({ group: 'examples', name: 'Demo', dir: '', path: 'examples/Demo', load });
+    await screen.rerender({ catalog: [...props.catalog] });
+    await expect.element(nav.getByRole('list', { name: 'ui' })).toBeInTheDocument();
+    await expect.element(nav.getByRole('list', { name: 'examples' })).toHaveTextContent('Demo');
+  });
+
+  it('on a narrow screen the menu button shows the navigation', async () => {
+    await page.viewport(400, 800);
+    const { props } = setup('');
+    const screen = await render(App, { props });
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    await expect.element(screen.getByRole('navigation', { name: 'Components' })).not.toBeInTheDocument();
+    await menu.click();
+    await expect.element(menu).toHaveAttribute('aria-expanded', 'true');
+    await screen.getByRole('navigation', { name: 'Components' }).getByRole('link', { name: 'Card' }).click();
+    await expect.element(menu).toHaveAttribute('aria-expanded', 'false');
     await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
   });
 });

@@ -10,6 +10,13 @@ export type Messages = {
   copyFailed: string;
   previewWidth: string;
   fullWidth: string;
+  search: string;
+  noMatches: string;
+  menu: string;
+  background: string;
+  light: string;
+  dark: string;
+  openInNewTab: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -24,7 +31,14 @@ export const messages: Record<'en' | 'ja', Messages> = {
     copied: 'Copied',
     copyFailed: 'Copy failed',
     previewWidth: 'Preview width',
-    fullWidth: '100%'
+    fullWidth: '100%',
+    search: 'Search',
+    noMatches: 'No matches',
+    menu: 'Menu',
+    background: 'Preview background',
+    light: 'Light',
+    dark: 'Dark',
+    openInNewTab: 'Open in new tab'
   },
   ja: {
     nav: 'コンポーネント',
@@ -37,6 +51,13 @@ export const messages: Record<'en' | 'ja', Messages> = {
     copied: 'コピーしました',
     copyFailed: 'コピーできませんでした',
     previewWidth: 'プレビューの幅',
-    fullWidth: '100%'
+    fullWidth: '100%',
+    search: '検索',
+    noMatches: '一致するものがありません',
+    menu: 'メニュー',
+    background: 'プレビューの背景',
+    light: 'ライト',
+    dark: 'ダーク',
+    openInNewTab: '新しいタブで開く'
   }
 };

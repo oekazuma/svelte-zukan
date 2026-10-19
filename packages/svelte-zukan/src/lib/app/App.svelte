@@ -66,6 +66,11 @@
     margin: 0;
   }
 
+  /* the catalog UI follows the system theme; the preview page (no .zukan) is left to the app's own CSS */
+  :global(html:has(> body > .zukan)) {
+    color-scheme: light dark;
+  }
+
   /* internal theme; the catalog page loads no app CSS, so these are not meant to be overridden */
   .zukan {
     --_bg: #fff;
@@ -86,8 +91,30 @@
     font-family: var(--_font);
   }
 
+  @media (prefers-color-scheme: dark) {
+    .zukan {
+      --_bg: #0d1117;
+      --_text: #f0f6fc;
+      --_muted: #9198a1;
+      --_border: #3d444d;
+      --_accent: #4493f8;
+      --_code-bg: #151b23;
+    }
+  }
+
   main {
     padding: 24px;
+  }
+
+  @media (max-width: 767px) {
+    .zukan {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto 1fr;
+    }
+
+    main {
+      padding: 16px;
+    }
   }
 
   h1 {

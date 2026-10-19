@@ -1,3 +1,11 @@
+<script lang="ts" module>
+  type Background = 'light' | 'dark';
+
+  // shared by every preview on the page, so one click switches them all
+  let background = $state<Background>('light');
+  const BACKGROUNDS: Record<Background, string> = { light: '#fff', dark: '#0d1117' };
+</script>
+
 <script lang="ts">
   import { messages, type Messages } from '../../app/i18n.js';
 
@@ -10,7 +18,11 @@
     src,
     title,
     labels = messages.en
-  }: { src: string; title: string; labels?: Pick<Messages, 'previewWidth' | 'fullWidth'> } = $props();
+  }: {
+    src: string;
+    title: string;
+    labels?: Pick<Messages, 'previewWidth' | 'fullWidth' | 'background' | 'light' | 'dark' | 'openInNewTab'>;
+  } = $props();
 
   // null = 100%
   let width = $state<number | null>(null);
@@ -22,6 +34,7 @@
   let startWidth = 0;
 
   let observer: ResizeObserver | undefined;
+  let doc = $state.raw<Document>();
 
   // a stage narrower than MIN_WIDTH lowers the minimum, so aria-valuenow never goes below aria-valuemin
   const min = $derived(Math.min(MIN_WIDTH, stageWidth));
@@ -74,6 +87,13 @@
     observer.observe(doc.body);
   }
 
+  // the preview page has no catalog CSS; `color-scheme` also switches `light-dark()` and form controls in it
+  $effect(() => {
+    if (!doc) return;
+    doc.documentElement.style.colorScheme = background;
+    doc.documentElement.style.backgroundColor = BACKGROUNDS[background];
+  });
+
   $effect(() => () => observer?.disconnect());
 </script>
 
@@ -84,18 +104,33 @@
     {/each}
     <button type="button" aria-pressed={width === null} onclick={() => (width = null)}>{labels.fullWidth}</button>
     <output>{stageWidth ? `${current}px` : ''}</output>
+    <div class="group" role="group" aria-label={labels.background}>
+      {#each ['light', 'dark'] as const as value (value)}
+        <button type="button" aria-pressed={background === value} onclick={() => (background = value)}>
+          {labels[value]}
+        </button>
+      {/each}
+    </div>
+    <!-- the preview page of this catalog, not a SvelteKit route -->
+    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+    <a href={src} target="_blank" rel="noopener">{labels.openInNewTab}</a>
   </div>
   <div class="stage" bind:clientWidth={stageWidth}>
     <div class="frame" style:width={width === null ? '100%' : `${width}px`}>
+      <!-- the iframe's color-scheme is what `prefers-color-scheme` reports inside it -->
       <iframe
         {src}
         {title}
+        loading="lazy"
         onload={(e) => {
-          const doc = (e.currentTarget as HTMLIFrameElement).contentDocument;
-          if (doc?.body) observe(doc);
+          const loaded = (e.currentTarget as HTMLIFrameElement).contentDocument;
+          if (!loaded?.body) return;
+          doc = loaded;
+          observe(loaded);
         }}
         class:dragging
         style:height="{height}px"
+        style:color-scheme={background}
       ></iframe>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <div
@@ -157,6 +192,16 @@
     font-family: var(--_mono);
     font-size: 12px;
     color: var(--_muted);
+  }
+
+  .group {
+    display: flex;
+    gap: 4px;
+  }
+
+  .toolbar a {
+    color: var(--_accent);
+    font-size: 12px;
   }
 
   .stage {
