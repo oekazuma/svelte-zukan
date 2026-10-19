@@ -150,41 +150,44 @@ describe('transform', () => {
 });
 
 describe('hotUpdate', () => {
-  const setup = (consumer: 'client' | 'server', found: Set<unknown> | null = new Set([{ id: 'mod' }])) => {
+  const metaMod = { id: '\0virtual:svelte-zukan/meta/app%2FA' };
+  const setup = (consumer: 'client' | 'server', metas: Map<string, unknown> = new Map([[metaMod.id, metaMod]])) => {
     const ctx = {
       environment: {
         config: { consumer },
         hot: { send: vi.fn() },
         moduleGraph: {
-          getModulesByFile: vi.fn(() => found ?? undefined),
+          idToModuleMap: metas,
           invalidateModule: vi.fn()
         }
       }
     };
     const run = (type: string, file: string, modules: unknown[] = []) =>
       plugin.hotUpdate.call(ctx, { type, file, modules, timestamp: 1 });
-    return { ctx, run, mod: [...(found ?? [])][0] };
+    return { ctx, run };
   };
 
-  it.each(['create', 'update', 'delete'])('invalidates the catalog file on %s of its .md', (type) => {
-    const { mod, ctx, run } = setup('client');
+  it.each(['create', 'update', 'delete'])('invalidates the metadata on %s of an .md', (type) => {
+    const { ctx, run } = setup('client');
     expect(run(type, docFile)).toEqual([]);
-    expect(ctx.environment.moduleGraph.getModulesByFile).toHaveBeenCalledWith(normalizePath(zukanFile));
-    expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(mod);
+    expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(metaMod);
     expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
     expect(ctx.environment.hot.send).not.toHaveBeenCalledWith({ type: 'full-reload' });
   });
 
-  it('does not throw when the catalog file is not in the module graph', () => {
-    const { ctx, run } = setup('client', null);
+  it('does not invalidate other modules of the graph', () => {
+    const other = { id: '/a/Button.svelte' };
+    const { ctx, run } = setup('client', new Map([[other.id, other]]));
     expect(run('create', docFile)).toEqual([]);
     expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
   });
 
   it('reloads on catalog file update', () => {
-    const { mod, ctx, run } = setup('client');
+    const { ctx, run } = setup('client');
+    const mod = { id: zukanFile };
     expect(run('update', zukanFile, [mod])).toEqual([]);
-    expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(mod);
+    const invalidated = ctx.environment.moduleGraph.invalidateModule.mock.calls.map((c: unknown[]) => c[0]);
+    expect(invalidated).toEqual(expect.arrayContaining([mod, metaMod]));
     expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
   });
 
@@ -527,36 +530,38 @@ describe('hotUpdate of the catalog list', () => {
     const { root, outside } = await makeApp();
     const { p } = boot(root);
     const catalogMod = { id: '\0virtual:svelte-zukan/catalog' };
+    const metaMod = { id: '\0virtual:svelte-zukan/meta/app%2FA' };
     const ctx = {
       environment: {
         config: { consumer },
         hot: { send: vi.fn() },
         moduleGraph: {
           getModuleById: vi.fn((id: string) => (id === catalogMod.id ? catalogMod : undefined)),
-          getModulesByFile: vi.fn(() => undefined),
+          idToModuleMap: new Map([[metaMod.id, metaMod]]),
           invalidateModule: vi.fn()
         }
       }
     };
     const run = (type: string, file: string, modules: unknown[] = []) =>
       p.hotUpdate.call(ctx, { type, file, modules, timestamp: 1 });
-    return { root, outside, ctx, run, catalogMod };
+    return { root, outside, ctx, run, catalogMod, metaMod };
   };
 
   it.each(['create', 'delete'])('invalidates the list on %s inside a scanned dir', async (type) => {
-    const { root, ctx, run, catalogMod } = await setup();
+    const { root, ctx, run, catalogMod, metaMod } = await setup();
     expect(run(type, `${root}/src/lib/New.zukan.svelte`)).toEqual([]);
-    expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(catalogMod);
+    const invalidated = ctx.environment.moduleGraph.invalidateModule.mock.calls.map((c: unknown[]) => c[0]);
+    expect(invalidated).toEqual(expect.arrayContaining([catalogMod, metaMod]));
     expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
     expect(ctx.environment.hot.send).not.toHaveBeenCalledWith({ type: 'full-reload' });
   });
 
   it.each(['create', 'delete'])('also invalidates the file itself on %s', async (type) => {
-    const { root, ctx, run, catalogMod } = await setup();
+    const { root, ctx, run, catalogMod, metaMod } = await setup();
     const own = { id: `${root}/src/lib/New.zukan.svelte` };
     expect(run(type, `${root}/src/lib/New.zukan.svelte`, [own])).toEqual([]);
     const invalidated = ctx.environment.moduleGraph.invalidateModule.mock.calls.map((c: unknown[]) => c[0]);
-    expect(invalidated).toEqual(expect.arrayContaining([own, catalogMod]));
+    expect(invalidated).toEqual(expect.arrayContaining([own, catalogMod, metaMod]));
   });
 
   it('server environment invalidates without sending', async () => {

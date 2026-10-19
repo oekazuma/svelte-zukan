@@ -18,7 +18,7 @@ const ENTRY_SRC = '/@id/__x00__' + ENTRY;
 const OUT_PREFIX = '_zukan/';
 
 export function zukan(options: ZukanOptions = {}): Plugin {
-  const { catalogId, isCatalogId, isCatalogFile, isDocFile, docFileOf, catalogFileOf } = createMatchers(
+  const { catalogId, isCatalogId, isCatalogFile, isDocFile, docFileOf } = createMatchers(
     options.suffix ?? 'zukan'
   );
   let root = '';
@@ -242,17 +242,18 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     },
     hotUpdate({ type, file, modules, timestamp }) {
       const { moduleGraph } = this.environment;
+      // the metadata of an entry depends on its catalog file and its .md, which the component's module does not track
+      const metas = () => [...moduleGraph.idToModuleMap.values()].filter((m) => m.id?.startsWith('\0' + META));
       let targets: Iterable<(typeof modules)[number]>;
       if (isDocFile(file)) {
-        // the module graph is keyed by normalized paths; the catalog file may not be in it yet
-        targets = moduleGraph.getModulesByFile(normalizePath(catalogFileOf(file))) ?? [];
+        targets = metas();
       } else if (type === 'update' && isCatalogFile(file)) {
-        targets = modules;
+        targets = [...modules, ...metas()];
       } else if (isCatalogFile(file) && scanned().some((dir) => isInside(normalizePath(file), dir))) {
         // created or deleted: the list is rebuilt when the module is loaded again, and Vite does not
-        // invalidate the file's own module on add or unlink, so a re-created file would keep its old transform
+        // invalidate the file's own module on add or unlink, so a re-created file would keep its old module
         const list = moduleGraph.getModuleById('\0' + CATALOG);
-        targets = list ? [...modules, list] : modules;
+        targets = [...modules, ...metas(), ...(list ? [list] : [])];
       } else return;
 
       for (const mod of targets) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
