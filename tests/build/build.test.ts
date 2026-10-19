@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, globSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { preview } from 'vite';
 import { beforeAll, expect, test } from 'vitest';
 
 const fixtures = import.meta.dirname;
@@ -74,10 +75,26 @@ test('kit monorepo build under paths.base', { timeout: 120_000 }, () => {
   expect(all).not.toContain('/app/_zukan');
 });
 
-test('plain vite build', { timeout: 120_000 }, () => {
+test('plain vite build', { timeout: 120_000 }, async () => {
   const dir = join(fixtures, 'vite-svelte');
   build(dir);
   expect(existsSync(join(dir, 'dist/index.html'))).toBe(true);
   expect(existsSync(join(dir, 'zukan-dist/index.html'))).toBe(true);
   expect(missing(dir, ['vite-svelte/lib/Counter'])).toEqual([]);
+
+  // `vite preview` serves the static catalog too
+  const server = await preview({
+    root: dir,
+    configFile: join(dir, 'vite.config.ts'),
+    logLevel: 'error',
+    preview: { port: 0 }
+  });
+  try {
+    const url = server.resolvedUrls!.local[0];
+    const html = await (await fetch(`${url}__zukan/`)).text();
+    const src = html.match(/src="\.\/(_zukan\/[^"]+)"/)![1];
+    expect((await fetch(`${url}__zukan/${src}`)).status).toBe(200);
+  } finally {
+    await server.close();
+  }
 });

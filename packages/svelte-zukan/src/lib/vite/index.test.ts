@@ -370,24 +370,24 @@ describe('metadata modules', () => {
   });
 });
 
-describe('configureServer', () => {
-  type Res = { status?: string | number; body?: string; type?: string; location?: string };
-  const request = (mw: (...a: unknown[]) => void, url: string) =>
-    new Promise<Res>((resolve) => {
-      const out: Res = {};
-      const res = {
-        statusCode: 200,
-        setHeader: (k: string, v: string) => {
-          if (k.toLowerCase() === 'content-type') out.type = v;
-          if (k.toLowerCase() === 'location') out.location = v;
-        },
-        end(body?: string) {
-          resolve({ ...out, ...(this.statusCode !== 200 && { status: this.statusCode }), body });
-        }
-      };
-      mw({ url }, res, () => resolve({ status: 'next' }));
-    });
+type Res = { status?: string | number; body?: string; type?: string; location?: string };
+const request = (mw: (...a: unknown[]) => void, url: string) =>
+  new Promise<Res>((resolve) => {
+    const out: Res = {};
+    const res = {
+      statusCode: 200,
+      setHeader: (k: string, v: string) => {
+        if (k.toLowerCase() === 'content-type') out.type = v;
+        if (k.toLowerCase() === 'location') out.location = v;
+      },
+      end(body?: string | Buffer) {
+        resolve({ ...out, ...(this.statusCode !== 200 && { status: this.statusCode }), body: body?.toString() });
+      }
+    };
+    mw({ url, method: 'GET' }, res, () => resolve({ status: 'next' }));
+  });
 
+describe('configureServer', () => {
   it('serves the catalog HTML at /__zukan/', async () => {
     const { root } = await makeApp();
     const { p } = boot(root, { title: 'My UI', locale: 'ja' });
@@ -447,6 +447,54 @@ describe('configureServer', () => {
     expect(server.config.logger.info).toHaveBeenCalledWith(
       expect.stringContaining('http://localhost:5173/app/__zukan/')
     );
+  });
+});
+
+describe('configurePreviewServer', () => {
+  const setup = async (base = '/', options: Parameters<typeof zukan>[0] = { build: true }) => {
+    const { root } = await makeApp();
+    mkdirSync(path.join(root, 'zukan-dist/_zukan'), { recursive: true });
+    await writeFile(path.join(root, 'zukan-dist/index.html'), '<html>catalog</html>');
+    await writeFile(path.join(root, 'zukan-dist/_zukan/zukan-abc.js'), 'export {}');
+    const server = fakeServer(root, base);
+    boot(root, options).p.configurePreviewServer(server);
+    return { server, mw: server.middlewares.use.mock.calls[0]?.[0] };
+  };
+
+  it('serves index.html and the files under _zukan/', async () => {
+    const { mw } = await setup();
+    const html = await request(mw, '/__zukan/');
+    expect(html.body).toContain('catalog');
+    expect(html.type).toMatch(/^text\/html/);
+    expect((await request(mw, '/__zukan/_zukan/zukan-abc.js')).type).toMatch(/javascript/);
+  });
+
+  it('redirects /__zukan to /__zukan/', async () => {
+    const { mw } = await setup();
+    expect(await request(mw, '/__zukan?a=1')).toMatchObject({ status: 302, location: '/__zukan/?a=1' });
+  });
+
+  it('leaves other URLs and missing files to the next middleware', async () => {
+    const { mw } = await setup();
+    for (const url of ['/', '/__zukanx', '/__zukan/nope.js'])
+      expect(await request(mw, url)).toEqual({ status: 'next' });
+  });
+
+  it('does not serve files outside the catalog directory', async () => {
+    const { mw } = await setup();
+    for (const url of ['/__zukan/..%2Fpackage.json', '/__zukan/%2e%2e/package.json'])
+      expect(await request(mw, url)).toEqual({ status: 'next' });
+  });
+
+  it('follows base', async () => {
+    const { mw } = await setup('/app/');
+    expect((await request(mw, '/app/__zukan/')).body).toContain('catalog');
+    expect(await request(mw, '/__zukan/')).toEqual({ status: 'next' });
+  });
+
+  it('does nothing without build', async () => {
+    const { server } = await setup('/', {});
+    expect(server.middlewares.use).not.toHaveBeenCalled();
   });
 });
 
