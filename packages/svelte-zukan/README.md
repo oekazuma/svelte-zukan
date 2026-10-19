@@ -6,37 +6,37 @@
 </p>
 
 <p align="center">
-  Svelte のコンポーネントカタログ。コンポーネントの隣にカタログ用のファイルを置くと、一覧・プレビュー・コード表示がそろいます。
+  A component catalog for Svelte. Put a catalog file next to a component and you get a list, a live preview, and a code view.
 </p>
 
-zukan は日本語で「図鑑」（illustrated encyclopedia）という意味です。
+"zukan" (図鑑) is Japanese for "illustrated encyclopedia".
 
-> svelte-zukan は Svelte の公式プロジェクトではありません（not affiliated with or endorsed by the Svelte team）。ロゴの S の図形は Svelte のロゴに由来します。
+> svelte-zukan is not an official Svelte project (not affiliated with or endorsed by the Svelte team). The S shape in the logo is derived from the Svelte logo.
 
-> 開発中です。API は予告なく変わります。
+> Under development. The API may change without notice.
 
-## 特徴
+## Features
 
-- 利用側の作業は `vite.config.ts` に `zukan()` を足すことだけ。`src` にルートも設定ファイルも置かない
-- dev サーバーの `/__zukan/` でカタログを開ける（vite-plugin-inspect の `/__inspect/` と同じ考え方）
-- `Button.zukan.svelte` と `Button.zukan.md` をコンポーネントの隣に置くと、カタログに自動で載る
-- セクションごとに iframe でプレビューし、幅をドラッグやプリセット（375 / 768 / 1024 / 1280px）で切り替えられる
-- セクションの中身を、参照している変数の定義つきでコード表示する
-- `build: true` で `vite build` のときに静的なカタログも書き出せる
-- モノレポでは、カタログ用のアプリが依存しているワークスペースパッケージのカタログファイルも自動で集める
+- All you do on your side is add `zukan()` to `vite.config.ts`. No routes or config files in `src`
+- Open the catalog at `/__zukan/` on the dev server (the same idea as `/__inspect/` in vite-plugin-inspect)
+- Put `Button.zukan.svelte` and `Button.zukan.md` next to a component and they show up in the catalog automatically
+- Each section is previewed in an iframe, and you can change its width by dragging or with presets (375 / 768 / 1024 / 1280px)
+- Shows the contents of a section as code, together with the definitions of the variables it references
+- With `build: true`, `vite build` also writes out a static catalog
+- In a monorepo, it also collects the catalog files of the workspace packages that the catalog app depends on
 
-## 対応範囲と動作要件
+## Scope and requirements
 
-Svelte（Vite）向けのライブラリです。素の Vite + Svelte（`@sveltejs/vite-plugin-svelte` の `svelte()`）でも SvelteKit でも、同じ `zukan()` で動きます。
+A library for Svelte on Vite. The same `zukan()` works with plain Vite + Svelte (`svelte()` from `@sveltejs/vite-plugin-svelte`) and with SvelteKit.
 
-- Vite 8 以上、Svelte 5、Node 22.17 以上
-- Vite 専用のフック（`configureServer`、`hotUpdate`、`buildApp`）を使うため、Vite 以外のバンドラーでは動きません
+- Vite 8 or later, Svelte 5, Node 22.17 or later
+- It uses Vite-specific hooks (`configureServer`, `hotUpdate`, `buildApp`), so it does not work with bundlers other than Vite
 
-## セットアップ
+## Setup
 
-### 素の Vite + Svelte
+### Plain Vite + Svelte
 
-`zukan()` は `svelte()` より前に置きます。
+Place `zukan()` before `svelte()`.
 
 ```ts
 // vite.config.ts
@@ -49,7 +49,7 @@ export default defineConfig({ plugins: [zukan(), svelte()] });
 
 ### SvelteKit
 
-`zukan()` は `sveltekit()` より前に置きます。
+Place `zukan()` before `sveltekit()`.
 
 ```ts
 // vite.config.ts
@@ -60,13 +60,13 @@ import { zukan } from 'svelte-zukan/vite';
 export default defineConfig({ plugins: [zukan(), sveltekit()] });
 ```
 
-dev サーバーを起動して `/__zukan/` を開きます。起動時にターミナルへ出る URL 一覧にも、カタログの URL が載ります。
+Start the dev server and open `/__zukan/`. The catalog URL is also listed in the URLs printed to the terminal at startup.
 
-Vite の `base` や SvelteKit の `paths.base` を設定しているときは、カタログは `<base>__zukan/`（例: `base: '/app/'` なら `/app/__zukan/`）に移ります。ターミナルの URL 一覧には、移った先の URL が出ます。
+If you set Vite's `base` or SvelteKit's `paths.base`, the catalog moves to `<base>__zukan/` (for example, `/app/__zukan/` when `base: '/app/'`). The terminal's URL list shows the new URL.
 
-## カタログファイルの書き方
+## Writing catalog files
 
-コンポーネントの隣に `<Name>.zukan.svelte` を置きます。`<Name>.zukan.md` は任意です（`zukan/` のようなサブディレクトリは使いません）。
+Put `<Name>.zukan.svelte` next to the component. `<Name>.zukan.md` is optional (subdirectories such as `zukan/` are not used).
 
 ```text
 src/lib/Button/
@@ -94,34 +94,34 @@ src/lib/Button/
 </Section>
 ```
 
-- `<Section>` はトップレベル（他の要素やブロックの中ではない位置）に置きます。`title` は空でない静的な文字列だけです。`title` がない、動的、空、同じファイル内で重複、トップレベル以外、のいずれもビルドエラーになります（ファイル名と行つき）
-- 詳細ページのコード表示には、セクションの中身と、そこから参照している `<script>` 内の定義（上の例では `label` と `count`）が出ます
-- `Button.zukan.md` は `Button.zukan.svelte` と同じディレクトリ・同じ名前のものだけが対応します。あれば詳細ページの上部に HTML として表示します
-- 接尾辞は `suffix` オプションで変えられます（`zukan({ suffix: 'catalog' })` なら `*.catalog.svelte` / `*.catalog.md`）
+- Put `<Section>` at the top level (not inside another element or block). `title` must be a non-empty static string. A missing, dynamic, or empty `title`, a duplicate within the same file, or a `<Section>` that is not at the top level each cause a build error (with the file name and line)
+- The code view on the detail page shows the contents of the section and the definitions in `<script>` that it references (`label` and `count` in the example above)
+- `Button.zukan.md` pairs only with the `Button.zukan.svelte` in the same directory with the same name. If it exists, it is rendered as HTML at the top of the detail page
+- You can change the suffix with the `suffix` option (`zukan({ suffix: 'catalog' })` gives `*.catalog.svelte` / `*.catalog.md`)
 
-## カタログの ID と URL
+## Catalog IDs and URLs
 
-カタログはハッシュでルーティングする SPA です。HTML は 1 つだけなので、書き出したものをどのパスに置いても、深いリンクがそのまま開けます。
+The catalog is a hash-routed SPA. It has only one HTML file, so deep links open as-is wherever you put the exported output.
 
-| URL                                       | 表示                                      |
-| ----------------------------------------- | ----------------------------------------- |
-| `/__zukan/`                               | 一覧                                      |
-| `/__zukan/#/<ID>`                         | 詳細ページ                                |
-| `/__zukan/#/preview/<ID>?section=<title>` | iframe 用プレビュー（カタログの UI なし） |
+| URL                                       | Shows                                  |
+| ----------------------------------------- | -------------------------------------- |
+| `/__zukan/`                               | List                                   |
+| `/__zukan/#/<ID>`                         | Detail page                            |
+| `/__zukan/#/preview/<ID>?section=<title>` | Preview for the iframe (no catalog UI) |
 
-ID は `<グループ名>/<相対パス>` です。相対パスは、探索ディレクトリからカタログファイルまでのパスから `.<suffix>.svelte` を除いたものです。
+An ID is `<group name>/<relative path>`. The relative path is the path from the search directory to the catalog file, minus `.<suffix>.svelte`.
 
-- グループ名が `my-app` のとき、`src/lib/forms/Button.zukan.svelte` → `my-app/lib/forms/Button`
-- 最後の 2 セグメントが同じとき（`Button/Button`）は 1 つにまとめます。`src/lib/Button/Button.zukan.svelte` → `my-app/lib/Button`
-- 同名のカタログファイル（`forms/Button.zukan.svelte` と `nav/Button.zukan.svelte`）も、ディレクトリが違えば別の ID になります。一覧には名前（`Button`）を主に、ディレクトリ（`lib/forms`）を控えめな色で添えて表示するので、見分けられます
-- グループ名が `preview` か `preview/` で始まるとエラーです（URL の予約語）
-- ID が重複するとエラーになり、両方のファイルパスが出ます。重複するのは、たとえば次の場合です
-  - `lib/Button.zukan.svelte` と `lib/Button/Button.zukan.svelte`。まとめた結果が同じ `my-app/lib/Button` になります
-  - グループ `@acme` の `ui/Card.zukan.svelte` と、グループ `@acme/ui` の `Card.zukan.svelte`。どちらも `@acme/ui/Card` になります
+- With the group name `my-app`, `src/lib/forms/Button.zukan.svelte` becomes `my-app/lib/forms/Button`
+- When the last two segments are the same (`Button/Button`), they are merged into one. `src/lib/Button/Button.zukan.svelte` becomes `my-app/lib/Button`
+- Catalog files with the same name (`forms/Button.zukan.svelte` and `nav/Button.zukan.svelte`) get different IDs if their directories differ. The list shows the name (`Button`) prominently and the directory (`lib/forms`) in a subdued color, so you can tell them apart
+- A group name that is `preview` or starts with `preview/` is an error (reserved in URLs)
+- Duplicate IDs are an error, and both file paths are reported. IDs collide, for example, in these cases
+  - `lib/Button.zukan.svelte` and `lib/Button/Button.zukan.svelte`. After merging, both become `my-app/lib/Button`
+  - `ui/Card.zukan.svelte` in the group `@acme` and `Card.zukan.svelte` in the group `@acme/ui`. Both become `@acme/ui/Card`
 
-ID はファイルを動かさない限り変わりません。自動探索で `lib/` が付くのは `src` 全体を探すためです。気になるときは `groups` で `src/lib` を指定してください。
+An ID does not change unless you move the file. With automatic discovery, `lib/` appears in the ID because the whole `src` directory is searched. If that bothers you, point `groups` at `src/lib`.
 
-## 設定
+## Options
 
 ```ts
 zukan({
@@ -135,30 +135,30 @@ zukan({
 });
 ```
 
-| オプション | 型                                   | 既定値     | 説明                                                                                                                                |
-| ---------- | ------------------------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `suffix`   | `string`                             | `'zukan'`  | カタログファイルの接尾辞。`/^[a-z0-9-]+$/i` に合う文字列                                                                            |
-| `groups`   | `Record<string, string \| string[]>` | 自動探索   | グループ名 → 探すディレクトリ。書くと自動探索は行わず、書いたディレクトリだけを探す。並び順はキー順。存在しないディレクトリはエラー |
-| `wrapper`  | `string`                             | なし       | プレビューを囲む `.svelte` のパス                                                                                                   |
-| `logo`     | `string \| false`                    | 同梱のロゴ | サイドバーのロゴ画像のパス。`false` でロゴを出さず `title` の文字列を表示                                                           |
-| `title`    | `string`                             | `'zukan'`  | サイドバーのロゴの `alt` と `<title>`                                                                                               |
-| `locale`   | `'en' \| 'ja'`                       | `'en'`     | UI の言語。`<html lang>` も合わせる                                                                                                 |
-| `build`    | `boolean \| { outDir?: string }`     | `false`    | `vite build` のときにカタログを静的に書き出す。`true` なら `outDir` は `'zukan-dist'`                                               |
+| Option    | Type                                 | Default        | Description                                                                                                                                                                                       |
+| --------- | ------------------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `suffix`  | `string`                             | `'zukan'`      | Suffix of catalog files. A string matching `/^[a-z0-9-]+$/i`                                                                                                                                      |
+| `groups`  | `Record<string, string \| string[]>` | auto-discovery | Group name → directories to search. If given, automatic discovery is skipped and only the listed directories are searched. Groups are ordered by key. A directory that does not exist is an error |
+| `wrapper` | `string`                             | none           | Path to a `.svelte` file that wraps the preview                                                                                                                                                   |
+| `logo`    | `string \| false`                    | bundled logo   | Path to the sidebar logo image. `false` hides the logo and shows the `title` text instead                                                                                                         |
+| `title`   | `string`                             | `'zukan'`      | The sidebar logo's `alt` and the `<title>`                                                                                                                                                        |
+| `locale`  | `'en' \| 'ja'`                       | `'en'`         | UI language. `<html lang>` follows it                                                                                                                                                             |
+| `build`   | `boolean \| { outDir?: string }`     | `false`        | Write the catalog statically during `vite build`. With `true`, `outDir` is `'zukan-dist'`                                                                                                         |
 
-- パスはすべて Vite の root からの相対で、`.zukan/` のような `src` 外のディレクトリに置けます
-- 不正な値（`suffix` が規則に合わない、`locale` が未知、指定したファイルやディレクトリがない）は、設定の読み込み時にエラーになります
-- `groups` のキーを数字だけにすると、JavaScript のオブジェクトの仕様で、宣言順ではなく数値順で並びます。グループ名には数字以外を含めてください
+- All paths are relative to Vite's root, and can point outside `src`, such as `.zukan/`
+- Invalid values (a `suffix` that does not match the rule, an unknown `locale`, a file or directory that does not exist) cause an error when the config is loaded
+- If a `groups` key consists only of digits, JavaScript object semantics order it numerically instead of in declaration order. Include a non-digit character in group names
 
-### モノレポでの探索
+### Discovery in a monorepo
 
-`groups` がないとき、次の順にカタログファイルを探します。
+Without `groups`, catalog files are searched in this order.
 
-1. Vite の root にあるパッケージ（カタログ用のアプリ自身）の `src`
-2. そのアプリの `package.json` の `dependencies` → `devDependencies` の順に、依存しているワークスペースパッケージの `src`
+1. The `src` of the package at Vite's root (the catalog app itself)
+2. The `src` of the workspace packages the app depends on, in the order of `dependencies` then `devDependencies` in the app's `package.json`
 
-- グループ名はパッケージの `package.json` の `name` です。カタログファイルがないパッケージはグループになりません
-- 依存パッケージは、カタログ用のアプリ自身の `node_modules/<依存名>` にあるリンクから探します（pnpm のワークスペースはこの形でリンクします）。npm や yarn のワークスペースでは、リンクがワークスペースのルートの `node_modules` にできるので見つかりません。その場合は `groups` で指定してください
-- 推移的な依存は探しません。アプリの依存に宣言していないアプリやパッケージ（たとえばカタログ用のアプリ `apps/catalog` から、別のアプリ `apps/web` のコンポーネントを見せたいとき）は、`groups` で指定します
+- The group name is the `name` in the package's `package.json`. A package without catalog files does not become a group
+- Dependency packages are found through the links in the catalog app's own `node_modules/<dependency name>` (pnpm workspaces link them this way). With npm or yarn workspaces, the links are created in the workspace root's `node_modules`, so they are not found. In that case, specify them with `groups`
+- Transitive dependencies are not searched. For apps or packages that are not declared in the app's dependencies (for example, when the catalog app `apps/catalog` should show components from another app, `apps/web`), specify them with `groups`
 
 ```ts
 // apps/catalog/vite.config.ts
@@ -172,7 +172,7 @@ zukan({
 
 ### `wrapper`
 
-プレビューの iframe の中だけを囲みます。Provider やグローバル CSS を入れる場所で、Storybook の `.storybook/preview.js` に当たります。`children` を受け取って描画してください。
+Wraps only the inside of the preview iframe. This is where you put providers and global CSS, and it corresponds to Storybook's `.storybook/preview.js`. Accept `children` and render it.
 
 ```svelte
 <!-- .zukan/Wrapper.svelte -->
@@ -186,49 +186,49 @@ zukan({
 <ThemeProvider>{@render children()}</ThemeProvider>
 ```
 
-`wrapper` が読み込むグローバル CSS は、カタログの UI 側には効きません。カタログの UI は独立した HTML で、アプリの CSS も読み込みません。
+Global CSS loaded by `wrapper` does not affect the catalog's own UI. The catalog UI is a separate HTML page and does not load the app's CSS either.
 
-## 静的な書き出し
+## Static export
 
 ```ts
 zukan({ build: true });
 ```
 
-`vite build` のとき、アプリのビルドとは別に `zukan-dist/` へカタログが書き出されます（`build: { outDir: 'docs/zukan' }` のように出力先も選べます）。アプリのビルドの出力先とは別なので、adapter の書き出しに消されません。
+During `vite build`, the catalog is written to `zukan-dist/`, separately from the app build (you can also choose the output directory, as in `build: { outDir: 'docs/zukan' }`). It is separate from the app's build output, so the adapter's output step does not delete it.
 
-- 出力のパスは相対パスなので、どのサブパス（例: `/docs/zukan/`）に置いても動きます。サーバー側の書き換え設定は要りません
-- `build` を有効にすると、`vite build` は Vite の builder モード（Environment API）で動き、全環境が 1 回の実行でビルドされます
-- `vite build --watch` ではカタログを書き出しません（警告を出して飛ばします）
-- 書き出しの前に、前回のカタログ（出力先の `_zukan/` と `index.html`）だけを消します。SvelteKit では、adapter が `build/` を空にすることが多いので、出力先が `build/` と重なると警告を出します
-- `/zukan-dist` は `.gitignore` に足してください
+- Output paths are relative, so it works under any subpath (for example, `/docs/zukan/`). No server-side rewrite configuration is needed
+- When `build` is enabled, `vite build` runs in Vite's builder mode (Environment API), and all environments are built in a single run
+- `vite build --watch` does not write the catalog (it prints a warning and skips it)
+- Before writing, only the previous catalog (`_zukan/` and `index.html` in the output directory) is removed. In SvelteKit, adapters often empty `build/`, so a warning is printed if the output directory overlaps with `build/`
+- Add `/zukan-dist` to `.gitignore`
 
-## SvelteKit の実行時 API
+## SvelteKit runtime APIs
 
-`$app/state` や `$app/navigation` のような SvelteKit の実行時 API は、差し替えません。カタログの中では SvelteKit の実行時コードが既定の状態で動きます。
+SvelteKit runtime APIs such as `$app/state` and `$app/navigation` are not replaced. Inside the catalog, SvelteKit's runtime code runs in its default state.
 
-- `$app/state` の `page`: `url.pathname` は空文字、`params` は `{}`、`data` は `{}`
-- `$app/env` の `browser`: `true`
-- `$app/navigation` の `goto` など: reject するだけで、画面は移動しません
-- `$app/paths` の `resolve`: アプリの `paths.base` を前提にした URL を返します（`paths.base` が空なら `resolve('/')` は `/`）。カタログ自身の URL ではありません
-- `$app/paths` の `asset`: `asset` も `resolve` と同じく、アプリの `paths.base` を前提にした URL を返します（例: `asset('favicon.svg')` は `/favicon.svg`）。`paths.assets` はカタログの中では使われません。カタログの中でアプリの `static/` のファイルを読むと、アプリの dev サーバーが配信するものが使われます
+- `page` from `$app/state`: `url.pathname` is an empty string, `params` is `{}`, and `data` is `{}`
+- `browser` from `$app/env`: `true`
+- `goto` and similar from `$app/navigation`: they only reject, and the page does not navigate
+- `resolve` from `$app/paths`: returns a URL based on the app's `paths.base` (with an empty `paths.base`, `resolve('/')` is `/`). It is not the catalog's own URL
+- `asset` from `$app/paths`: like `resolve`, it returns a URL based on the app's `paths.base` (for example, `asset('favicon.svg')` is `/favicon.svg`). `paths.assets` is not used inside the catalog. When the catalog reads a file from the app's `static/`, the one served by the app's dev server is used
 
-現在のページで表示が変わるナビゲーションなどは、カタログでは既定値のままで描画されます。SvelteKit を使っているアプリでは、静的に書き出したカタログでもこの動きは同じです。
+Anything that changes the display based on the current page, such as navigation, is rendered with the default values in the catalog. In an app that uses SvelteKit, this behavior is the same in a statically exported catalog.
 
-## 監視と HMR
+## Watching and HMR
 
-- カタログファイル（`*.zukan.svelte`）や `.md` を作成・削除・編集すると、`/__zukan/` のタブだけが再読み込みされます。同じ dev サーバーにつないだアプリのタブは再読み込みされません
-- コンポーネント本体（`Button.svelte` など）の編集は通常の HMR で、アプリとカタログの両方に反映されます
-- Vite の root の外にあるディレクトリ（モノレポの別パッケージなど）も監視します
-- 同じ ID のカタログファイルが 2 つできるなど、ID が重複したときは、ターミナルに加えて、dev サーバーに接続しているアプリのタブにも Vite のエラーオーバーレイが出ます
+- Creating, deleting, or editing a catalog file (`*.zukan.svelte`) or a `.md` file reloads only the `/__zukan/` tab. Tabs of the app connected to the same dev server are not reloaded
+- Editing a component itself (such as `Button.svelte`) goes through normal HMR and is reflected in both the app and the catalog
+- Directories outside Vite's root (such as other packages in a monorepo) are also watched
+- When IDs collide, for example when two catalog files end up with the same ID, Vite's error overlay appears in the terminal and also in the tabs of apps connected to the dev server
 
-## UI の言語
+## UI language
 
-カタログの UI は既定で英語です。`locale: 'ja'` で日本語になります。`groups` のキーやカタログファイルの `title` のように、利用側が書いた文字列は翻訳しません。プラグインのエラーメッセージは英語で、`locale` に従いません。
+The catalog UI is in English by default. `locale: 'ja'` switches it to Japanese. Strings you write yourself, such as `groups` keys and the `title` in catalog files, are not translated. The plugin's error messages are in English and do not follow `locale`.
 
-## 開発
+## Development
 
-[CONTRIBUTING.md](https://github.com/oekazuma/svelte-zukan/blob/main/CONTRIBUTING.md) を見てください。
+See [CONTRIBUTING.md](https://github.com/oekazuma/svelte-zukan/blob/main/CONTRIBUTING.md).
 
-## ライセンス
+## License
 
 [MIT](LICENSE.md)
