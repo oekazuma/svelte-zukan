@@ -398,6 +398,50 @@ describe('virtual modules', () => {
   });
 });
 
+describe('metadata modules', () => {
+  const meta = (path: string) => `\0virtual:svelte-zukan/meta/${path}`;
+
+  it('resolves the metadata of an entry and lists it in the catalog', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    expect(p.resolveId('virtual:svelte-zukan/meta/app%2FA')).toBe(meta('app%2FA'));
+    expect(p.load('\0virtual:svelte-zukan/catalog')).toContain('import("virtual:svelte-zukan/meta/app%2FA")');
+  });
+
+  it('exports the sections and no absolute path', async () => {
+    const { tmp, root } = await makeApp();
+    const { p } = boot(root);
+    const addWatchFile = vi.fn();
+    const code = p.load.call({ addWatchFile }, meta('app%2FA'));
+    expect(code).toContain('"title":"Foo"');
+    expect(code).toContain('"doc":null');
+    expect(code).not.toContain(tmp);
+    expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/A.zukan.svelte`);
+  });
+
+  it('renders the .md next to the file and watches it', async () => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/A.zukan.md'), '# A');
+    const { p } = boot(root);
+    const addWatchFile = vi.fn();
+    expect(p.load.call({ addWatchFile }, meta('app%2FA'))).toContain('<h1>A</h1>');
+    expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/A.zukan.md`);
+  });
+
+  it('throws for an unknown ID', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    expect(() => p.load.call({ addWatchFile: vi.fn() }, meta('app%2FNope'))).toThrow(/no catalog file/);
+  });
+
+  it.each(['app%2FMy%20Button', 'app%2FMy Button'])('finds an ID with a space (%s)', async (id) => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/My Button.zukan.svelte'), '<Section title="B"><p>b</p></Section>');
+    const { p } = boot(root);
+    expect(p.load.call({ addWatchFile: vi.fn() }, meta(id))).toContain('"title":"B"');
+  });
+});
+
 describe('configureServer', () => {
   type Res = { status?: string | number; body?: string; type?: string; location?: string };
   const request = (mw: (...a: unknown[]) => void, url: string) =>

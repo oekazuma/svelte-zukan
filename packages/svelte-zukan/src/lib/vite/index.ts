@@ -4,12 +4,12 @@ import { marked } from 'marked';
 import { normalizePath, type Plugin } from 'vite';
 import type { CatalogGroup } from '../types.js';
 import { discoverGroups, listCatalog } from './discover.js';
-import { transformZukan } from './extract.js';
+import { extractSections, transformZukan } from './extract.js';
 import { renderHtml } from './html.js';
 import { detectSvelteKit } from './kit.js';
 import { SVELTE_STYLE_ID, createMatchers } from './matchers.js';
 import { appFile, extendFsAllow, isInside, libDir, resolveOptions, type ZukanOptions } from './options.js';
-import { CATALOG, ENTRY, generateCatalogModule, generateEntryModule } from './virtual.js';
+import { CATALOG, ENTRY, META, generateCatalogModule, generateEntryModule } from './virtual.js';
 
 export type { ZukanOptions };
 
@@ -158,9 +158,31 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       }
     },
     resolveId(id) {
-      if (id === ENTRY || id === CATALOG) return '\0' + id;
+      if (id === ENTRY || id === CATALOG || id.startsWith(META)) return '\0' + id;
     },
     load(id) {
+      if (id.startsWith('\0' + META)) {
+        const raw = id.slice(META.length + 1);
+        // the dev server may already have decoded part of the id (e.g. `%20`)
+        let path = raw;
+        try {
+          path = decodeURIComponent(raw);
+        } catch {
+          // keep the raw id
+        }
+        // listed again on every load, so that files added after the start are found
+        const item = listCatalog(groups, resolved.suffix).find((i) => i.path === path);
+        if (!item) throw new Error(`svelte-zukan: no catalog file for ID "${path}"`);
+        this.addWatchFile(item.file);
+        const docPath = docFileOf(item.file);
+        let doc: string | null = null;
+        if (existsSync(docPath)) {
+          this.addWatchFile(docPath);
+          doc = marked.parse(readFileSync(docPath, 'utf-8'), { async: false });
+        }
+        const sections = extractSections(readFileSync(item.file, 'utf-8'), item.file);
+        return `export default ${JSON.stringify({ sections, doc })};\n`;
+      }
       if (id === '\0' + CATALOG) return generateCatalogModule(listCatalog(groups, resolved.suffix));
       if (id === '\0' + ENTRY) {
         // relative, so that absolute paths do not end up in the static build
