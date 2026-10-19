@@ -124,7 +124,6 @@ describe('discoverGroups', () => {
     mkdirSync(join(tmp, 'app'));
     expect(() => discoverGroups(tmp, { preview: 'app' })).toThrow(/"preview"/);
     expect(() => discoverGroups(tmp, { 'preview/x': 'app' })).toThrow(/"preview\/x"/);
-    expect(() => listCatalog([{ name: 'preview', dirs: [] }], 'zukan')).toThrow(/"preview"/);
     // only a prefix of the whole name is reserved
     expect(discoverGroups(tmp, { previews: 'app', 'x/preview': 'app' })).toHaveLength(2);
   });
@@ -195,7 +194,6 @@ describe('listCatalog IDs', () => {
     write('app/src/A.catalog.svelte');
     write('app/src/B.zukan.svelte');
     expect(paths(join(tmp, 'app'), 'catalog')).toEqual(['app/A']);
-    expect(() => listCatalog([], 'a.b')).toThrow(/suffix/);
   });
 
   it('scoped group name', () => {

@@ -37,10 +37,5 @@ export default defineConfig(
     // the build fixtures and the example have no tsconfig of their own ready at lint time; no rule in use needs type information
     files: ['tests/build/**/*.svelte', 'example/**/*.svelte'],
     languageOptions: { parserOptions: { projectService: false } }
-  },
-  {
-    // Override or add rule settings here, such as:
-    // 'svelte/button-has-type': 'error'
-    rules: {}
   }
 );

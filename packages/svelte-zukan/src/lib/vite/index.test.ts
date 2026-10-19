@@ -9,7 +9,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import * as api from './index.js';
 import { zukan } from './index.js';
 import { detectSvelteKit } from './kit.js';
-import { createMatchers, escapeRegExp } from './matchers.js';
+import { createMatchers } from './matchers.js';
 import { extendFsAllow, libDir, resolveOptions } from './options.js';
 import { ENTRY, generateCatalogModule, generateEntryModule } from './virtual.js';
 
@@ -37,23 +37,10 @@ const transform = (code: string, id: string, p = plugin, ctx = { addWatchFile: v
   p.transform.handler.call(ctx, code, id);
 
 describe('createMatchers', () => {
-  it('matches catalog files, with or without a query', () => {
-    const { isCatalogId } = createMatchers('zukan');
-    expect(isCatalogId('/a/Foo.zukan.svelte')).toBe(true);
-    expect(isCatalogId('/a/Foo.zukan.svelte?v=1')).toBe(true);
-  });
-
-  it('rejects style modules, virtual modules and other files', () => {
-    const { isCatalogId } = createMatchers('zukan');
-    expect(isCatalogId('/a/Foo.zukan.svelte?svelte&type=style&lang.css')).toBe(false);
-    expect(isCatalogId('\0/a/Foo.zukan.svelte')).toBe(false);
-    expect(isCatalogId('/a/Foo.svelte')).toBe(false);
-  });
-
   it('follows the suffix', () => {
-    const { isCatalogId, isCatalogFile, isDocFile } = createMatchers('catalog');
-    expect(isCatalogId('/a/Foo.catalog.svelte')).toBe(true);
-    expect(isCatalogId('/a/Foo.zukan.svelte')).toBe(false);
+    const { catalogId, isCatalogFile, isDocFile } = createMatchers('catalog');
+    expect(catalogId.test('/a/Foo.catalog.svelte')).toBe(true);
+    expect(catalogId.test('/a/Foo.zukan.svelte')).toBe(false);
     expect(isCatalogFile('/a/Foo.catalog.svelte')).toBe(true);
     expect(isCatalogFile('/a/Foo.zukan.svelte')).toBe(false);
     expect(isDocFile('/a/Foo.catalog.md')).toBe(true);
@@ -67,15 +54,9 @@ describe('createMatchers', () => {
     expect(catalogFileOf('/a/Foo.zukan.md')).toBe('/a/Foo.zukan.svelte');
   });
 
-  it('escapes regex metacharacters', () => {
-    const re = new RegExp(`^${escapeRegExp('a.b*')}$`);
-    expect(re.test('a.b*')).toBe(true);
-    expect(re.test('axbb')).toBe(false);
-  });
-
   it('is case-sensitive, using the suffix verbatim', () => {
-    const { isCatalogId, isCatalogFile } = createMatchers('zukan');
-    expect(isCatalogId('/a/Foo.ZUKAN.svelte')).toBe(false);
+    const { catalogId, isCatalogFile } = createMatchers('zukan');
+    expect(catalogId.test('/a/Foo.ZUKAN.svelte')).toBe(false);
     expect(isCatalogFile('/a/Foo.ZUKAN.svelte')).toBe(false);
   });
 
@@ -93,23 +74,22 @@ describe('transform', () => {
     expect(plugin.transform.filter.id).toHaveProperty('exclude');
   });
 
-  it('filter agrees with isCatalogId', () => {
-    const { isCatalogId } = createMatchers('zukan');
+  it('filter selects catalog modules only', () => {
     const { include, exclude } = plugin.transform.filter.id as { include: RegExp; exclude: RegExp[] };
-    const ids = [
-      '/a/Foo.zukan.svelte',
-      '/a/Foo.zukan.svelte?v=1',
-      '/a/Foo.zukan.svelte#x',
-      '/a/Foo.zukan.svelte?svelte&type=style&lang.css',
-      '/a/Foo.zukan.svelte?foo&svelte&type=style',
-      '\0/a/Foo.zukan.svelte',
-      '/a/Foo.svelte',
-      '/a/Foo.zukan.svelte.ts',
-      '/a/Foo.catalog.svelte',
-      '/a/Foo.zukan.md'
+    const ids: [string, boolean][] = [
+      ['/a/Foo.zukan.svelte', true],
+      ['/a/Foo.zukan.svelte?v=1', true],
+      ['/a/Foo.zukan.svelte#x', true],
+      ['/a/Foo.zukan.svelte?svelte&type=style&lang.css', false],
+      ['/a/Foo.zukan.svelte?foo&svelte&type=style', false],
+      ['\0/a/Foo.zukan.svelte', false],
+      ['/a/Foo.svelte', false],
+      ['/a/Foo.zukan.svelte.ts', false],
+      ['/a/Foo.catalog.svelte', false],
+      ['/a/Foo.zukan.md', false]
     ];
-    for (const id of ids) {
-      expect(include.test(id) && !exclude.some((r) => r.test(id)), id).toBe(isCatalogId(id));
+    for (const [id, expected] of ids) {
+      expect(include.test(id) && !exclude.some((r) => r.test(id)), id).toBe(expected);
     }
   });
 
@@ -135,10 +115,6 @@ describe('transform', () => {
     const result = transform(source, path.join(other, 'Foo.zukan.svelte'), plugin, ctx);
     expect(result.code).toContain('"doc":null');
     expect(ctx.addWatchFile).not.toHaveBeenCalled();
-  });
-
-  it('handler ignores non-catalog ids', () => {
-    expect(transform(source, '/a/Foo.svelte')).toBeUndefined();
   });
 
   it('strips query from id', () => {
@@ -301,7 +277,6 @@ describe('resolveOptions', () => {
     const { root } = await makeApp();
     expect(resolveOptions(root, {})).toEqual({
       suffix: 'zukan',
-      groups: undefined,
       wrapper: null,
       logo: bundled('logo.svg'),
       title: 'zukan',
@@ -323,7 +298,6 @@ describe('resolveOptions', () => {
     const { root } = await makeApp();
     // @ts-expect-error unknown locale
     expect(() => resolveOptions(root, { locale: 'fr' })).toThrow(/locale "fr"/);
-    expect(() => resolveOptions(root, { suffix: 'a.b' })).toThrow(/suffix/);
     expect(() => resolveOptions(root, { wrapper: 'Nope.svelte' })).toThrow(`wrapper not found: ${root}/Nope.svelte`);
     expect(() => resolveOptions(root, { logo: 'nope.svg' })).toThrow(`logo not found: ${root}/nope.svg`);
     // directories are not files

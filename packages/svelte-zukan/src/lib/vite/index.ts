@@ -18,9 +18,7 @@ const ENTRY_SRC = '/@id/__x00__' + ENTRY;
 const OUT_PREFIX = '_zukan/';
 
 export function zukan(options: ZukanOptions = {}): Plugin {
-  const { catalogId, isCatalogId, isCatalogFile, isDocFile, docFileOf, catalogFileOf } = createMatchers(
-    options.suffix ?? 'zukan'
-  );
+  const { catalogId, isCatalogFile, isDocFile, docFileOf, catalogFileOf } = createMatchers(options.suffix ?? 'zukan');
   let root = '';
   let groups: CatalogGroup[] = [];
   let resolved: ReturnType<typeof resolveOptions>;
@@ -207,7 +205,6 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     transform: {
       filter: { id: { include: catalogId, exclude: [/^\0/, SVELTE_STYLE_ID] } },
       handler(code, id) {
-        if (!isCatalogId(id)) return;
         const filename = id.split(/[?#]/)[0];
         const docPath = docFileOf(filename);
         let doc: string | null = null;
