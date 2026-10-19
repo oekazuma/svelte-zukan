@@ -4,10 +4,10 @@ import { marked } from 'marked';
 import { normalizePath, type Plugin } from 'vite';
 import type { CatalogGroup } from '../types.js';
 import { discoverGroups, listCatalog } from './discover.js';
-import { extractSections, transformZukan } from './extract.js';
+import { extractSections } from './extract.js';
 import { renderHtml } from './html.js';
 import { detectSvelteKit } from './kit.js';
-import { SVELTE_STYLE_ID, createMatchers } from './matchers.js';
+import { createMatchers } from './matchers.js';
 import { appFile, extendFsAllow, isInside, libDir, resolveOptions, type ZukanOptions } from './options.js';
 import { CATALOG, ENTRY, META, generateCatalogModule, generateEntryModule } from './virtual.js';
 
@@ -18,9 +18,7 @@ const ENTRY_SRC = '/@id/__x00__' + ENTRY;
 const OUT_PREFIX = '_zukan/';
 
 export function zukan(options: ZukanOptions = {}): Plugin {
-  const { catalogId, isCatalogId, isCatalogFile, isDocFile, docFileOf } = createMatchers(
-    options.suffix ?? 'zukan'
-  );
+  const { isCatalogFile, isDocFile, docFileOf } = createMatchers(options.suffix ?? 'zukan');
   let root = '';
   let groups: CatalogGroup[] = [];
   let resolved: ReturnType<typeof resolveOptions>;
@@ -225,20 +223,6 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         const local = server.resolvedUrls?.local[0];
         if (local) logger.info(`  ➜  zukan:   ${local}__zukan/`);
       };
-    },
-    transform: {
-      filter: { id: { include: catalogId, exclude: [/^\0/, SVELTE_STYLE_ID] } },
-      handler(code, id) {
-        if (!isCatalogId(id)) return;
-        const filename = id.split(/[?#]/)[0];
-        const docPath = docFileOf(filename);
-        let doc: string | null = null;
-        if (existsSync(docPath)) {
-          this.addWatchFile(docPath);
-          doc = marked.parse(readFileSync(docPath, 'utf-8'), { async: false });
-        }
-        return transformZukan(code, filename, doc);
-      }
     },
     hotUpdate({ type, file, modules, timestamp }) {
       const { moduleGraph } = this.environment;

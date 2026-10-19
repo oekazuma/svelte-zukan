@@ -1,6 +1,5 @@
-import { compile } from 'svelte/compiler';
 import { describe, expect, it } from 'vitest';
-import { extractSections, transformZukan } from './extract.js';
+import { extractSections } from './extract.js';
 
 const FILE = 'Button.zukan.svelte';
 
@@ -274,58 +273,5 @@ describe('extractSections', () => {
     expect(() => extractSections(nested, FILE)).toThrow(/Button\.zukan\.svelte:2 .*import it under another name/);
     const inIf = '<p></p>\n{#if true}\n<Section title="a"><A /></Section>\n{/if}';
     expect(() => extractSections(inIf, FILE)).toThrow(/Button\.zukan\.svelte:3/);
-  });
-});
-
-describe('transformZukan', () => {
-  const withScripts = `<script module lang="ts">export const x = 1;</script>
-<script lang="ts">
-  import Button from '../Button.svelte';
-</script>
-
-<Section title="a"><Button /></Section>
-`;
-
-  it('appends to existing module script and compiles', () => {
-    const { code: out } = transformZukan(withScripts, FILE, null);
-    expect(() => compile(out, { filename: FILE, generate: 'client' })).not.toThrow();
-    expect(out.match(/export const __zukan =/g)).toHaveLength(1);
-    expect(out).toContain('\\u003c/script>');
-    expect(out.split('\n')).toHaveLength(withScripts.split('\n').length);
-  });
-
-  it('inserts at module content start', () => {
-    const source = `<script module>export const x = 1; // comment</script>\n\n<Section title="a"><A /></Section>`;
-    const { code: out } = transformZukan(source, FILE, null);
-    expect(compile(out, { filename: FILE, generate: 'client' }).js.code).toContain('__zukan');
-  });
-
-  it('keeps a SCSS <style> verbatim', () => {
-    const style = '<style lang="scss">\n  $c: red;\n  .a { &:hover { color: $c; } }\n</style>';
-    const source = `<script module>export const x = 1;</script>\n\n<Section title="a"><A /></Section>\n\n${style}\n`;
-    const { code: out } = transformZukan(source, FILE, null);
-    expect(out).toContain(style);
-    expect(out.startsWith('<script module>export const __zukan = ')).toBe(true);
-    expect(out).toContain(';export const x = 1;</script>');
-    const plain = '<Section title="a"><A /></Section>\n' + style;
-    expect(transformZukan(plain, FILE, null).code.startsWith(plain)).toBe(true);
-  });
-
-  it('returns a source map', () => {
-    const { map } = transformZukan(withScripts, FILE, null);
-    expect(map.sources).toEqual([FILE]);
-    expect(map.sourcesContent?.[0]).toBe(withScripts);
-    expect(map.mappings).not.toBe('');
-  });
-
-  it('adds module script when missing', () => {
-    const source = '<Section title=\'a "b" 日本語\'><A /></Section>\n';
-    const { code: out } = transformZukan(source, FILE, '<p>x</p>');
-    expect(out.startsWith(source)).toBe(true);
-    const json = out.slice(source.length).match(/export const __zukan = (.*);<\/script>/)![1];
-    expect(JSON.parse(json)).toEqual({
-      sections: [{ title: 'a "b" 日本語', code: '<A />' }],
-      doc: '<p>x</p>'
-    });
   });
 });

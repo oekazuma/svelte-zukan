@@ -16,8 +16,6 @@ import { ENTRY, generateCatalogModule, generateEntryModule } from './virtual.js'
 // hooks are called with hand-made fakes, so the plugin is typed loosely
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const plugin = zukan() as any;
-// transformZukan escapes "<" as < in the injected JSON
-const h1 = '\\u003ch1>Foo\\u003c/h1>';
 const source = '<Section title="Foo"><div>x</div></Section>';
 
 let dir: string;
@@ -30,33 +28,13 @@ beforeAll(async () => {
   docFile = path.join(dir, 'Foo.zukan.md');
   await writeFile(zukanFile, source);
   await writeFile(docFile, '# Foo');
-  await writeFile(path.join(dir, 'Foo.catalog.md'), '# Foo');
 });
 
-const transform = (code: string, id: string, p = plugin, ctx = { addWatchFile: vi.fn() }) =>
-  p.transform.handler.call(ctx, code, id);
-
 describe('createMatchers', () => {
-  it('matches catalog files, with or without a query', () => {
-    const { isCatalogId } = createMatchers('zukan');
-    expect(isCatalogId('/a/Foo.zukan.svelte')).toBe(true);
-    expect(isCatalogId('/a/Foo.zukan.svelte?v=1')).toBe(true);
-  });
-
-  it('rejects style modules, virtual modules and other files', () => {
-    const { isCatalogId } = createMatchers('zukan');
-    expect(isCatalogId('/a/Foo.zukan.svelte?svelte&type=style&lang.css')).toBe(false);
-    expect(isCatalogId('\0/a/Foo.zukan.svelte')).toBe(false);
-    expect(isCatalogId('/a/Foo.svelte')).toBe(false);
-  });
-
   it('follows the suffix', () => {
-    const { isCatalogId, isCatalogFile, isDocFile } = createMatchers('catalog');
-    expect(isCatalogId('/a/Foo.catalog.svelte')).toBe(true);
-    expect(isCatalogId('/a/Foo.zukan.svelte')).toBe(false);
+    const { isCatalogFile, isDocFile } = createMatchers('catalog');
     expect(isCatalogFile('/a/Foo.catalog.svelte')).toBe(true);
     expect(isCatalogFile('/a/Foo.zukan.svelte')).toBe(false);
-    expect(isDocFile('/a/Foo.catalog.md')).toBe(true);
     expect(isDocFile('/a/Foo.zukan.md')).toBe(false);
     expect(isDocFile('/a/Document.md')).toBe(false);
   });
@@ -74,78 +52,13 @@ describe('createMatchers', () => {
   });
 
   it('is case-sensitive, using the suffix verbatim', () => {
-    const { isCatalogId, isCatalogFile } = createMatchers('zukan');
-    expect(isCatalogId('/a/Foo.ZUKAN.svelte')).toBe(false);
+    const { isCatalogFile } = createMatchers('zukan');
     expect(isCatalogFile('/a/Foo.ZUKAN.svelte')).toBe(false);
   });
 
   it.each(['a.b', '', 'a b', 'a|b'])('rejects invalid suffix %j', (suffix) => {
     expect(() => createMatchers(suffix)).toThrow(/suffix/);
     expect(() => zukan({ suffix })).toThrow(/suffix/);
-  });
-});
-
-describe('transform', () => {
-  it('uses a hook filter', () => {
-    expect(plugin.name).toBe('vite-plugin-svelte-zukan');
-    expect(plugin.enforce).toBe('pre');
-    expect(plugin.transform.filter.id).toHaveProperty('include');
-    expect(plugin.transform.filter.id).toHaveProperty('exclude');
-  });
-
-  it('filter agrees with isCatalogId', () => {
-    const { isCatalogId } = createMatchers('zukan');
-    const { include, exclude } = plugin.transform.filter.id as { include: RegExp; exclude: RegExp[] };
-    const ids = [
-      '/a/Foo.zukan.svelte',
-      '/a/Foo.zukan.svelte?v=1',
-      '/a/Foo.zukan.svelte#x',
-      '/a/Foo.zukan.svelte?svelte&type=style&lang.css',
-      '/a/Foo.zukan.svelte?foo&svelte&type=style',
-      '\0/a/Foo.zukan.svelte',
-      '/a/Foo.svelte',
-      '/a/Foo.zukan.svelte.ts',
-      '/a/Foo.catalog.svelte',
-      '/a/Foo.zukan.md'
-    ];
-    for (const id of ids) {
-      expect(include.test(id) && !exclude.some((r) => r.test(id)), id).toBe(isCatalogId(id));
-    }
-  });
-
-  it('injects doc html', () => {
-    const ctx = { addWatchFile: vi.fn() };
-    const result = transform(source, zukanFile, plugin, ctx);
-    expect(result.code).toContain(h1);
-    expect(result.map).toBeDefined();
-    expect(ctx.addWatchFile).toHaveBeenCalledWith(docFile);
-  });
-
-  it('reads Foo.<suffix>.md for a custom suffix', () => {
-    const catalog = zukan({ suffix: 'catalog' }) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const ctx = { addWatchFile: vi.fn() };
-    const result = transform(source, path.join(dir, 'Foo.catalog.svelte'), catalog, ctx);
-    expect(result.code).toContain(h1);
-    expect(ctx.addWatchFile).toHaveBeenCalledWith(path.join(dir, 'Foo.catalog.md'));
-  });
-
-  it('doc is null without Foo.zukan.md', async () => {
-    const other = await mkdtemp(path.join(tmpdir(), 'zukan-'));
-    const ctx = { addWatchFile: vi.fn() };
-    const result = transform(source, path.join(other, 'Foo.zukan.svelte'), plugin, ctx);
-    expect(result.code).toContain('"doc":null');
-    expect(ctx.addWatchFile).not.toHaveBeenCalled();
-  });
-
-  it('handler ignores non-catalog ids', () => {
-    expect(transform(source, '/a/Foo.svelte')).toBeUndefined();
-  });
-
-  it('strips query from id', () => {
-    const ctx = { addWatchFile: vi.fn() };
-    const result = transform(source, `${zukanFile}?v=123`, plugin, ctx);
-    expect(result.code).toContain(h1);
-    expect(ctx.addWatchFile).toHaveBeenCalledWith(docFile);
   });
 });
 
@@ -881,5 +794,11 @@ describe('build', () => {
 describe('public API', () => {
   it('exports only zukan', () => {
     expect(Object.keys(api)).toEqual(['zukan']);
+  });
+
+  it('is a pre plugin without a transform hook', () => {
+    expect(plugin.name).toBe('vite-plugin-svelte-zukan');
+    expect(plugin.enforce).toBe('pre');
+    expect(plugin.transform).toBeUndefined();
   });
 });
