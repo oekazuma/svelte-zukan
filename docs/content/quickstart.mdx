@@ -4,7 +4,7 @@ sidebar:
   order: 10
 ---
 
-svelte-zukan works with plain Vite + Svelte and with SvelteKit. It needs Vite 8 or later, Svelte 5, and Node 22.17 or later. It uses Vite-specific hooks (`configureServer`, `hotUpdate`, `buildApp`), so it does not work with other bundlers.
+svelte-zukan works with plain Vite + Svelte and with SvelteKit 3 or later. It needs Vite 8 or later, Svelte 5, and Node 22.17 or later. It uses Vite-specific hooks (`configureServer`, `hotUpdate`, `buildApp`), so it does not work with other bundlers.
 
 ## Install
 
@@ -75,6 +75,12 @@ Put `<Name>.zukan.svelte` next to the component, and wrap each example in `<Sect
 Start the dev server and open `/__zukan/`. The catalog URL is also listed in the URLs printed to the terminal at startup.
 
 If you set Vite's `base` or SvelteKit's `paths.base`, the catalog moves to `<base>__zukan/` (for example, `/app/__zukan/` when `base: '/app/'`).
+
+In the catalog:
+
+- Type in the search box, or press <kbd>/</kbd> to jump to it, to filter the components
+- Each section has width presets (or drag the right edge), a light or dark background for every preview at once, and a link that opens the preview alone in a new tab
+- The catalog UI follows your system's light or dark theme. On a narrow screen, the component list folds under the menu button
 
 ## Next steps
 

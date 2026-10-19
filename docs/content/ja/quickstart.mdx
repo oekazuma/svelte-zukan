@@ -4,7 +4,7 @@ sidebar:
   order: 10
 ---
 
-svelte-zukan は、素の Vite + Svelte でも SvelteKit でも動きます。Vite 8 以上、Svelte 5、Node 22.17 以上が必要です。Vite 専用のフック（`configureServer`、`hotUpdate`、`buildApp`）を使うため、Vite 以外のバンドラーでは動きません。
+svelte-zukan は、素の Vite + Svelte でも SvelteKit 3 以上でも動きます。Vite 8 以上、Svelte 5、Node 22.17 以上が必要です。Vite 専用のフック（`configureServer`、`hotUpdate`、`buildApp`）を使うため、Vite 以外のバンドラーでは動きません。
 
 ## インストール
 
@@ -75,6 +75,12 @@ export default defineConfig({ plugins: [zukan(), svelte()] });
 dev サーバーを起動して `/__zukan/` を開きます。起動時にターミナルへ出る URL 一覧にも、カタログの URL が載ります。
 
 Vite の `base` や SvelteKit の `paths.base` を設定しているときは、カタログは `<base>__zukan/`（例: `base: '/app/'` なら `/app/__zukan/`）に移ります。
+
+カタログでは次のことができます。
+
+- 検索欄に入力するとコンポーネントを絞り込めます。<kbd>/</kbd> を押すと検索欄に移ります
+- セクションごとに、幅のプリセット（右端のドラッグでも変えられます）、全プレビューに効くライトとダークの背景の切り替え、プレビューだけを新しいタブで開くリンクがあります
+- カタログの UI は OS のライトとダークの設定に合わせます。狭い画面では、コンポーネントの一覧がメニューボタンの中に畳まれます
 
 ## 次のステップ
 
