@@ -5,15 +5,20 @@ import { beforeAll, expect, test } from 'vitest';
 
 const fixtures = import.meta.dirname;
 const vite = join(fixtures, 'node_modules/vite/bin/vite.js');
-// a production build from the package's source: none of vitest's variables, and not the dist
+// a production build: none of vitest's variables (ZUKAN_FROM_DIST=1 builds with the packaged library)
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const { NODE_ENV, VITEST, TEST, ZUKAN_FROM_DIST, ...env } = process.env;
+const { NODE_ENV, VITEST, TEST, ...env } = process.env;
 
 /** `vite build` in a child process: SvelteKit takes `process.cwd()` as its project root */
-const build = (dir: string) => {
+const build = (dir: string, args: string[] = []) => {
   for (const out of ['zukan-dist', 'build', 'dist', '.svelte-kit'])
     rmSync(join(dir, out), { recursive: true, force: true });
-  const r = spawnSync(process.execPath, [vite, 'build'], { cwd: dir, env, encoding: 'utf8', timeout: 110_000 });
+  const r = spawnSync(process.execPath, [vite, 'build', ...args], {
+    cwd: dir,
+    env,
+    encoding: 'utf8',
+    timeout: 110_000
+  });
   expect(r.status, [r.error?.message, r.stderr, r.stdout?.slice(-4000)].filter(Boolean).join('\n')).toBe(0);
 };
 
@@ -51,6 +56,22 @@ test('kit monorepo build', { timeout: 120_000 }, () => {
   // discovered without `groups`: the workspace dependency, with same-named files told apart by their directories
   const ids = ['@fixture/ui', '@fixture/ui/lib/Card', '@fixture/ui/lib/forms/Button', '@fixture/ui/lib/nav/Button'];
   expect(missing(dir, ids)).toEqual([]);
+  // the library's own catalog files are not the app's
+  expect(missing(dir, ['svelte-zukan/lib/components/Badge'])).toEqual(['svelte-zukan/lib/components/Badge']);
+
+  // sections and the rendered .md come from the catalog files themselves, not from the list
+  const all = js.map(({ code }) => code).join('\n');
+  for (const text of ['Long title', 'A card from']) expect(all).toContain(text);
+});
+
+test('kit monorepo build under paths.base', { timeout: 120_000 }, () => {
+  const dir = join(fixtures, 'monorepo/apps/catalog');
+  build(dir, ['--config', 'vite.config.base.ts']);
+  const html = readFileSync(join(dir, 'zukan-dist/index.html'), 'utf8');
+  // relative, so the catalog works wherever it is deployed
+  expect(html).toContain('src="./_zukan/');
+  const all = [html, ...catalogJs(dir).map(({ code }) => code)].join('\n');
+  expect(all).not.toContain('/app/_zukan');
 });
 
 test('plain vite build', { timeout: 120_000 }, () => {
