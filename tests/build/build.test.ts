@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { beforeAll, expect, test } from 'vitest';
 
 const fixtures = import.meta.dirname;
-const vite = join(fixtures, '../node_modules/vite/bin/vite.js');
-// a production build from the repo's source: none of vitest's variables, and not the dist
+const vite = join(fixtures, 'node_modules/vite/bin/vite.js');
+// a production build from the package's source: none of vitest's variables, and not the dist
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { NODE_ENV, VITEST, TEST, ZUKAN_FROM_DIST, ...env } = process.env;
 

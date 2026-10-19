@@ -1,104 +1,35 @@
 {
-  "name": "svelte-zukan",
-  "version": "0.0.1",
-  "description": "Colocated component catalog for Svelte, served by a Vite plugin",
-  "license": "MIT",
-  "author": "oekazuma",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/oekazuma/svelte-zukan.git"
-  },
-  "keywords": [
-    "svelte",
-    "vite-plugin",
-    "component-catalog",
-    "styleguide",
-    "sveltekit"
-  ],
+  "name": "@svelte-zukan/monorepo",
   "type": "module",
-  "packageManager": "pnpm@12.10.1",
-  "engines": {
-    "node": ">=22.17"
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm --filter svelte-zukan run package && pnpm -r build",
+    "preview": "pnpm -r --parallel preview",
+    "package": "pnpm -r package",
+    "check": "pnpm -r check",
+    "lint": "prettier --check . && eslint .",
+    "format": "prettier --write .",
+    "test": "pnpm -r test",
+    "release": "changeset publish"
   },
+  "devDependencies": {
+    "@changesets/cli": "catalog:",
+    "@eslint/js": "catalog:",
+    "eslint": "catalog:",
+    "eslint-config-prettier": "catalog:",
+    "eslint-plugin-svelte": "catalog:",
+    "globals": "catalog:",
+    "prettier": "catalog:",
+    "prettier-plugin-svelte": "catalog:",
+    "typescript-eslint": "catalog:"
+  },
+  "packageManager": "pnpm@12.14.0",
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": "24.21.0",
+      "version": "24.22.0",
       "onFail": "download"
     }
-  },
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build && pnpm prepack",
-    "preview": "vite preview",
-    "prepare": "svelte-kit sync || echo ''",
-    "prepack": "svelte-kit sync && svelte-package && publint",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "lint": "prettier --check . && eslint .",
-    "format": "prettier --write .",
-    "test": "vitest",
-    "test:run": "vitest run"
-  },
-  "files": [
-    "dist",
-    "!dist/**/*.test.*",
-    "!dist/**/*.spec.*",
-    "!dist/**/*.zukan.svelte",
-    "!dist/**/*.zukan.svelte.d.ts",
-    "!dist/**/*.zukan.md"
-  ],
-  "sideEffects": [
-    "**/*.css"
-  ],
-  "svelte": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "svelte": "./dist/index.js"
-    },
-    "./vite": {
-      "types": "./dist/vite/index.d.ts",
-      "default": "./dist/vite/index.js"
-    }
-  },
-  "imports": {
-    "#lib": "./src/lib/index.js",
-    "#lib/*": "./src/lib/*"
-  },
-  "peerDependencies": {
-    "svelte": "^5.0.0",
-    "vite": "^8.0.0"
-  },
-  "dependencies": {
-    "magic-string": "^1.4.3",
-    "marked": "^18.1.1"
-  },
-  "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@sveltejs/adapter-static": "^4.0.0",
-    "@sveltejs/kit": "^3.0.0",
-    "@sveltejs/package": "^2.5.8",
-    "@sveltejs/vite-plugin-svelte": "^7.2.0",
-    "@types/node": "^24",
-    "@vitejs/devtools": "^0.7.6",
-    "@vitest/browser-playwright": "^4.1.8",
-    "eslint": "^10.4.1",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-svelte": "^3.19.0",
-    "globals": "^17.6.0",
-    "playwright": "^1.60.0",
-    "prettier": "^3.8.3",
-    "prettier-plugin-svelte": "^4.1.0",
-    "publint": "^0.3.21",
-    "svelte": "^5.57.1",
-    "svelte-check": "^4.6.0",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.60.1",
-    "vite": "^8.3.0",
-    "vite-plugin-inspect": "^12.1.0",
-    "vitest": "^4.1.8",
-    "vitest-browser-svelte": "^2.1.1"
   }
 }

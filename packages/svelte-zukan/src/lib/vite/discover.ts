@@ -53,8 +53,11 @@ export function discoverGroups(root: string, groups?: Record<string, string | st
     const real = realpathSync(link);
     // installed packages live under node_modules; only workspace links resolve outside of it
     if (real.split(/[/\\]/).includes('node_modules') || scanned.has(real)) continue;
+    const { name } = readPackage(real);
+    // a workspace link to this library itself: its own catalog files are not the app's
+    if (name === 'svelte-zukan') continue;
     scanned.add(real);
-    found.push({ name: readPackage(real).name ?? basename(real), dir: real });
+    found.push({ name: name ?? basename(real), dir: real });
   }
   return found.flatMap(({ name, dir }) => {
     const src = join(dir, 'src');

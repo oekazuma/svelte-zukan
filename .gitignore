@@ -5,10 +5,12 @@ node_modules
 .vercel
 .netlify
 .wrangler
-/.svelte-kit
-/build
-/dist
-/zukan-dist
+# in every package, the fixtures included; `tests/build` itself is the build tests package
+.svelte-kit
+build
+!/tests/build/
+dist
+zukan-dist
 
 # OS
 .DS_Store
@@ -32,9 +34,3 @@ vite.config.ts.timestamp-*
 
 # Superpowers (agent workspace)
 /.superpowers/
-
-# Fixture outputs
-fixtures/**/.svelte-kit
-fixtures/**/build
-fixtures/**/dist
-fixtures/**/zukan-dist

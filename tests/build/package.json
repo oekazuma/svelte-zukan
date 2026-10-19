@@ -1,0 +1,17 @@
+{
+  "name": "build-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "catalog:",
+    "@sveltejs/kit": "catalog:",
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@types/node": "catalog:",
+    "svelte": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

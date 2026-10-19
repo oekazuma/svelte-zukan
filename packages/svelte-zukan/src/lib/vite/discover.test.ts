@@ -63,6 +63,16 @@ describe('discoverGroups', () => {
     expect(names(discoverGroups(join(tmp, 'app')))).toEqual(['app']);
   });
 
+  it('skips a workspace link to svelte-zukan itself', () => {
+    pkg('app', { name: 'app', devDependencies: { 'svelte-zukan': 'workspace:*' } });
+    write('app/src/a.zukan.svelte');
+    pkg('zukan', { name: 'svelte-zukan' });
+    write('zukan/src/lib/Badge.zukan.svelte');
+    mkdirSync(join(tmp, 'app/node_modules'), { recursive: true });
+    symlinkSync(join(tmp, 'zukan'), join(tmp, 'app/node_modules/svelte-zukan'), 'dir');
+    expect(names(discoverGroups(join(tmp, 'app')))).toEqual(['app']);
+  });
+
   it('dependencies before devDependencies', () => {
     pkg('app', { name: 'app', devDependencies: { dev: 'workspace:*' }, dependencies: { dep: 'workspace:*' } });
     for (const n of ['dep', 'dev']) {
