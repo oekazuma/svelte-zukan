@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, globSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { preview } from 'vite';
 import { beforeAll, expect, test } from 'vitest';
 
@@ -63,6 +63,7 @@ test('kit monorepo build', { timeout: 120_000 }, () => {
   // sections and the rendered .md come from the catalog files themselves, not from the list
   const all = js.map(({ code }) => code).join('\n');
   for (const text of ['Long title', 'A card from']) expect(all).toContain(text);
+  expect(unloadedCss(dir)).toEqual([]);
 });
 
 test('kit monorepo build under paths.base', { timeout: 120_000 }, () => {
@@ -73,6 +74,22 @@ test('kit monorepo build under paths.base', { timeout: 120_000 }, () => {
   expect(html).toContain('src="./_zukan/');
   const all = [html, ...catalogJs(dir).map(({ code }) => code)].join('\n');
   expect(all).not.toContain('/app/_zukan');
+});
+
+/** CSS files of the catalog that neither index.html nor any catalog JS file names */
+const unloadedCss = (dir: string) => {
+  const all = [
+    readFileSync(join(dir, 'zukan-dist/index.html'), 'utf8'),
+    ...catalogJs(dir).map(({ code }) => code)
+  ].join('\n');
+  return globSync('zukan-dist/_zukan/*.css', { cwd: dir }).filter((f) => !all.includes(basename(f)));
+};
+
+test('kit monorepo build with bundleStrategy inline', { timeout: 120_000 }, () => {
+  const dir = join(fixtures, 'monorepo/apps/catalog');
+  build(dir, ['--config', 'vite.config.inline.ts']);
+  expect(globSync('zukan-dist/_zukan/*.css', { cwd: dir }).length).toBeGreaterThan(0);
+  expect(unloadedCss(dir)).toEqual([]);
 });
 
 test('plain vite build', { timeout: 120_000 }, async () => {

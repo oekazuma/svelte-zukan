@@ -674,6 +674,7 @@ describe('build', () => {
       build: {
         ssr: 'src/entry-server.ts',
         lib: { entry: 'src/index.ts' },
+        cssCodeSplit: false,
         rolldownOptions: { input: { main: 'index.html', nested: 'nested/index.html', zukan: ENTRY } }
       }
     });
@@ -683,6 +684,7 @@ describe('build', () => {
       ssr: false,
       lib: false,
       emptyOutDir: false,
+      cssCodeSplit: true,
       rolldownOptions: { input: { zukan: ENTRY } }
     });
     const client = inherited();
@@ -745,7 +747,7 @@ describe('build', () => {
     const outDir = `${root}/zukan-dist`;
     mkdirSync(`${outDir}/_app`, { recursive: true });
     await writeFile(`${outDir}/_app/version.json`, '{}');
-    const { p } = await bootBuild(root, { build: true, title: 'My UI', locale: 'ja' });
+    const { p } = await bootBuild(root, { build: true, title: 'My UI', locale: 'ja' }, { plugins: kitPlugins() });
     const { builder, zukanEnv } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } }, { array });
     await p.buildApp.handler(builder);
     expect(builder.build).toHaveBeenCalledTimes(1);
@@ -763,11 +765,33 @@ describe('build', () => {
     mkdirSync(`${outDir}/_app/immutable/workers`, { recursive: true });
     await writeFile(`${outDir}/_app/version.json`, '{}');
     await writeFile(`${outDir}/_app/immutable/workers/w.js`, '');
-    const { p } = await bootBuild(root, { build: true });
+    const { p } = await bootBuild(root, { build: true }, { plugins: kitPlugins() });
     const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
     await p.buildApp.handler(builder);
     expect(existsSync(`${outDir}/_app/version.json`)).toBe(false);
     expect(existsSync(`${outDir}/_app/immutable/workers/w.js`)).toBe(true);
+  });
+
+  it("removes version.json from SvelteKit's custom appDir", async () => {
+    const { root } = await makeApp();
+    const outDir = `${root}/zukan-dist`;
+    mkdirSync(`${outDir}/kit-app`, { recursive: true });
+    await writeFile(`${outDir}/kit-app/version.json`, '{}');
+    const { p } = await bootBuild(root, { build: true }, { plugins: kitPlugins({ appDir: 'kit-app' }) });
+    const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
+    await p.buildApp.handler(builder);
+    expect(existsSync(`${outDir}/kit-app`)).toBe(false);
+  });
+
+  it('leaves _app/version.json alone without SvelteKit', async () => {
+    const { root } = await makeApp();
+    const outDir = `${root}/zukan-dist`;
+    mkdirSync(`${outDir}/_app`, { recursive: true });
+    await writeFile(`${outDir}/_app/version.json`, '{}');
+    const { p } = await bootBuild(root, { build: true });
+    const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
+    await p.buildApp.handler(builder);
+    expect(existsSync(`${outDir}/_app/version.json`)).toBe(true);
   });
 
   it('removes only the files of the previous catalog', async () => {

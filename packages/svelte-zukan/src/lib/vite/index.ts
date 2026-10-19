@@ -45,6 +45,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   let resolved: ReturnType<typeof resolveOptions>;
   /** whether the user's config builds every environment (`builder`, or `vite build --app`) */
   let appBuilder = false;
+  /** where SvelteKit writes version.json into every client environment, the catalog's included */
+  let kitAppDir: string | null = null;
   /** printed once in buildApp: Vite resolves the config again for every environment */
   let warning: string | null = null;
   const scanned = () => groups.flatMap((g) => g.dirs);
@@ -57,6 +59,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       // after the other plugins, so that a `builder` or a `renderBuiltUrl` they set is seen
       order: 'post',
       async handler(config, { command }) {
+        kitAppDir = null;
         root = normalizePath(resolve(config.root ?? process.cwd()));
         resolved = resolveOptions(root, options);
         groups = discoverGroups(root, options.groups);
@@ -69,6 +72,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         if (command !== 'build' || !resolved.build || config.build?.ssr) return;
         // set here, not in configResolved: a define added there does not reach the build
         const kit = await detectSvelteKit(config.plugins ?? []);
+        kitAppDir = kit ? ((kit.api?.options as { appDir?: string } | undefined)?.appDir ?? '_app') : null;
         const out = resolved.build;
         const overlaps = (dir: string) => isInside(out, dir) || isInside(dir, out);
         const dirOf = (rel: string) => normalizePath(resolve(root, rel));
@@ -132,7 +136,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       if (name !== 'zukan' || !config.build) return;
       // the environment starts from the app's top-level `build`; mutated, since a returned value would be merged into it
       // `emptyOutDir: false` also because Kit sets it for the whole build; buildApp removes only the catalog's own files
-      Object.assign(config.build, { ssr: false, lib: false, emptyOutDir: false });
+      // `cssCodeSplit`: index.html is written without Vite's HTML transform, which is the only thing that links merged CSS
+      Object.assign(config.build, { ssr: false, lib: false, emptyOutDir: false, cssCodeSplit: true });
       config.build.rolldownOptions = { ...config.build.rolldownOptions, input: { zukan: ENTRY } };
     },
     buildApp: {
@@ -170,10 +175,11 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           icon
         });
         writeFileSync(join(resolved.build, 'index.html'), html);
-        // SvelteKit's plugins also write _app/version.json here
-        const kitDir = join(resolved.build, '_app');
-        rmSync(join(kitDir, 'version.json'), { force: true });
-        if (existsSync(kitDir) && readdirSync(kitDir).length === 0) rmSync(kitDir, { recursive: true });
+        if (kitAppDir) {
+          const kitDir = join(resolved.build, kitAppDir);
+          rmSync(join(kitDir, 'version.json'), { force: true });
+          if (existsSync(kitDir) && readdirSync(kitDir).length === 0) rmSync(kitDir, { recursive: true });
+        }
       }
     },
     resolveId(id) {
