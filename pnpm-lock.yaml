@@ -389,6 +389,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.2
+      playwright:
+        specifier: 'catalog:'
+        version: 1.64.0
       svelte:
         specifier: 'catalog:'
         version: 5.57.2(@typescript-eslint/types@8.71.2)
