@@ -5,8 +5,7 @@ import { dirname, resolve } from 'node:path';
 const here = import.meta.dirname;
 const pkg = resolve(here, '../../../packages/svelte-zukan');
 
-// `svelte-zukan` is linked but not declared in the catalog app's package.json:
-// declared, the link would look like a workspace package and the package's own `src` would be scanned as a group
+// `svelte-zukan` is linked but not declared in the catalog app's package.json (discovery skips it either way)
 // the links point at packages/svelte-zukan: never run a link-following recursive delete on tests/build/**/node_modules
 const links = [
   ['apps/catalog/node_modules/@fixture/ui', resolve(here, 'packages/ui')],
