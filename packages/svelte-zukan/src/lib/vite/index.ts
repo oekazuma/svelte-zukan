@@ -227,9 +227,10 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       } else if (type === 'update' && isCatalogFile(file)) {
         targets = modules;
       } else if (isCatalogFile(file) && scanned().some((dir) => isInside(normalizePath(file), dir))) {
-        // created or deleted: the list is rebuilt when the module is loaded again
+        // created or deleted: the list is rebuilt when the module is loaded again, and Vite does not
+        // invalidate the file's own module on add or unlink, so a re-created file would keep its old transform
         const list = moduleGraph.getModuleById('\0' + CATALOG);
-        targets = list ? [list] : [];
+        targets = list ? [...modules, list] : modules;
       } else return;
 
       for (const mod of targets) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
