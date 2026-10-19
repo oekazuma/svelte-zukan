@@ -1,0 +1,25 @@
+name: 'Setup Playwright'
+description: 'Cache and install Playwright Chromium using the version from pnpm-workspace.yaml'
+
+runs:
+  using: 'composite'
+  steps:
+    # The browser tests (packages/svelte-zukan vite.config.ts) run on Chromium only.
+    - name: Resolve Playwright version
+      shell: bash
+      run: |
+        echo "PLAYWRIGHT_VERSION=$(grep '^  playwright:' pnpm-workspace.yaml | awk '{print $2}' | sed 's/\^//')" >> "${GITHUB_ENV}"
+
+    - name: Cache Playwright browsers
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+        restore-keys: |
+          ${{ runner.os }}-playwright-
+
+    # Skips the browser download already restored from cache; system packages are always installed.
+    - name: Install Playwright Chromium and system dependencies
+      shell: bash
+      working-directory: packages/svelte-zukan
+      run: pnpm exec playwright install --with-deps chromium
