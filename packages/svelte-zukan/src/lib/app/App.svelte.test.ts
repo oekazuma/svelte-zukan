@@ -229,6 +229,31 @@ describe('App', () => {
     await expect.element(nav.getByRole('list', { name: 'examples' })).toHaveTextContent('Demo');
   });
 
+  it('on a narrow screen the menu closes when the logo link or Back navigates', async () => {
+    await page.viewport(400, 800);
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    await menu.click();
+    await expect.element(menu).toHaveAttribute('aria-expanded', 'true');
+    await screen.getByRole('link', { name: 'zukan' }).click();
+    await expect.element(menu).toHaveAttribute('aria-expanded', 'false');
+    await menu.click();
+    await expect.element(menu).toHaveAttribute('aria-expanded', 'true');
+    history.back();
+    await expect.element(menu).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('the preview URL is the page path plus the preview hash', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = () =>
+      Promise.resolve({ default: { sections: [{ title: 'One', code: '<p>one</p>' }], doc: null } });
+    const screen = await render(App, { props });
+    const src = `${location.pathname}#/preview/ui/Card?section=One`;
+    await expect.element(screen.getByTitle('One')).toHaveAttribute('src', src);
+    await expect.element(screen.getByRole('link', { name: 'Open in new tab' })).toHaveAttribute('href', src);
+  });
+
   it('on a narrow screen the menu button shows the navigation', async () => {
     await page.viewport(400, 800);
     const { props } = setup('');

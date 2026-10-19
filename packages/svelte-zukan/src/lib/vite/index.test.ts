@@ -199,7 +199,7 @@ describe('generateEntryModule', () => {
     const code = generateEntryModule({ ...base, logo: null, wrapper: null });
     const listen = code.indexOf("import.meta.hot.on('zukan:reload'");
     expect(listen).toBeGreaterThan(-1);
-    expect(code).toContain('window === window.top');
+    expect(code).toContain('parent.location.pathname === location.pathname');
     expect(listen).toBeLessThan(code.indexOf('import("virtual:svelte-zukan/catalog")'));
     expect(listen).toBeLessThan(code.indexOf('import("/lib/app/App.svelte")'));
     expect(code).not.toMatch(/^import .* from "(virtual:svelte-zukan\/catalog|\/lib\/app\/App\.svelte)"/m);

@@ -28,7 +28,12 @@
     {/if}
     {#each meta.sections as section (section.title)}
       <h2>{section.title}</h2>
-      <PreviewFrame src="./{formatHash('preview', entry.path, section.title)}" title={section.title} labels={t} />
+      <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
+      <PreviewFrame
+        src={location.pathname + formatHash('preview', entry.path, section.title)}
+        title={section.title}
+        labels={t}
+      />
       <CodeBlock code={section.code} labels={t} />
     {/each}
   {:catch error}

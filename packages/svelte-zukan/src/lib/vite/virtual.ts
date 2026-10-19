@@ -33,8 +33,12 @@ export function generateEntryModule(opts: {
   return [
     `import { mount } from 'svelte';`,
     ...(opts.logo ? [`import logo from ${s(opts.logo + '?url')};`] : []),
-    // preview iframes are recreated when the catalog page reloads; a preview opened in its own tab is the top window
-    `if (import.meta.hot && window === window.top) import.meta.hot.on('zukan:reload', () => location.reload());`,
+    // a preview iframe is recreated when its catalog page reloads; any other page (a tab, an editor's iframe) reloads itself
+    `if (import.meta.hot) import.meta.hot.on('zukan:reload', () => {`,
+    `  let preview = false;`,
+    `  try { preview = window !== parent && parent.location.pathname === location.pathname; } catch {}`,
+    `  if (!preview) location.reload();`,
+    `});`,
     `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)})]).then(([{ default: App }, { catalog }]) =>`,
     `  mount(App, {`,
     `    target: document.body,`,
