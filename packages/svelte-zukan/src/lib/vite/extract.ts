@@ -72,7 +72,7 @@ function declaredNames(node: Node) {
 
 // `import { Section as Example } from 'svelte-zukan'` names the tag `Example`
 function sectionName(ast: Ast) {
-  for (const n of (ast.instance?.content.body ?? []) as unknown as Node[]) {
+  for (const n of [...(ast.module?.content.body ?? []), ...(ast.instance?.content.body ?? [])] as unknown as Node[]) {
     if (n.type !== 'ImportDeclaration' || (n.source as { value: string }).value !== 'svelte-zukan') continue;
     for (const s of n.specifiers as { type: string; imported?: { name?: string }; local: { name: string } }[])
       if (s.type === 'ImportSpecifier' && s.imported?.name === 'Section') return s.local.name;
@@ -163,15 +163,15 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
   return top.map((section) => {
     const attr = (section.attributes as Node[]).find((a) => a.name === 'title');
     const value = attr?.value as Node[] | true | undefined;
-    if (!attr) fail(section.start, '<Section> needs a title');
+    if (!attr) fail(section.start, `<${name}> needs a title`);
     // `title` alone (value `true`) and `title=""` (no Text node) are both empty
     if (value === true || (Array.isArray(value) && !value.length))
-      fail(section.start, '<Section> title must not be empty');
+      fail(section.start, `<${name}> title must not be empty`);
     if (!Array.isArray(value) || value.length !== 1 || value[0].type !== 'Text')
-      fail(section.start, '<Section> title must be a static string');
+      fail(section.start, `<${name}> title must be a static string`);
     const title = (value as unknown as { data: string }[])[0].data;
-    if (!title.trim()) fail(section.start, '<Section> title must not be empty');
-    if (titles.has(title)) fail(section.start, `duplicate <Section> title "${title}"`);
+    if (!title.trim()) fail(section.start, `<${name}> title must not be empty`);
+    if (titles.has(title)) fail(section.start, `duplicate <${name}> title "${title}"`);
     titles.add(title);
 
     const nodes = (section.fragment as { nodes: Node[] }).nodes;
