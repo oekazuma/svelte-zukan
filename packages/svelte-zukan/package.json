@@ -1,7 +1,6 @@
 {
   "name": "svelte-zukan",
   "version": "0.0.1",
-  "private": true,
   "description": "Colocated component catalog for Svelte, served by a Vite plugin",
   "license": "MIT",
   "author": "oekazuma",
@@ -21,7 +20,7 @@
   "bugs": {
     "url": "https://github.com/oekazuma/svelte-zukan/issues"
   },
-  "homepage": "https://github.com/oekazuma/svelte-zukan/tree/main/packages/svelte-zukan#readme",
+  "homepage": "https://oekazuma.github.io/svelte-zukan/",
   "engines": {
     "node": ">=22.17"
   },
