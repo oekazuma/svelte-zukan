@@ -3,10 +3,10 @@ import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
-// ZUKAN_FROM_DIST=1: the built package (`pnpm build`), linked by setup.mjs; otherwise the repo's source
+// ZUKAN_FROM_DIST=1: the built package (`pnpm run package`), linked by setup.mjs; otherwise the package's source
 const { zukan } = process.env.ZUKAN_FROM_DIST
   ? await import('svelte-zukan/vite')
-  : await import('../../../../src/lib/vite/index.js');
+  : await import('../../../../../packages/svelte-zukan/src/lib/vite/index.js');
 
 export const config = (paths?: { base: '' | `/${string}` }) =>
   defineConfig({
@@ -16,7 +16,9 @@ export const config = (paths?: { base: '' | `/${string}` }) =>
         : [
             {
               find: /^svelte-zukan$/,
-              replacement: fileURLToPath(new URL('../../../../src/lib/index.ts', import.meta.url))
+              replacement: fileURLToPath(
+                new URL('../../../../../packages/svelte-zukan/src/lib/index.ts', import.meta.url)
+              )
             }
           ]
     },

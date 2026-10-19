@@ -1,18 +1,18 @@
-// Links the workspace packages the way pnpm would. Run once before using the fixture: `node fixtures/monorepo/setup.mjs`
+// Links the workspace packages the way pnpm would. Run once before using the fixture: `node tests/build/monorepo/setup.mjs`
 import { lstatSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 const here = import.meta.dirname;
-const repo = resolve(here, '../..');
+const pkg = resolve(here, '../../../packages/svelte-zukan');
 
 // `svelte-zukan` is linked but not declared in the catalog app's package.json:
-// declared, the link would look like a workspace package and the repo's own `src` would be scanned as a group
-// the links point at the repo root: never run a link-following recursive delete on fixtures/**/node_modules
+// declared, the link would look like a workspace package and the package's own `src` would be scanned as a group
+// the links point at packages/svelte-zukan: never run a link-following recursive delete on tests/build/**/node_modules
 const links = [
   ['apps/catalog/node_modules/@fixture/ui', resolve(here, 'packages/ui')],
-  ['apps/catalog/node_modules/svelte-zukan', repo],
-  ['packages/ui/node_modules/svelte-zukan', repo],
-  ['../vite-svelte/node_modules/svelte-zukan', repo]
+  ['apps/catalog/node_modules/svelte-zukan', pkg],
+  ['packages/ui/node_modules/svelte-zukan', pkg],
+  ['../vite-svelte/node_modules/svelte-zukan', pkg]
 ];
 
 for (const [path, target] of links) {

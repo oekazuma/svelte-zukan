@@ -52,9 +52,8 @@ export default defineConfig(({ command }) => ({
         test: {
           name: 'server',
           environment: 'node',
-          include: ['src/**/*.{test,spec}.{js,ts}', 'fixtures/**/*.test.ts'],
-          // the fixtures link the repo into their node_modules; listing `exclude` drops vitest's default one
-          exclude: ['**/node_modules/**', 'src/**/*.svelte.{test,spec}.{js,ts}']
+          include: ['src/**/*.{test,spec}.{js,ts}'],
+          exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
         }
       }
     ]

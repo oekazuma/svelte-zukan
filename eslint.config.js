@@ -34,8 +34,8 @@ export default defineConfig(
     }
   },
   {
-    // the fixtures are separate projects outside the root tsconfig; no rule in use needs type information
-    files: ['fixtures/**/*.svelte'],
+    // the build fixtures and the example have no tsconfig of their own ready at lint time; no rule in use needs type information
+    files: ['tests/build/**/*.svelte', 'example/**/*.svelte'],
     languageOptions: { parserOptions: { projectService: false } }
   },
   {
