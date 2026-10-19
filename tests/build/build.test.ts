@@ -42,7 +42,7 @@ test('kit monorepo build', { timeout: 120_000 }, () => {
 
   const js = catalogJs(dir);
   expect(js.length).toBeGreaterThan(0);
-  // SvelteKit's client-only replacements must all be defined for the catalog (see the spec's "SvelteKit runtime APIs" section)
+  // SvelteKit's client-only replacements must all be defined for the catalog (see the "SvelteKit runtime APIs" page in the docs)
   const leftovers = js.flatMap(({ f, code }) =>
     [...code.matchAll(/__SVELTEKIT_[A-Z_]+__/g)].map((m) => `${f}: ${m[0]}`)
   );

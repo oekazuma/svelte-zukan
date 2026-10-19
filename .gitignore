@@ -32,5 +32,9 @@ vite.config.ts.timestamp-*
 
 .pnpm-store/
 
+# Blume (docs)
+.astro/
+.blume/
+
 # Superpowers (agent workspace)
 /.superpowers/

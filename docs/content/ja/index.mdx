@@ -1,0 +1,38 @@
+---
+title: svelte-zukan
+description: Svelte のコンポーネントカタログ。コンポーネントの隣にカタログファイルを置くと、一覧・プレビュー・コード表示がそろいます。
+seo:
+  title: svelte-zukan ・ Svelte のコンポーネントカタログ
+  description: svelte-zukan は、コンポーネントの隣に置いたカタログファイルから Svelte のコンポーネントカタログを配信する Vite プラグインです。
+---
+
+zukan は日本語の「図鑑」のことです。
+
+<CardGroup cols={2}>
+  <Card title="vite.config.ts に 1 行足すだけ" icon="plug">
+    Vite のプラグインに `zukan()` を足します。`src` にルートも設定ファイルも置きません。
+  </Card>
+  <Card title="コンポーネントの隣に置く" icon="folder">
+    `Button.zukan.svelte` と `Button.zukan.md` を `Button.svelte` の隣に置くと、カタログに載ります。
+  </Card>
+  <Card title="プレビューとコード" icon="code">
+    セクションごとに幅を変えられる iframe でプレビューし、コードは参照している変数の定義つきで表示します。
+  </Card>
+  <Card title="静的な書き出し" icon="package">
+    `build: true` にすると、`vite build` のときに静的なカタログも書き出します。どのサブパスに置いても動きます。
+  </Card>
+</CardGroup>
+
+<CardGroup cols={2}>
+  <Card title="はじめる" icon="arrow-right" href="/ja/quickstart">
+    svelte-zukan をインストールして、最初のカタログファイルを書きます。
+  </Card>
+  <Card title="デモを見る" icon="eye" href="https://oekazuma.github.io/svelte-zukan/demo/">
+    svelte-zukan 自身のコンポーネントのカタログです。`build: true` で書き出しています。
+  </Card>
+  <Card title="GitHub で見る" icon="github" href="https://github.com/oekazuma/svelte-zukan">
+    ソースを読んだり、issue を立てたり、コントリビュートしたりできます。
+  </Card>
+</CardGroup>
+
+svelte-zukan は Svelte の公式プロジェクトではありません（Svelte チームとの提携や承認はありません）。ロゴの S の図形は Svelte のロゴに由来します。

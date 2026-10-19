@@ -15,8 +15,9 @@
 
 ## Links
 
-- [README](packages/svelte-zukan/README.md) (setup, writing catalog files, options)
-- [Contributing guide](CONTRIBUTING.md)
+- [Documentation](https://oekazuma.github.io/svelte-zukan/) (Support for English and Japanese)
+- [Demo](https://oekazuma.github.io/svelte-zukan/demo/)
+- [Contribution Guide](CONTRIBUTING.md)
 
 ## License
 

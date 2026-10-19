@@ -1,0 +1,38 @@
+---
+title: svelte-zukan
+description: A component catalog for Svelte. Put a catalog file next to a component and you get a list, a live preview, and a code view.
+seo:
+  title: svelte-zukan ・ A component catalog for Svelte
+  description: svelte-zukan is a Vite plugin that serves a component catalog for Svelte from catalog files placed next to your components.
+---
+
+"zukan" (図鑑) is Japanese for "illustrated encyclopedia".
+
+<CardGroup cols={2}>
+  <Card title="One line in vite.config.ts" icon="plug">
+    Add `zukan()` to your Vite plugins. No routes or config files in `src`.
+  </Card>
+  <Card title="Next to your components" icon="folder">
+    Put `Button.zukan.svelte` and `Button.zukan.md` next to `Button.svelte` and they show up in the catalog.
+  </Card>
+  <Card title="Preview and code" icon="code">
+    Each section previews in a resizable iframe, and its code is shown with the variables it uses.
+  </Card>
+  <Card title="Static export" icon="package">
+    With `build: true`, `vite build` also writes a static catalog that works under any subpath.
+  </Card>
+</CardGroup>
+
+<CardGroup cols={2}>
+  <Card title="Get started" icon="arrow-right" href="/quickstart">
+    Install svelte-zukan and write your first catalog file.
+  </Card>
+  <Card title="See the demo" icon="eye" href="https://oekazuma.github.io/svelte-zukan/demo/">
+    The catalog of svelte-zukan's own components, exported with `build: true`.
+  </Card>
+  <Card title="View on GitHub" icon="github" href="https://github.com/oekazuma/svelte-zukan">
+    Browse the source, open issues, and contribute.
+  </Card>
+</CardGroup>
+
+svelte-zukan is not an official Svelte project (not affiliated with or endorsed by the Svelte team). The S shape in the logo is derived from the Svelte logo.

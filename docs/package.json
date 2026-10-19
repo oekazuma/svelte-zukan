@@ -1,0 +1,16 @@
+{
+  "name": "docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "blume dev",
+    "start": "blume dev",
+    "check": "blume check",
+    "build": "blume build",
+    "preview": "blume preview"
+  },
+  "dependencies": {
+    "blume": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -34,7 +34,7 @@ Run `pnpm run format` to auto-fix formatting issues found by `pnpm run lint`.
 - `packages/svelte-zukan/` is the published library. The code is in `src/lib/`: the Vite plugin in `src/lib/vite/` and the catalog SPA in `src/lib/app/`. The package also uses itself: `pnpm --filter svelte-zukan dev` serves this repository's own catalog at `/__zukan/` (the `ui` group is `src/lib`, the `examples` group is `src/examples`), and `pnpm --filter svelte-zukan build` writes it to `zukan-dist/`.
 - `example/` is a SvelteKit app that uses the built package (`packages/svelte-zukan/dist`) through `workspace:*`. Run `pnpm run package` first, then `pnpm --filter example dev` or `pnpm --filter example build`.
 - `tests/build/` builds the fixtures in `tests/build/monorepo/` (SvelteKit in a monorepo) and `tests/build/vite-svelte/` (plain Vite + Svelte) with the library's source, and checks the written catalog.
-- `docs/` has the design (`docs/specs/`) and the plans (`docs/plans/`).
+- `docs/` is the documentation site (Blume). English pages are in `docs/content/`, Japanese pages in `docs/content/ja/`; update both. Run `pnpm --filter docs dev` to preview it.
 
 ### Browser tests
 

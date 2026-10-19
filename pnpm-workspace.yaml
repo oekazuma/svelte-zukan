@@ -1,9 +1,18 @@
 packages:
+  - docs/
   - example/
   - packages/*
   - tests/*
 
 minimumReleaseAge: 4320
+
+allowBuilds:
+  sharp: true
+
+# takumi 2.16 renamed FontSubset's `ranges`, which blume 2.2.3 still reads; the docs build
+# then fails on the OG images of the Japanese pages. Drop this once blume reads the new field.
+overrides:
+  takumi-js: 2.14.0
 
 catalog:
   '@changesets/cli': ^3.0.3
@@ -15,6 +24,7 @@ catalog:
   '@types/node': ^24.19.2
   '@vitejs/devtools': ^0.7.6
   '@vitest/browser-playwright': ^4.1.11
+  blume: ^2.2.3
   eslint: ^10.12.0
   eslint-config-prettier: ^10.1.8
   eslint-plugin-svelte: ^3.23.1
