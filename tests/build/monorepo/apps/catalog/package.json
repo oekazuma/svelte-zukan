@@ -4,5 +4,8 @@
   "type": "module",
   "dependencies": {
     "@fixture/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "svelte-zukan": "*"
   }
 }
