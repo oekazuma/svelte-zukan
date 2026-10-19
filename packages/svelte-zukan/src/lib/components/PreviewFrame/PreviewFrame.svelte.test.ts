@@ -1,9 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { page, userEvent } from 'vitest/browser';
 import PreviewFrame from './PreviewFrame.svelte';
 
 const props = { src: 'about:blank', title: 'preview' };
+
+// widths and the background are remembered in storage; no test may start from another test's choice
+beforeEach(() => {
+  localStorage.clear();
+  sessionStorage.clear();
+});
 
 function frameStyle(container: HTMLElement) {
   return container.querySelector('iframe')!.parentElement!.style;
@@ -234,5 +240,46 @@ describe('PreviewFrame toolbar', () => {
   it('loads the iframe lazily', async () => {
     const screen = await render(PreviewFrame, { props });
     expect(screen.container.querySelector('iframe')!.getAttribute('loading')).toBe('lazy');
+  });
+});
+
+describe('PreviewFrame storage', () => {
+  it('remembers the background in localStorage', async () => {
+    const screen = await render(PreviewFrame, { props });
+    await screen.getByRole('button', { name: 'Dark', exact: true }).click();
+    expect(localStorage.getItem('svelte-zukan:background')).toBe('dark');
+    await screen.getByRole('button', { name: 'Light', exact: true }).click();
+    expect(localStorage.getItem('svelte-zukan:background')).toBe('light');
+  });
+
+  it('remembers the width per preview in sessionStorage', async () => {
+    const screen = await render(PreviewFrame, { props });
+    await screen.getByRole('button', { name: '375', exact: true }).click();
+    await expect.poll(() => sessionStorage.getItem('svelte-zukan:width:about:blank')).toBe('375');
+    await screen.getByRole('button', { name: '100%', exact: true }).click();
+    await expect.poll(() => sessionStorage.getItem('svelte-zukan:width:about:blank')).toBeNull();
+  });
+
+  it('starts from a stored width', async () => {
+    sessionStorage.setItem('svelte-zukan:width:about:blank', '768');
+    const screen = await render(PreviewFrame, { props });
+    expect(frameStyle(screen.container).width).toBe('768px');
+  });
+
+  it('still switches the background when storage throws', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    try {
+      await screen.getByRole('button', { name: 'Dark', exact: true }).click();
+      await expect
+        .element(screen.getByRole('button', { name: 'Dark', exact: true }))
+        .toHaveAttribute('aria-pressed', 'true');
+    } finally {
+      spy.mockRestore();
+      // the background is shared by every frame in the file
+      await screen.getByRole('button', { name: 'Light', exact: true }).click();
+    }
   });
 });

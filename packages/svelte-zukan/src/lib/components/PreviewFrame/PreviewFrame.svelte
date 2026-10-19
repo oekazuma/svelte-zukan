@@ -1,9 +1,8 @@
 <script lang="ts" module>
-  type Background = 'light' | 'dark';
+  import { BACKGROUNDS, readBackground, readWidth, writeBackground, writeWidth, type Background } from './storage.js';
 
   // shared by every preview on the page, so one click switches them all
-  let background = $state<Background>('light');
-  const BACKGROUNDS: Record<Background, string> = { light: '#fff', dark: '#0d1117' };
+  let background = $state<Background>(readBackground() ?? 'light');
 </script>
 
 <script lang="ts">
@@ -24,8 +23,9 @@
     labels?: Pick<Messages, 'previewWidth' | 'fullWidth' | 'background' | 'light' | 'dark' | 'openInNewTab'>;
   } = $props();
 
-  // null = 100%
-  let width = $state<number | null>(null);
+  // null = 100%; the frame is recreated per entry, so `src` is read once
+  // svelte-ignore state_referenced_locally
+  let width = $state<number | null>(readWidth(src));
   // 0 until measured
   let stageWidth = $state(0);
   let height = $state(MIN_HEIGHT);
@@ -105,6 +105,8 @@
     doc.documentElement.style.backgroundColor = BACKGROUNDS[background];
   });
 
+  $effect(() => writeWidth(src, width));
+
   $effect(() => () => observer?.disconnect());
 </script>
 
@@ -120,7 +122,14 @@
     <span class="width" aria-hidden="true">{stageWidth ? `${current}px` : ''}</span>
     <div class="group" role="group" aria-label={labels.background}>
       {#each ['light', 'dark'] as const as value (value)}
-        <button type="button" aria-pressed={background === value} onclick={() => (background = value)}>
+        <button
+          type="button"
+          aria-pressed={background === value}
+          onclick={() => {
+            background = value;
+            writeBackground(value);
+          }}
+        >
           {labels[value]}
         </button>
       {/each}

@@ -61,6 +61,20 @@ describe('App', () => {
     expect(screen.container.querySelector('nav')).toBeNull();
   });
 
+  it('a preview page applies the stored background', async () => {
+    localStorage.setItem('svelte-zukan:background', 'dark');
+    try {
+      const { props } = setup('#/preview/ui/Card?section=Two');
+      const screen = await render(App, { props });
+      await expect.element(screen.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+      expect(document.documentElement.style.colorScheme).toBe('dark');
+    } finally {
+      localStorage.removeItem('svelte-zukan:background');
+      document.documentElement.style.colorScheme = '';
+      document.documentElement.style.backgroundColor = '';
+    }
+  });
+
   it('an unknown ID is not found', async () => {
     const { props } = setup('#/ui/Nope');
     const screen = await render(App, { props });
