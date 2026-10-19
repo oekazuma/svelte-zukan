@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import EntryList from '../components/EntryList.svelte';
   import type { Entry } from '../types.js';
   import type { Messages } from './i18n.js';
@@ -21,12 +22,14 @@
     return q ? entries.filter((e) => e.path.toLowerCase().includes(q)) : entries;
   });
 
-  function onkeydown(e: KeyboardEvent) {
+  async function onkeydown(e: KeyboardEvent) {
     const target = e.target as HTMLElement;
     if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
     if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
     e.preventDefault();
     open = true;
+    // on narrow screens the panel is display: none until `open` is applied
+    await tick();
     search.focus();
   }
 </script>

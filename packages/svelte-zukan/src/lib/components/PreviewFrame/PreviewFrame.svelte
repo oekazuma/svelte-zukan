@@ -99,11 +99,14 @@
 
 <div class="preview">
   <div class="toolbar">
-    {#each PRESETS as preset (preset)}
-      <button type="button" aria-pressed={width === preset} onclick={() => (width = preset)}>{preset}</button>
-    {/each}
-    <button type="button" aria-pressed={width === null} onclick={() => (width = null)}>{labels.fullWidth}</button>
-    <output>{stageWidth ? `${current}px` : ''}</output>
+    <div class="group" role="group" aria-label={labels.previewWidth}>
+      {#each PRESETS as preset (preset)}
+        <button type="button" aria-pressed={width === preset} onclick={() => (width = preset)}>{preset}</button>
+      {/each}
+      <button type="button" aria-pressed={width === null} onclick={() => (width = null)}>{labels.fullWidth}</button>
+    </div>
+    <!-- the handle reports the same value (aria-valuenow); a live region here would announce every pixel while dragging -->
+    <span class="width" aria-hidden="true">{stageWidth ? `${current}px` : ''}</span>
     <div class="group" role="group" aria-label={labels.background}>
       {#each ['light', 'dark'] as const as value (value)}
         <button type="button" aria-pressed={background === value} onclick={() => (background = value)}>
@@ -187,7 +190,7 @@
     color: var(--_accent);
   }
 
-  output {
+  .width {
     margin-left: auto;
     font-family: var(--_mono);
     font-size: 12px;

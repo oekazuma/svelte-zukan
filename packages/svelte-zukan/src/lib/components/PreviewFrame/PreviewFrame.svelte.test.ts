@@ -18,6 +18,14 @@ describe('PreviewFrame', () => {
     await expect.element(screen.getByText('768px', { exact: true })).toBeInTheDocument();
   });
 
+  it('width presets are a labelled group and the readout is not a live region', async () => {
+    const screen = await render(PreviewFrame, { props });
+    await expect
+      .element(screen.getByRole('group', { name: 'Preview width' }).getByRole('button', { name: '768', exact: true }))
+      .toBeInTheDocument();
+    expect(screen.container.querySelector('output')).toBeNull();
+  });
+
   it('full width preset', async () => {
     const screen = await render(PreviewFrame, { props });
     await screen.getByRole('button', { name: '375', exact: true }).click();
@@ -117,7 +125,7 @@ describe('PreviewFrame resizing', () => {
     hidden.style.display = 'none';
     const screen = await render(PreviewFrame, { props, target: hidden });
     const handle = screen.getByRole('separator', { includeHidden: true }).element();
-    expect(hidden.querySelector('output')!.textContent).toBe('');
+    expect(hidden.querySelector('.width')!.textContent).toBe('');
     for (const name of ['aria-valuenow', 'aria-valuemin', 'aria-valuemax'])
       expect(handle.hasAttribute(name)).toBe(false);
     hidden.style.display = '';
