@@ -21,7 +21,7 @@ Run from repo root unless noted. Root `dev` / `build` / `preview` / `package` / 
 ```bash
 pnpm install               # install workspace deps (uses the pnpm catalog)
 pnpm run dev               # dev servers (the library's dogfooding app, the example)
-pnpm run build             # build all workspaces (the example needs `pnpm run package` first)
+pnpm run build             # package the library, then build all workspaces (the example uses the library's dist)
 pnpm run package           # svelte-kit sync && svelte-package && publint (library output -> packages/svelte-zukan/dist)
 pnpm run check             # svelte-check across workspaces
 pnpm run lint              # prettier --check . && eslint .
@@ -87,7 +87,9 @@ Versioning and publishing go through **Changesets**:
 
    Internal-only changes (tests, CI, example app, docs) need **no** changeset.
 
-2. On merge to `main`, `.github/workflows/release.yml` runs `changesets/action`, which either opens/updates a "Version Packages" PR (bumping `packages/svelte-zukan/package.json` + CHANGELOG) or, when that PR is merged, runs `pnpm run release` (`changeset publish`) to publish to npm with provenance. `prepublishOnly` runs `pnpm run package`.
+2. On every push to `main`, `.github/workflows/release.yml` runs `changesets/action`. If there are pending changesets, it opens/updates a "Version Packages" PR (bumping `packages/svelte-zukan/package.json` + CHANGELOG). If there are none (including right after that PR is merged), it runs `pnpm run release` (`changeset publish`), which publishes to npm with provenance any public package whose current version is not on npm yet — usually a no-op. `prepublishOnly` runs `pnpm run package`.
+
+**Not released yet**: `packages/svelte-zukan/package.json` has `"private": true`, so `changeset publish` skips it and the Release job does nothing (otherwise the first push to `main` would publish `0.0.1`). Before the first release, remove `"private": true` and add the first changeset in the same PR.
 
 Do **not** bump versions or edit `CHANGELOG.md` manually. `pnpm-workspace.yaml` sets a `minimumReleaseAge` so new dependency releases are only installed after a cooldown — preserve that field when editing the workspace file.
 

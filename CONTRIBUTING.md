@@ -16,7 +16,7 @@ pnpm install
 2. Make your modifications / additions
 3. Update / Add Documentation (`packages/svelte-zukan/README.md`)
 4. Write / Update Tests
-5. Run the same checks CI runs before opening a pull request:
+5. Run the same checks CI runs before opening a pull request (the first time, install Chromium for the browser tests: see [Browser tests](#browser-tests)):
 
 ```bash
 pnpm run lint      # Prettier + ESLint
@@ -55,3 +55,5 @@ pnpm --filter build-tests test
 ## Releases
 
 The [Changesets GitHub action](https://github.com/changesets/action#with-publishing) will create and update a PR that applies changesets and publishes new versions of changed packages to npm.
+
+svelte-zukan has not been released yet: `packages/svelte-zukan/package.json` has `"private": true` so that nothing is published. Before the first release, remove `"private": true` and add the first changeset.

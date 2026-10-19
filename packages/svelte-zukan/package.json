@@ -1,6 +1,7 @@
 {
   "name": "svelte-zukan",
   "version": "0.0.1",
+  "private": true,
   "description": "Colocated component catalog for Svelte, served by a Vite plugin",
   "license": "MIT",
   "author": "oekazuma",
@@ -57,10 +58,6 @@
       "types": "./dist/vite/index.d.ts",
       "default": "./dist/vite/index.js"
     }
-  },
-  "imports": {
-    "#lib": "./src/lib/index.js",
-    "#lib/*": "./src/lib/*"
   },
   "peerDependencies": {
     "svelte": "^5.0.0",
