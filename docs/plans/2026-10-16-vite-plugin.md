@@ -1,262 +1,261 @@
-# svelte-zukan /__zukan/ 化 実装計画
+# svelte-zukan /__zukan/ Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `vite.config.ts` に `zukan()` を足すだけで、dev サーバーの `/__zukan/` にカタログが出るようにする。`build: true` なら `vite build` でカタログを静的な SPA として書き出す。
+**Goal:** Just by adding `zukan()` to `vite.config.ts`, the catalog appears at `/__zukan/` on the dev server. With `build: true`, `vite build` writes the catalog out as a static SPA.
 
-**Architecture:** プラグインが探索ディレクトリを決め（自動探索か `groups`）、`fs.globSync` で `*.<suffix>.svelte` を列挙して一覧の仮想モジュールを作る。dev では `configureServer` のミドルウェアが `/__zukan/` に HTML を返し、仮想エントリがライブラリの SPA（ハッシュでルーティング）を起動する。ビルドでは `environments.zukan` を足し、`buildApp` で JS のエントリをビルドして HTML を書き出す。
+**Architecture:** The plugin decides the search directories (automatic discovery or `groups`), enumerates `*.<suffix>.svelte` with `fs.globSync`, and builds the list's virtual module. In dev, the `configureServer` middleware returns HTML at `/__zukan/`, and the virtual entry starts the library's SPA (routed by hash). In the build, it adds `environments.zukan`, builds the JS entry in `buildApp`, and writes the HTML.
 
-**Tech Stack:** Svelte 5.57 (runes), Vite 8.3（Environment API、`buildApp`）、SvelteKit 3.0.1 と `@sveltejs/vite-plugin-svelte`（ドッグフーディングと fixture のアプリ側だけ）、vitest 4、Node 22.17 以上
+**Tech Stack:** Svelte 5.57 (runes), Vite 8.3 (Environment API, `buildApp`), SvelteKit 3.0.1 and `@sveltejs/vite-plugin-svelte` (only on the app side of dogfooding and fixtures), vitest 4, Node 22.17 or later
 
-**Spec:** `docs/specs/2026-10-16-catalog.md`（今回の改訂版）
+**Spec:** `docs/specs/2026-10-16-catalog.md` (this revision)
 
-**旧計画の積み残し:** 旧計画（ルートファイル方式の実装計画。ファイルは削除済みで、git の履歴にだけ残る）のレビューで後回しにした軽微な指摘は、この計画の各タスクに割り振った（直すもの）か、spec の「やらないこと」に理由付きで入れた
+**Leftovers from the previous plan:** The minor review comments deferred in the review of the previous plan (the implementation plan for the route-file approach; the file has been deleted and survives only in git history) have been assigned to the tasks of this plan (to be fixed) or added with reasons to the spec's "Out of scope" section
 
-**前提:** ロゴの SVG（`src/lib/app/logo.svg`、`src/lib/app/icon.svg`、`.github/logo.svg`、`.github/logo-dark.svg`、`static/favicon.svg`）は controller が配置済みで、Task 4 と Task 6 のコミットに含める。旧計画の Task 1〜6 は完了している。Task 7 で先に積まれたコミット（2fb60eb, 509917c）は、この計画の Task 6 で作り直す。spec の「スパイクで確かめたこと」は controller が実施済み（コードはコミットしていない）。
+**Prerequisites:** The logo SVGs (`src/lib/app/logo.svg`, `src/lib/app/icon.svg`, `.github/logo.svg`, `.github/logo-dark.svg`, `static/favicon.svg`) have been placed by the controller and are included in the commits of Task 4 and Task 6. Tasks 1 to 6 of the previous plan are complete. The commits that were stacked earlier in Task 7 (2fb60eb, 509917c) are redone in Task 6 of this plan. The spec's "Findings from the spike" has been carried out by the controller (the code is not committed).
 
 ## Global Constraints
 
-- 新しい依存は足さない（`pnpm install` は不要）。`peerDependencies` から `@sveltejs/kit` を外し、`vite` を足すのは package.json の編集だけで済む
-- オプションは `suffix`、`groups`、`wrapper`、`logo`、`title`、`locale`、`build` の 7 つ。既定値は spec のとおり（`suffix: 'zukan'`、`title: 'zukan'`、`locale: 'en'`、`build: false`、`build: true` のときの `outDir: 'zukan-dist'`）
-- 接尾辞は `/^[a-z0-9-]+$/i` のみ受け付け、正規表現に入れるときはエスケープする
-- 探すのは各パッケージの `src`（`groups` 指定時は書かれたディレクトリ）だけ。列挙は `fs.globSync`
-- パスは `vite` の `normalizePath` を通してから比較・出力する
-- カタログの URL はハッシュ: `#/<ID>`、`#/preview/<ID>?section=<title>`
-- UI の文言はすべて spec の辞書（en / ja）から出す。プラグインのエラーメッセージは英語のみ
-- ライブラリのコードは `$app/*` を import しない
-- コミットメッセージは `feat: ...` / `fix: ...` / `chore: ...` の日本語。経緯や Co-Authored-By は書かない
-- 各タスクの終わりに `pnpm lint`、`pnpm check`、`node_modules/.bin/vitest run --project server` が通ること。client テストは `node_modules/.bin/vitest run --config .superpowers/vitest.sandbox.config.ts --no-file-parallelism`（この設定はコミットしない）
-- サブエージェントは dev サーバーや静的サーバーを起動しない。ブラウザでの確認は controller が preview 機能で行う
+- Do not add new dependencies (`pnpm install` is not needed). Removing `@sveltejs/kit` from `peerDependencies` and adding `vite` is only an edit to package.json
+- There are 7 options: `suffix`, `groups`, `wrapper`, `logo`, `title`, `locale`, `build`. The defaults are as in the spec (`suffix: 'zukan'`, `title: 'zukan'`, `locale: 'en'`, `build: false`, and `outDir: 'zukan-dist'` when `build: true`)
+- Accept only `/^[a-z0-9-]+$/i` as the suffix, and escape it when putting it into a regular expression
+- Compare and print paths only after passing them through `vite`'s `normalizePath`
+- Catalog URLs are hash-based: `#/<ID>`, `#/preview/<ID>?section=<title>`
+- All UI strings come from the spec's dictionary (en / ja). The plugin's error messages are English only
+- Library code does not import `$app/*`
+- Commit messages are in English in the form `feat: ...` / `fix: ...` / `chore: ...`. Do not write the background or Co-Authored-By
+- At the end of each task, `pnpm lint`, `pnpm check`, and `node_modules/.bin/vitest run --project server` must pass. For client tests, use `node_modules/.bin/vitest run --config .superpowers/vitest.sandbox.config.ts --no-file-parallelism` (do not commit this config)
+- Subagents do not start dev servers or static servers. Verification in the browser is done by the controller with the preview feature
 
 ## Review Focus
 
-- 同じ dev サーバーにつながったアプリのタブが、カタログファイルの編集で再読み込みされない（`zukan:reload` を使う。Task 3 のテスト、Task 6 の確認）
-- `wrapper` が import したグローバル CSS が、カタログの UI 側に効かない（プレビューのときだけ動的 import。Task 4 のテスト、Task 6 の確認）
-- `/` を含むグループ名や、途中に `preview` を含む ID がハッシュで正しく往復する（Task 4 の `parseHash` / `formatHash` のテスト）
-- 書き出したカタログをサブパス（例: `/docs/zukan/`）に置いても、深いリンクとプレビューが開く（Task 5 のテスト、Task 6 の確認）
-- SvelteKit の更新で、カタログのビルドに Kit の置き換え（`__SVELTEKIT_*__`）が残り、`$app/*` を使うコンポーネントが壊れる（Task 7 の自動テスト）
-- Vite の `base` を設定したアプリで `/__zukan/` が開く（Task 3 のテスト、Task 7 の確認）
+- Tabs of the app connected to the same dev server are not reloaded when a catalog file is edited (use `zukan:reload`. Task 3 tests, Task 6 verification)
+- Global CSS imported by `wrapper` does not affect the catalog's UI side (dynamic import only for the preview. Task 4 tests, Task 6 verification)
+- Group names containing `/` and IDs containing `preview` in the middle round-trip correctly through the hash (Task 4 tests of `parseHash` / `formatHash`)
+- Even when the built catalog is placed under a subpath (for example, `/docs/zukan/`), deep links and the preview open (Task 5 tests, Task 6 verification)
+- A SvelteKit update leaves Kit's replacements (`__SVELTEKIT_*__`) in the catalog build and breaks components that use `$app/*` (Task 7 automated test)
+- `/__zukan/` opens in an app with Vite's `base` set (Task 3 tests, Task 7 verification)
 
-## ファイル構成
+## File structure
 
-| ファイル                                       | 役割                                                                                                                                                     |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/lib/vite/index.ts`                        | `zukan(options?)`。オプションの検証、transform、仮想モジュール、dev のミドルウェア、監視、`fs.allow`、ビルド                                             |
-| `src/lib/vite/discover.ts`（新規）             | `discoverGroups` と `listCatalog`                                                                                                                        |
-| `src/lib/vite/html.ts`（新規）                 | dev とビルドの HTML を作る `renderHtml`                                                                                                                  |
-| `src/lib/vite/extract.ts`                      | `title` の検証を細かくする（Task 1）                                                                                                                     |
-| `src/lib/app/`（新規）                         | カタログの SPA。`App.svelte`（ハッシュのルーター）、`Sidebar.svelte`、`List.svelte`、`Detail.svelte`、`Preview.svelte`、`hash.ts`、`i18n.ts`、`logo.svg` |
-| `src/lib/components/`                          | `Badge`、`CodeBlock`、`PreviewFrame`、`EntryList` は残し、文言を辞書から受け取る                                                                         |
-| `src/lib/Section.svelte`、`src/lib/context.ts` | 変更なし                                                                                                                                                 |
-| 削除                                           | `src/lib/Zukan.svelte`、`src/lib/components/Detail.svelte`・`Preview.svelte`（`app/` に移す）、`src/lib/entries.ts`、`Groups` 型                         |
-| `fixtures/monorepo/`                           | モノレポ確認用                                                                                                                                           |
+| File                                           | Role                                                                                                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/vite/index.ts`                        | `zukan(options?)`. Option validation, transform, virtual modules, dev middleware, watching, `fs.allow`, build                                     |
+| `src/lib/vite/discover.ts` (new)               | `discoverGroups` and `listCatalog`                                                                                                                |
+| `src/lib/vite/html.ts` (new)                   | `renderHtml`, which builds the HTML for dev and build                                                                                             |
+| `src/lib/vite/extract.ts`                      | Make the `title` validation finer-grained (Task 1)                                                                                                |
+| `src/lib/app/` (new)                           | The catalog SPA. `App.svelte` (hash router), `Sidebar.svelte`, `List.svelte`, `Detail.svelte`, `Preview.svelte`, `hash.ts`, `i18n.ts`, `logo.svg` |
+| `src/lib/components/`                          | `Badge`, `CodeBlock`, `PreviewFrame`, and `EntryList` stay, and receive their strings from the dictionary                                         |
+| `src/lib/Section.svelte`, `src/lib/context.ts` | No changes                                                                                                                                        |
+| Deleted                                        | `src/lib/Zukan.svelte`, `src/lib/components/Detail.svelte` and `Preview.svelte` (moved to `app/`), `src/lib/entries.ts`, the `Groups` type        |
+| `fixtures/monorepo/`                           | For monorepo verification                                                                                                                         |
 
 ---
 
-### Task 1: 接尾辞オプションと `.md` の 1 対 1 対応
+### Task 1: Suffix option and one-to-one `.md` correspondence
 
-**Files:** Modify `src/lib/vite/index.ts`・`src/lib/vite/extract.ts`、Test `src/lib/vite/index.test.ts`・`src/lib/vite/extract.test.ts`
+**Files:** Modify `src/lib/vite/index.ts` and `src/lib/vite/extract.ts`, Test `src/lib/vite/index.test.ts` and `src/lib/vite/extract.test.ts`
 
 **Interfaces:**
 
 - Produces:
-  - `type ZukanOptions = { suffix?; groups?; wrapper?; logo?; title?; locale?; build? }`（spec の型どおり。このタスクでは `suffix` だけを使い、ほかは受け取るだけ）
+  - `type ZukanOptions = { suffix?; groups?; wrapper?; logo?; title?; locale?; build? }` (as in the spec's type. This task uses only `suffix` and merely accepts the rest)
   - `zukan(options?: ZukanOptions): Plugin`
-  - `createMatchers(suffix: string): { isCatalogId(id): boolean; isCatalogFile(file): boolean; isDocFile(file): boolean; docFileOf(catalogFile): string; catalogFileOf(docFile): string }`（`isZukanId` を置き換える）
+  - `createMatchers(suffix: string): { isCatalogId(id): boolean; isCatalogFile(file): boolean; isDocFile(file): boolean; docFileOf(catalogFile): string; catalogFileOf(docFile): string }` (replaces `isZukanId`)
 
-- [ ] **Step 1: 失敗するテストを書く**
-  - `createMatchers('zukan')`: `/a/Foo.zukan.svelte`、`?v=1` 付きは `isCatalogId` が true。`?svelte&type=style&lang.css` 付き、`\0` 付き、`/a/Foo.svelte` は false
-  - `createMatchers('catalog')`: `/a/Foo.catalog.svelte` は true、`/a/Foo.zukan.svelte` は false
-  - `docFileOf('/a/Foo.zukan.svelte')` は `'/a/Foo.zukan.md'`、`catalogFileOf` はその逆
-  - `rejects invalid suffix`: `'a.b'` と `''` は throw（メッセージに `suffix`）
-  - transform: `Foo.zukan.md` があれば HTML が入り、`addWatchFile` がその絶対パスで呼ばれる。`suffix: 'catalog'` なら `Foo.catalog.md` を読む
-  - hotUpdate: `Foo.zukan.md` の create / update / delete で `getModulesByFile` が `normalizePath('<dir>/Foo.zukan.svelte')` で呼ばれる（`readdirSync` は使わない）。`Foo.zukan.svelte` がモジュールグラフにまだないとき（`getModulesByFile` が `undefined`）も例外にならない
-  - `filter agrees with isCatalogId`: `transform.filter.id` の `include` と `exclude` を ID のいくつかに当てた結果が、`isCatalogId` と一致する（旧計画の「フィルターのテストが浅い」への対応）
-  - extract（旧計画の積み残し）:
-    - `throws on empty title`: `title=""` と `title="  "` は空のタイトルとしてエラー
-    - `missing and dynamic title have different messages`: `title` なしと `title={x}` でメッセージが別
-    - `collects dotted component root`: `<Foo.Bar />` で `Foo` の定義が添えられる
-    - `collects transition and animate names`: `transition:fade`、`in:fly`、`animate:flip` の名前の定義が添えられる
-- [ ] **Step 2: 失敗を確認** → **Step 3: 実装** → **Step 4: PASS を確認**
-- [ ] **Step 5: コミット** `feat: カタログファイルの接尾辞を設定できるようにする`
+- [ ] **Step 1: Write the failing tests**
+  - `createMatchers('zukan')`: `/a/Foo.zukan.svelte`, and the same with `?v=1`, make `isCatalogId` true. With `?svelte&type=style&lang.css`, with `\0`, and `/a/Foo.svelte` it is false
+  - `createMatchers('catalog')`: `/a/Foo.catalog.svelte` is true, `/a/Foo.zukan.svelte` is false
+  - `docFileOf('/a/Foo.zukan.svelte')` is `'/a/Foo.zukan.md'`, and `catalogFileOf` is the reverse
+  - `rejects invalid suffix`: `'a.b'` and `''` throw (the message contains `suffix`)
+  - transform: if `Foo.zukan.md` exists, its HTML is included and `addWatchFile` is called with its absolute path. With `suffix: 'catalog'`, it reads `Foo.catalog.md`
+  - hotUpdate: for create / update / delete of `Foo.zukan.md`, `getModulesByFile` is called with `normalizePath('<dir>/Foo.zukan.svelte')` (`readdirSync` is not used). It does not throw even when `Foo.zukan.svelte` is not yet in the module graph (`getModulesByFile` returns `undefined`)
+  - `filter agrees with isCatalogId`: the results of applying `include` and `exclude` of `transform.filter.id` to several IDs match `isCatalogId` (a response to the previous plan's "filter tests are shallow")
+  - extract (leftovers from the previous plan):
+    - `throws on empty title`: `title=""` and `title="  "` are errors as an empty title
+    - `missing and dynamic title have different messages`: a missing `title` and `title={x}` have different messages
+    - `collects dotted component root`: with `<Foo.Bar />`, the definition of `Foo` is attached
+    - `collects transition and animate names`: the definitions of the names in `transition:fade`, `in:fly`, and `animate:flip` are attached
+- [ ] **Step 2: Confirm the failure** → **Step 3: Implement** → **Step 4: Confirm PASS**
+- [ ] **Step 5: Commit** `feat: make the catalog file suffix configurable`
 
-### Task 2: 探索と一覧の組み立て
+### Task 2: Discovery and list building
 
-**Files:** Create `src/lib/vite/discover.ts`、Test `src/lib/vite/discover.test.ts`、Modify `src/lib/types.ts`
+**Files:** Create `src/lib/vite/discover.ts`, Test `src/lib/vite/discover.test.ts`, Modify `src/lib/types.ts`
 
 **Interfaces:**
 
-- Consumes: `createMatchers`（Task 1）
+- Consumes: `createMatchers` (Task 1)
 - Produces:
-  - `type CatalogGroup = { name: string; dirs: string[] }`（`dirs` は `normalizePath` 済みの絶対パス）
+  - `type CatalogGroup = { name: string; dirs: string[] }` (`dirs` are `normalizePath`-ed absolute paths)
   - `discoverGroups(root: string, groups?: Record<string, string | string[]>): CatalogGroup[]`
-  - `type CatalogItem = { group: string; name: string; dir: string; path: string; file: string }`（`path` は spec の ID）
+  - `type CatalogItem = { group: string; name: string; dir: string; path: string; file: string }` (`path` is the spec's ID)
   - `listCatalog(groups: CatalogGroup[], suffix: string): CatalogItem[]`
 
-- [ ] **Step 1: 失敗するテストを書く。** 一時ディレクトリに構成を作る（ワークスペースのリンクは `fs.symlinkSync`）
-  - 探索: `single package`、`workspace dependency`（`app` → `@acme/ui` の順）、`skips installed packages`（実ディレクトリの `node_modules/lodash`）、`dependencies before devDependencies`、`groups option`（キー順、自動探索しない）、`missing groups dir throws`
+- [ ] **Step 1: Write the failing tests.** Build the layout in a temporary directory (workspace links with `fs.symlinkSync`)
+  - Discovery: `single package`, `workspace dependency` (in the order `app` → `@acme/ui`), `skips installed packages` (a real directory `node_modules/lodash`), `dependencies before devDependencies`, `groups option` (key order, no automatic discovery), `missing groups dir throws`
   - ID:
-    - `same name in different dirs`: `src/lib/forms/Button.zukan.svelte` と `src/lib/nav/Button.zukan.svelte` → `app/lib/forms/Button` と `app/lib/nav/Button`、`name` はどちらも `Button`、`dir` は `lib/forms` と `lib/nav`
-    - `collapses Dir/Dir`: `src/lib/Button/Button.zukan.svelte` → `app/lib/Button`、`dir` は `lib`
-    - `groups option is relative to the given dir`、`root file has empty dir`
-    - `stable when files are added`: 別ディレクトリに同名ファイルを足して作り直しても、既存の項目の `path` が変わらない
-    - `suffix: 'catalog'`、`scoped group name`（`@acme/ui/lib/Card`）、`rel may contain preview`（`ui/preview/Foo` はエラーにならない）
-  - 並び順: グループ順、グループ内は `rel` を `Intl.Collator('en', { numeric: true, sensitivity: 'base' })` で比べ、同順位はコードポイント順。`alert` が `Button` より前、`Item2` が `Item10` より前
-  - エラー（ファイルパスかグループ名を含む）: グループ名 `preview` と `preview/x`、まとめた結果の重複、グループをまたぐ重複
-  - `group without files is dropped`、`no files at all → []`
-- [ ] **Step 2: 失敗を確認** → **Step 3: 実装** → **Step 4: PASS を確認**
-- [ ] **Step 5: コミット** `feat: カタログファイルを探索して一覧を組み立てる`
+    - `same name in different dirs`: `src/lib/forms/Button.zukan.svelte` and `src/lib/nav/Button.zukan.svelte` → `app/lib/forms/Button` and `app/lib/nav/Button`, `name` is `Button` for both, and `dir` is `lib/forms` and `lib/nav`
+    - `collapses Dir/Dir`: `src/lib/Button/Button.zukan.svelte` → `app/lib/Button`, and `dir` is `lib`
+    - `groups option is relative to the given dir`, `root file has empty dir`
+    - `stable when files are added`: even if a file with the same name is added in another directory and the list is rebuilt, the `path` of existing items does not change
+    - `suffix: 'catalog'`, `scoped group name` (`@acme/ui/lib/Card`), `rel may contain preview` (`ui/preview/Foo` is not an error)
+  - Order: group order; within a group, compare `rel` with `Intl.Collator('en', { numeric: true, sensitivity: 'base' })`, ties by code point order. `alert` comes before `Button`, and `Item2` before `Item10`
+  - Errors (containing the file path or group name): the group names `preview` and `preview/x`, duplicates after merging, duplicates across groups
+  - `group without files is dropped`, `no files at all → []`
+- [ ] **Step 2: Confirm the failure** → **Step 3: Implement** → **Step 4: Confirm PASS**
+- [ ] **Step 5: Commit** `feat: discover catalog files and build the list`
 
-### Task 3: dev の `/__zukan/`、一覧の仮想モジュール、監視、`fs.allow`
+### Task 3: Dev `/__zukan/`, the list's virtual module, watching, `fs.allow`
 
-**Files:** Create `src/lib/vite/html.ts`、Modify `src/lib/vite/index.ts`、Test `src/lib/vite/index.test.ts`・`src/lib/vite/html.test.ts`
+**Files:** Create `src/lib/vite/html.ts`, Modify `src/lib/vite/index.ts`, Test `src/lib/vite/index.test.ts` and `src/lib/vite/html.test.ts`
 
 **Interfaces:**
 
-- Consumes: `discoverGroups`、`listCatalog`（Task 2）
+- Consumes: `discoverGroups`, `listCatalog` (Task 2)
 - Produces:
-  - 仮想モジュール ID: エントリ `\0virtual:svelte-zukan/entry`、一覧 `\0virtual:svelte-zukan/catalog`（どちらも `resolveId` で `virtual:svelte-zukan/...` から解決）
+  - Virtual module IDs: the entry `\0virtual:svelte-zukan/entry` and the list `\0virtual:svelte-zukan/catalog` (both resolved in `resolveId` from `virtual:svelte-zukan/...`)
   - `generateCatalogModule(items: CatalogItem[]): string`
-  - `generateEntryModule(opts: { appFile: string; logo: string | null; wrapper: string | null; title: string; locale: 'en' | 'ja' }): string`（`appFile` などは `normalizePath` 済みの絶対パス。`logo` は `?url` 付きで import する。`wrapper` は `() => import(...)` の関数として渡す）
-  - `renderHtml(opts: { title: string; locale: 'en' | 'ja'; entrySrc: string; icon: string }): string`（`icon` は SVG の文字列。`<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,...">` に URL エンコードして埋め込む）
+  - `generateEntryModule(opts: { appFile: string; logo: string | null; wrapper: string | null; title: string; locale: 'en' | 'ja' }): string` (`appFile` and the like are `normalizePath`-ed absolute paths. `logo` is imported with `?url`. `wrapper` is passed as a `() => import(...)` function)
+  - `renderHtml(opts: { title: string; locale: 'en' | 'ja'; entrySrc: string; icon: string }): string` (`icon` is an SVG string. It is URL-encoded and embedded in `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,...">`)
   - `extendFsAllow(root: string, dirs: string[], allow: string[] | undefined): string[] | undefined`
-  - `resolveOptions(root: string, options: ZukanOptions)`: 既定値を入れ、`locale`・`suffix`・`wrapper`・`logo` のファイルの存在を検証した結果を返す
+  - `resolveOptions(root: string, options: ZukanOptions)`: fills in the defaults and returns the result of validating `locale`, `suffix`, and the existence of the `wrapper` and `logo` files
 
-- [ ] **Step 1: 失敗するテストを書く**
-  - `renderHtml`: `<html lang="ja">`、`<title>` が `title`、`<script type="module" src="...">` が `entrySrc`、`<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,...">` があり、デコードすると渡した SVG に戻る。`title` の `<` などはエスケープされる
-  - `generateCatalogModule`: `import("/abs/Card.zukan.svelte")` と `"path":"@acme/ui/lib/Card"` を含む
-  - `generateEntryModule`: `logo: null` なら logo の import がない。`wrapper: null` なら `wrapper` は `null`
-  - `resolveOptions`: 既定値、`locale: 'fr'` で throw、存在しない `wrapper` / `logo` で throw（パスを含む英語のメッセージ）
-  - middleware: 偽の `server`（`middlewares.use` を記録、`transformIndexHtml` は入力をそのまま返す）で、`/__zukan/` と `/__zukan/?x` には HTML を返し、`/` と `/__zukanx` は `next()` に回す。`server.config.base` が `/app/` でも `/app/__zukan/` を扱う
-  - `extendFsAllow`: 探索ディレクトリがすべて `searchForWorkspaceRoot(root)` の内側なら `undefined`。外側があれば `[searchForWorkspaceRoot(root), ...allow, ...外側]`
+- [ ] **Step 1: Write the failing tests**
+  - `renderHtml`: `<html lang="ja">`, `<title>` is `title`, `<script type="module" src="...">` is `entrySrc`, there is a `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,...">`, and decoding it gives back the SVG that was passed. `<` and the like in `title` are escaped
+  - `generateCatalogModule`: contains `import("/abs/Card.zukan.svelte")` and `"path":"@acme/ui/lib/Card"`
+  - `generateEntryModule`: with `logo: null`, there is no logo import. With `wrapper: null`, `wrapper` is `null`
+  - `resolveOptions`: defaults; `locale: 'fr'` throws; a nonexistent `wrapper` / `logo` throws (an English message containing the path)
+  - middleware: with a fake `server` (`middlewares.use` records, `transformIndexHtml` returns its input as is), `/__zukan/` and `/__zukan/?x` get HTML, while `/` and `/__zukanx` go to `next()`. Even with `server.config.base` of `/app/`, it handles `/app/__zukan/`
+  - `extendFsAllow`: `undefined` if all search directories are inside `searchForWorkspaceRoot(root)`. If any is outside, `[searchForWorkspaceRoot(root), ...allow, ...outside ones]`
   - hotUpdate:
-    - 探索ディレクトリ内の `X.zukan.svelte` の create / delete で、一覧の仮想モジュールが無効化され、client 環境では `hot.send({ type: 'custom', event: 'zukan:reload' })`。`full-reload` は送らない
-    - 探索ディレクトリ外の作成は無視
-  - `configureServer` が root 外の探索ディレクトリだけを `server.watcher.add` する
-  - `printUrls`: `server.printUrls` を包み、カタログの URL を 1 行足す
-- [ ] **Step 2: 失敗を確認** → **Step 3: 実装**（探索は `configResolved` で 1 回行い、create / delete のたびに `listCatalog` をやり直す。SPA 本体の `appFile` はプラグインのファイル位置から `new URL('../app/App.svelte', import.meta.url)` で求める） → **Step 4: PASS を確認**
-- [ ] **Step 5: コミット** `feat: dev サーバーの /__zukan/ にカタログを出す`
+    - On create / delete of `X.zukan.svelte` inside a search directory, the list's virtual module is invalidated, and in the client environment `hot.send({ type: 'custom', event: 'zukan:reload' })` is sent. `full-reload` is not sent
+    - Creation outside the search directories is ignored
+  - `configureServer` calls `server.watcher.add` only for search directories outside the root
+  - `printUrls`: wraps `server.printUrls` and adds one line with the catalog URL
+- [ ] **Step 2: Confirm the failure** → **Step 3: Implement** (discovery is done once in `configResolved`, and `listCatalog` is redone on each create / delete. The SPA's `appFile` is computed from the plugin file's location with `new URL('../app/App.svelte', import.meta.url)`) → **Step 4: Confirm PASS**
+- [ ] **Step 5: Commit** `feat: serve the catalog at /__zukan/ on the dev server`
 
-### Task 4: カタログの SPA
+### Task 4: The catalog SPA
 
 **Files:**
 
-- Create: `src/lib/app/App.svelte`、`Sidebar.svelte`、`List.svelte`、`Detail.svelte`、`Preview.svelte`、`hash.ts`、`i18n.ts`（`logo.svg` と `icon.svg` は配置済みのものを使う）
-- Modify: `src/lib/components/CodeBlock/CodeBlock.svelte`（文言を props で受け取る。コピーボタンを `<summary>` の行のツールバーへ移す。失敗時の表示）、`PreviewFrame/PreviewFrame.svelte`（文言を props で受け取る。Home / End キー、`aria-valuemin` を表示領域の幅にそろえる、測るまで幅の表示と aria 値を出さない）、`EntryList.svelte`（`dir` を添える）、`src/lib/index.ts`（`Section` だけを export）、`src/lib/types.ts`（`Groups` を削除）、`package.json`（`peerDependencies` から `@sveltejs/kit` を外し `vite` を足す）
-- Delete: `src/lib/Zukan.svelte`、`src/lib/components/Detail.svelte`、`src/lib/components/Preview.svelte`、`src/lib/entries.ts`、`src/lib/entries.test.ts`
-- Test: `src/lib/app/hash.test.ts`、`src/lib/app/i18n.test.ts`、`src/lib/components/EntryList.svelte.test.ts`（client）、`PreviewFrame.svelte.test.ts` と `CodeBlock.svelte.test.ts`（client、追加分）、既存の client テストの修正
+- Create: `src/lib/app/App.svelte`, `Sidebar.svelte`, `List.svelte`, `Detail.svelte`, `Preview.svelte`, `hash.ts`, `i18n.ts` (use the already placed `logo.svg` and `icon.svg`)
+- Modify: `src/lib/components/CodeBlock/CodeBlock.svelte` (receive strings via props. Move the copy button into the toolbar on the `<summary>` line. Display on failure), `PreviewFrame/PreviewFrame.svelte` (receive strings via props. Home / End keys, align `aria-valuemin` with the viewport width, do not show the width display and aria values until measured), `EntryList.svelte` (add `dir`), `src/lib/index.ts` (export only `Section`), `src/lib/types.ts` (delete `Groups`), `package.json` (remove `@sveltejs/kit` from `peerDependencies` and add `vite`)
+- Delete: `src/lib/Zukan.svelte`, `src/lib/components/Detail.svelte`, `src/lib/components/Preview.svelte`, `src/lib/entries.ts`, `src/lib/entries.test.ts`
+- Test: `src/lib/app/hash.test.ts`, `src/lib/app/i18n.test.ts`, `src/lib/components/EntryList.svelte.test.ts` (client), `PreviewFrame.svelte.test.ts` and `CodeBlock.svelte.test.ts` (client, additions), fixes to the existing client tests
 
 **Interfaces:**
 
-- Consumes: `generateEntryModule` が渡す props（Task 3）、`CatalogItem`（Task 2）
+- Consumes: the props that `generateEntryModule` passes (Task 3), `CatalogItem` (Task 2)
 - Produces:
   - `App` props: `{ catalog: (CatalogItem & { load: () => Promise<ZukanModule> })[]; logo: string | null; wrapper: (() => Promise<{ default: Component }>) | null; title: string; locale: 'en' | 'ja' }`
   - `parseHash(hash: string): { view: 'list' } | { view: 'detail'; path: string } | { view: 'preview'; path: string; section: string | null }`
   - `formatHash(view: 'detail' | 'preview', path: string, section?: string): string`
-  - `messages: Record<'en' | 'ja', Messages>`（キーは spec の辞書の表のとおり）
+  - `messages: Record<'en' | 'ja', Messages>` (keys as in the spec's dictionary table)
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [ ] **Step 1: Write the failing tests**
   - `parseHash` / `formatHash`:
-    - `''`・`'#'`・`'#/'` は list
-    - `formatHash('detail', '@acme/ui/lib/Card')` が `'#/%40acme/ui/lib/Card'`、`parseHash` で `@acme/ui/lib/Card` に戻る
-    - `formatHash('preview', 'ui/preview/Foo', 'a b?c')` が往復する（`section` も戻る）
-    - `#/preview/ui/Button` は section が `null`
-    - 日本語の ID も往復する
-  - `i18n`: `en` と `ja` のキーの集合が一致し、空文字がない
-  - `EntryList`（client）: `shows dir to tell same names apart`。`name` が同じ 2 件で、それぞれの `dir` が表示され、リンク先（`#/...`）が別になる
-  - 既存の client テストで、日本語の文言（`コード`、`コピー`、`プレビューの幅` など）で要素を探しているものを、英語の既定値で探すように直す
-  - PreviewFrame（client。旧計画の積み残し）:
-    - `keyboard resize`: ハンドルにフォーカスして ArrowLeft で 10px 狭くなり、Home で 200px、End で表示領域の幅
-    - `drag resize`: ハンドルで `pointerdown` → `pointermove`（+50px）→ `pointerup` を送ると幅が 50px 広がり、ドラッグ中だけ iframe に `pointer-events: none` が付く。右ボタン（`button: 2`）では始まらない
-    - `aria-valuemin follows a narrow stage`: 表示領域を 150px にすると `aria-valuemin` が 150 で、`aria-valuenow` がそれを下回らない
-    - `height follows the preview`: `src` を `about:blank` にし、読み込み後に `contentDocument` に `[data-zukan-preview]` の要素（高さ 300px）を入れると、iframe の高さが 300px になる
-  - CodeBlock（client）: `copy failure is shown`: `navigator.clipboard.writeText` が reject すると `copyFailed` の文言が出る。コピーボタンが `<summary>` と同じツールバーにある
-- [ ] **Step 2: 失敗を確認** → **Step 3: 実装**
-  - `App` は `hashchange` を購読し、`parseHash` の結果でサイドバー付きの list / detail と、UI なしの preview を出し分ける
-  - preview のときだけ `wrapper` を動的 import して囲む。`section` があれば `setPreviewSection`
+    - `''`, `'#'`, and `'#/'` are list
+    - `formatHash('detail', '@acme/ui/lib/Card')` gives `'#/%40acme/ui/lib/Card'`, and `parseHash` returns it to `@acme/ui/lib/Card`
+    - `formatHash('preview', 'ui/preview/Foo', 'a b?c')` round-trips (`section` comes back too)
+    - `#/preview/ui/Button` has a section of `null`
+    - Japanese IDs also round-trip
+  - `i18n`: the key sets of `en` and `ja` match, and there are no empty strings
+  - `EntryList` (client): `shows dir to tell same names apart`. With two items with the same `name`, each `dir` is shown and the link targets (`#/...`) differ
+  - Fix the existing client tests that locate elements by Japanese strings (the dictionary's `code`, `copy`, `previewWidth` values, and so on) so that they locate them by the English default values
+  - PreviewFrame (client. Leftovers from the previous plan):
+    - `keyboard resize`: focus the handle, ArrowLeft makes it 10px narrower, Home gives 200px, End gives the viewport width
+    - `drag resize`: sending `pointerdown` → `pointermove` (+50px) → `pointerup` on the handle widens it by 50px, and `pointer-events: none` is set on the iframe only during the drag. It does not start with the right button (`button: 2`)
+    - `aria-valuemin follows a narrow stage`: with a viewport of 150px, `aria-valuemin` is 150 and `aria-valuenow` does not fall below it
+    - `height follows the preview`: set `src` to `about:blank`, and after loading, put an element with `[data-zukan-preview]` (300px high) into `contentDocument`; the iframe's height becomes 300px
+  - CodeBlock (client): `copy failure is shown`: when `navigator.clipboard.writeText` rejects, the `copyFailed` text appears. The copy button is in the same toolbar as the `<summary>`
+- [ ] **Step 2: Confirm the failure** → **Step 3: Implement**
+  - `App` subscribes to `hashchange` and, based on the result of `parseHash`, switches between list / detail with the sidebar and preview without UI
+  - Only for the preview, dynamically import `wrapper` and wrap with it. If there is a `section`, call `setPreviewSection`
   - `import.meta.hot?.on('zukan:reload', () => location.reload())`
-  - `document.title` は spec のとおり（一覧は `title`、詳細は `<name> | <title>`）
-  - ロゴ: `logo` があれば `<img alt={title}>`、なければ同梱の `logo.svg`（高さ 32px 程度）（`logo: false` は `generateEntryModule` が `null` を渡し、`title` の文字列を表示する。同梱ロゴとの区別は、`logo` が `undefined` か `false` かで Task 3 が決める）
-  - ルート要素で内部の CSS 変数を定義する（以前の `Zukan.svelte` と同じ既定値）
-  - 以前の `Zukan.svelte` で入れた対応を引き継ぐ: 読み込み失敗の表示、詳細を切り替えたときに前の項目の PreviewFrame の状態を持ち越さない（`{#key}`）、サイドバーの `<nav aria-label>`、一覧の `h1`
-- [ ] **Step 4: PASS を確認**（server と client）
-- [ ] **Step 5: コミット** `feat: カタログを SvelteKit に依存しない SPA にする`
+  - `document.title` is as in the spec (`title` on the list, `<name> | <title>` on a detail page)
+  - Logo: if `logo` is given, `<img alt={title}>`; otherwise the bundled `logo.svg` (about 32px high) (`logo: false` makes `generateEntryModule` pass `null`, and the `title` string is shown. Whether it is distinguished from the bundled logo by `logo` being `undefined` or `false` is decided in Task 3)
+  - Define the internal CSS variables on the root element (the same defaults as the earlier `Zukan.svelte`)
+  - Carry over the handling that was put into the earlier `Zukan.svelte`: the display for load failures, not carrying over the previous item's PreviewFrame state when the detail is switched (`{#key}`), the sidebar's `<nav aria-label>`, and the list's `h1`
+- [ ] **Step 4: Confirm PASS** (server and client)
+- [ ] **Step 5: Commit** `feat: make the catalog an SPA that does not depend on SvelteKit`
 
-### Task 5: 静的書き出し
+### Task 5: Static output
 
-**Files:** Modify `src/lib/vite/index.ts`、Test `src/lib/vite/index.test.ts`
+**Files:** Modify `src/lib/vite/index.ts`, Test `src/lib/vite/index.test.ts`
 
 **Interfaces:**
 
-- Consumes: `renderHtml`、`generateEntryModule`（Task 3）
+- Consumes: `renderHtml`, `generateEntryModule` (Task 3)
 - Produces:
-  - `detectSvelteKit(plugins: unknown[]): Promise<boolean>`（入れ子の配列と Promise を平らにし、名前が `vite-plugin-sveltekit` で始まるものがあるか）
-  - `build` が有効なとき、`config` フックの戻り値に `environments.zukan`（`consumer: 'client'`、Kit を検出したときだけ `define: { __SVELTEKIT_PAYLOAD__: 'undefined', __SVELTEKIT_HAS_SERVER_LOAD__: 'false', __SVELTEKIT_HAS_UNIVERSAL_LOAD__: 'false' }`、`build.outDir`、`build.manifest: false`、`build.rolldownOptions.input: { zukan: 'virtual:svelte-zukan/entry' }`、出力ファイル名は `assets/[name]-[hash].js` / `.css` などの固定の規則）
-  - `buildApp` フック: `builder.build(builder.environments.zukan)` → entry チャンクを探して `<outDir>/index.html` を `renderHtml({ entrySrc: './' + fileName })` で書く → `<outDir>/_app/version.json` があれば消す
+  - `detectSvelteKit(plugins: unknown[]): Promise<boolean>` (flattens nested arrays and Promises, and checks whether any name starts with `vite-plugin-sveltekit`)
+  - When `build` is enabled, the return value of the `config` hook includes `environments.zukan` (`consumer: 'client'`, `define: { __SVELTEKIT_PAYLOAD__: 'undefined', __SVELTEKIT_HAS_SERVER_LOAD__: 'false', __SVELTEKIT_HAS_UNIVERSAL_LOAD__: 'false' }` only when Kit is detected, `build.outDir`, `build.manifest: false`, `build.rolldownOptions.input: { zukan: 'virtual:svelte-zukan/entry' }`, and output file names following a fixed rule such as `assets/[name]-[hash].js` / `.css`)
+  - `buildApp` hook: `builder.build(builder.environments.zukan)` → find the entry chunk and write `<outDir>/index.html` with `renderHtml({ entrySrc: './' + fileName })` → delete `<outDir>/_app/version.json` if it exists
 
-- [ ] **Step 1: 失敗するテストを書く**
-  - `build: false`（既定）なら `config` は `environments.zukan` を返さず、`buildApp` は何もしない
-  - `detectSvelteKit`: `[Promise.resolve([{ name: 'vite-plugin-sveltekit-setup' }])]` で true、`[[{ name: 'vite-plugin-svelte' }], null, false]` で false
-  - Kit を検出しなかったとき、`environments.zukan` に `define` が入らない
-  - `build: true` なら `outDir` が `<root>/zukan-dist`、`build: { outDir: 'out/catalog' }` なら `<root>/out/catalog`
-  - `buildApp`: 偽の `builder`（`build` が entry チャンク `assets/zukan-abc.js` を含む出力を返す）で、`index.html` の script が `./assets/zukan-abc.js` になる。`_app/version.json` が消える
-- [ ] **Step 2: 失敗を確認** → **Step 3: 実装** → **Step 4: PASS を確認**
-- [ ] **Step 5: コミット** `feat: vite build でカタログを静的に書き出せるようにする`
+- [ ] **Step 1: Write the failing tests**
+  - With `build: false` (the default), `config` does not return `environments.zukan` and `buildApp` does nothing
+  - `detectSvelteKit`: true for `[Promise.resolve([{ name: 'vite-plugin-sveltekit-setup' }])]`, false for `[[{ name: 'vite-plugin-svelte' }], null, false]`
+  - When Kit is not detected, `define` is not put into `environments.zukan`
+  - With `build: true`, `outDir` is `<root>/zukan-dist`, and with `build: { outDir: 'out/catalog' }` it is `<root>/out/catalog`
+  - `buildApp`: with a fake `builder` (`build` returns an output containing the entry chunk `assets/zukan-abc.js`), the script in `index.html` becomes `./assets/zukan-abc.js`. `_app/version.json` is deleted
+- [ ] **Step 2: Confirm the failure** → **Step 3: Implement** → **Step 4: Confirm PASS**
+- [ ] **Step 5: Commit** `feat: allow vite build to write the catalog statically`
 
-### Task 6: ドッグフーディングと README
+### Task 6: Dogfooding and README
 
 **Files:**
 
-- Move: `src/lib/components/{Badge,CodeBlock}/zukan/*` をコンポーネントの隣へ（`git mv`。`Document.md` は `<Name>.zukan.md` に改名し、中の相対 import を直す）。`src/examples/Button/zukan/*` も同様
-- Create: `src/examples/nav/Button/Button.zukan.svelte`（同名の確認用）、`src/examples/PageInfo/PageInfo.svelte` と `PageInfo.zukan.svelte`（`$app/state` の `page.url.pathname` と `$app/paths` の `resolve('/')` を表示するだけのコンポーネント。Kit の実行時 API がカタログでどう動くかの確認用）、`.zukan/Wrapper.svelte`（グローバル CSS を 1 つ import し、`children` を囲む例）、`.zukan/global.css`（例: `body { background: #fffbe6 }`）
+- Move: `src/lib/components/{Badge,CodeBlock}/zukan/*` next to the components (`git mv`. Rename `Document.md` to `<Name>.zukan.md` and fix the relative imports inside). Do the same for `src/examples/Button/zukan/*`
+- Create: `src/examples/nav/Button/Button.zukan.svelte` (for checking same names), `src/examples/PageInfo/PageInfo.svelte` and `PageInfo.zukan.svelte` (a component that only shows `page.url.pathname` from `$app/state` and `resolve('/')` from `$app/paths`. For checking how Kit's runtime APIs behave in the catalog), `.zukan/Wrapper.svelte` (an example that imports one global CSS file and wraps `children`), `.zukan/global.css` (for example, `body { background: #fffbe6 }`)
 - Delete: `src/routes/zukan/`
-- Modify: `src/routes/+page.svelte`（ライブラリの紹介と、dev なら `/__zukan/` へのリンク）、`vite.config.ts`（`zukan({ groups: { ui: 'src/lib', examples: 'src/examples' }, wrapper: '.zukan/Wrapper.svelte', build: true, locale: 'ja' })`、`resolve.alias` は残す）、`package.json`（`files` を `!dist/**/*.zukan.svelte`、`!dist/**/*.zukan.md` に。`description` と `keywords` を spec の「対応範囲」のとおりに）、`.gitignore`（`/zukan-dist`）、`README.md`
+- Modify: `src/routes/+page.svelte` (an introduction to the library and, in dev, a link to `/__zukan/`), `vite.config.ts` (`zukan({ groups: { ui: 'src/lib', examples: 'src/examples' }, wrapper: '.zukan/Wrapper.svelte', build: true, locale: 'ja' })`, keep `resolve.alias`), `package.json` (make `files` `!dist/**/*.zukan.svelte` and `!dist/**/*.zukan.md`. Make `description` and `keywords` as in the spec's "Supported environments"), `.gitignore` (`/zukan-dist`), `README.md`
 
-- [ ] **Step 1: ファイルを移して直す**
-- [ ] **Step 2: README を書き直す**（spec の「README」の節のとおり。先頭は `<picture>` で `.github/logo-dark.svg` と `.github/logo.svg` を切り替える。「Svelte の公式プロジェクトではない」の一行を入れる）
-- [ ] **Step 3: `pnpm lint`、`pnpm check`、server / client テスト、`pnpm build` を通す。** `zukan-dist/index.html` と `zukan-dist/assets/` があり、`zukan-dist/_app` がないこと。`pnpm pack --dry-run` に `.zukan.` を含むファイルがないこと
-- [ ] **Step 4: コミット** `feat: カタログファイルをコンポーネントの隣に置く形に移す`、`chore: README を書き直す`
-- [ ] **Step 5（controller）: preview 機能で dev を起動して確かめる**
-  - `/__zukan/` の一覧が `ui` → `examples` の順でバッジ付き。`Button` が 2 つ並び、片方に `nav` が添えられる。UI が日本語、`<html lang="ja">`、サイドバーのロゴとタブのファビコンが同梱の zukan のもの
-  - 詳細、プレビュー、コード、`.md`
-  - プレビューの背景が `.zukan/global.css` の色で、カタログの UI 側の背景は変わらない
-  - アプリの `/` を別タブで開いたまま、カタログファイルを新規作成・削除・編集すると、カタログのタブだけが再読み込みされる。`Button.svelte` の編集は両方のタブに HMR で反映される
-  - `$app/paths` の `resolve` を使う小さなコンポーネントをカタログで表示し、結果を README に書く
-- [ ] **Step 6（controller）:** `zukan-dist` をサブパス（例: `/docs/zukan/`）で静的配信し、一覧、`#/examples/nav/Button` の深いリンク、プレビューが開くこと。`#/examples/PageInfo` がエラーにならずに描画されること（`__SVELTEKIT_PAYLOAD__` の define が効いている確認）
+- [ ] **Step 1: Move and fix the files**
+- [ ] **Step 2: Rewrite the README** (as in the spec's "README" section. The top switches `.github/logo-dark.svg` and `.github/logo.svg` with `<picture>`. Include the line "not an official Svelte project")
+- [ ] **Step 3: Get `pnpm lint`, `pnpm check`, the server / client tests, and `pnpm build` to pass.** `zukan-dist/index.html` and `zukan-dist/assets/` exist, and `zukan-dist/_app` does not. `pnpm pack --dry-run` contains no files with `.zukan.`
+- [ ] **Step 4: Commit** `feat: move catalog files next to their components`, `chore: rewrite the README`
+- [ ] **Step 5 (controller): Start dev with the preview feature and verify**
+  - The list at `/__zukan/` is in the order `ui` → `examples` with badges. Two `Button`s appear side by side, and one has `nav` attached. The UI is in Japanese, `<html lang="ja">`, and the sidebar logo and the tab favicon are the bundled zukan ones
+  - Detail, preview, code, `.md`
+  - The preview background is the color of `.zukan/global.css`, and the background of the catalog's UI side does not change
+  - With the app's `/` open in another tab, creating, deleting, and editing a catalog file reloads only the catalog's tab. Editing `Button.svelte` is reflected in both tabs by HMR
+  - Display a small component that uses `resolve` from `$app/paths` in the catalog, and write the result in the README
+- [ ] **Step 6 (controller):** Serve `zukan-dist` statically under a subpath (for example, `/docs/zukan/`), and confirm that the list, the deep link `#/examples/nav/Button`, and the preview open. Confirm that `#/examples/PageInfo` renders without errors (a check that the `__SVELTEKIT_PAYLOAD__` define is effective)
 
-### Task 7: fixture（モノレポの SvelteKit と素の Vite）
+### Task 7: Fixtures (SvelteKit monorepo and plain Vite)
 
 **Files:**
 
-- Create: `fixtures/monorepo/apps/catalog/`（`package.json`: name `catalog`、`dependencies` に `@fixture/ui` と `svelte-zukan`。`vite.config.ts`: `zukan()` を設定なしで登録し、`sveltekit()` と adapter-static。`src/app.html`、`src/routes/+page.svelte`、`src/routes/+layout.ts`。2 つ目の確認用に `vite.config.base.ts`（`base: '/app/'` の設定）も置く）
-- Create: `fixtures/monorepo/packages/ui/`（`package.json`: name `@fixture/ui`、`imports: { "#lib/*": "./src/lib/*" }`。`src/lib/Card/Card.svelte` が `#lib/label.js` を import、`Card.zukan.svelte`、`Card.zukan.md`、同名確認用の `src/lib/forms/Button.zukan.svelte` と `src/lib/nav/Button.zukan.svelte`）
-- Create: `fixtures/monorepo/packages/ui/src/lib/PageInfo/PageInfo.svelte` と `PageInfo.zukan.svelte`（`$app/state` を使う）
-- Create: `fixtures/vite-svelte/`（素の Vite + Svelte。`package.json`: name `vite-svelte`、`vite.config.ts`: `svelte()` と `zukan({ build: true })`、`index.html`、`src/main.ts`、`src/lib/Counter/Counter.svelte` と `Counter.zukan.svelte`）
-- Create: `fixtures/build.test.ts`（server プロジェクトに含める。下の Step 1）
-- Create: `fixtures/monorepo/setup.mjs`（`apps/catalog/node_modules/@fixture/ui` → `../../../packages/ui`、`apps/catalog/node_modules/svelte-zukan` → repo ルート、の symlink を作る）
-- Modify: `.gitignore`（`fixtures/**/.svelte-kit`、`fixtures/**/build`、`fixtures/**/dist`、`fixtures/**/zukan-dist`）、`vite.config.ts`（server プロジェクトの `include` に `fixtures/**/*.test.ts`）、`.github/workflows/ci.yml`（`windows-latest` で server プロジェクトのテストだけを回すジョブを足す。spec の「Windows のドライブ文字付きパスは CI で確かめる」への対応）
+- Create: `fixtures/monorepo/apps/catalog/` (`package.json`: name `catalog`, with `@fixture/ui` and `svelte-zukan` in `dependencies`. `vite.config.ts`: register `zukan()` with no configuration, plus `sveltekit()` and adapter-static. `src/app.html`, `src/routes/+page.svelte`, `src/routes/+layout.ts`. For the second check, also place `vite.config.base.ts` (a config with `base: '/app/'`))
+- Create: `fixtures/monorepo/packages/ui/` (`package.json`: name `@fixture/ui`, `imports: { "#lib/*": "./src/lib/*" }`. `src/lib/Card/Card.svelte` imports `#lib/label.js`, `Card.zukan.svelte`, `Card.zukan.md`, and `src/lib/forms/Button.zukan.svelte` and `src/lib/nav/Button.zukan.svelte` for checking same names)
+- Create: `fixtures/monorepo/packages/ui/src/lib/PageInfo/PageInfo.svelte` and `PageInfo.zukan.svelte` (using `$app/state`)
+- Create: `fixtures/vite-svelte/` (plain Vite + Svelte. `package.json`: name `vite-svelte`, `vite.config.ts`: `svelte()` and `zukan({ build: true })`, `index.html`, `src/main.ts`, `src/lib/Counter/Counter.svelte` and `Counter.zukan.svelte`)
+- Create: `fixtures/build.test.ts` (included in the server project. Step 1 below)
+- Create: `fixtures/monorepo/setup.mjs` (creates the symlinks `apps/catalog/node_modules/@fixture/ui` → `../../../packages/ui` and `apps/catalog/node_modules/svelte-zukan` → the repo root)
+- Modify: `.gitignore` (`fixtures/**/.svelte-kit`, `fixtures/**/build`, `fixtures/**/dist`, `fixtures/**/zukan-dist`), `vite.config.ts` (add `fixtures/**/*.test.ts` to the server project's `include`), `.github/workflows/ci.yml` (add a job that runs only the server project's tests on `windows-latest`. This responds to the spec's "Windows paths with drive letters are checked in CI")
 
-fixture の `vite.config.ts` は、環境変数 `ZUKAN_FROM_DIST` があれば `svelte-zukan/vite`（setup.mjs の symlink 経由で repo ルートの dist）を、なければ repo の `src/lib/vite/index.ts` を相対パスで読む。カタログファイルの `svelte-zukan` も同じく、なければ `resolve.alias` で `src/lib/index.ts` に向ける。自動テストは dist を作らずに src で回し、controller の確認は dist で行う
+The fixture's `vite.config.ts` reads `svelte-zukan/vite` (the repo root's dist via the symlink from setup.mjs) if the environment variable `ZUKAN_FROM_DIST` is set, and otherwise reads the repo's `src/lib/vite/index.ts` by relative path. For `svelte-zukan` in catalog files, likewise, when it is not set, `resolve.alias` points to `src/lib/index.ts`. The automated tests run on src without building dist, and the controller's verification is done on dist.
 
-fixture には `pnpm-workspace.yaml` を置かない。置くと Vite の `searchForWorkspaceRoot` がそこで止まり、repo ルートの `dist` が許可範囲の外になって、プラグインの処理と関係なく 403 になるため。
+Do not put a `pnpm-workspace.yaml` in the fixtures. If one is present, Vite's `searchForWorkspaceRoot` stops there, the repo root's `dist` falls outside the allowed range, and requests get a 403 regardless of what the plugin does.
 
-- [ ] **Step 1: 自動テストを書く**（`fixtures/build.test.ts`、タイムアウト 120 秒）
-  - `beforeAll` で `node fixtures/monorepo/setup.mjs` を実行する
-  - `kit monorepo build`: `fixtures/monorepo/apps/catalog` を `cwd` にして `node <repo>/node_modules/vite/bin/vite.js build` を子プロセスで実行する（SvelteKit は `process.cwd()` をプロジェクトのルートとして使うため、vitest のワーカー内で `createBuilder` は使わない）。終了コード 0、`zukan-dist/index.html` があり、`zukan-dist/assets/*.js` のどれにも `/__SVELTEKIT_[A-Z_]+__/` が残っていない、`zukan-dist/_app` がない
-  - `plain vite build`: `fixtures/vite-svelte` で同じく `vite build`。終了コード 0、アプリの `dist/` と `zukan-dist/index.html` の両方ができる
-- [ ] **Step 2: ファイルを作り、テストが通ることを確かめる。** `pnpm lint` と `pnpm check` が通ること
-- [ ] **Step 3: コミット** `chore: SvelteKit と素の Vite の fixture を追加する`
-- [ ] **Step 4（controller）: `node fixtures/monorepo/setup.mjs` と `pnpm build`（repo ルートの dist を作る）のあと、`ZUKAN_FROM_DIST=1` で、preview 機能で fixture のアプリの dev を起動して確かめる**
-  - 設定なしでグループ `@fixture/ui` が付き、`#/@fixture/ui/lib/Card` の詳細とプレビューが開く
-  - `Button` が 2 つ並び、`lib/forms` と `lib/nav` で見分けられる
-  - Card 内の `#lib/label.js` が ui 側で解決される
-  - `node_modules` 経由で読んだ `svelte-zukan` の `Section` が、SPA と同じコンテキストを使う（`section` 指定のプレビューで、指定したセクションだけが出る）
-  - `packages/ui/src/lib/New/New.zukan.svelte` を新規作成すると、再起動なしで一覧に出る
-  - 403 が出ない
-  - `vite.config.base.ts` で起動すると `/app/__zukan/` が開く
-  - `build: true` を付けた `vite build` で `zukan-dist/index.html` が書き出され、静的配信で開く。`#/@fixture/ui/lib/PageInfo` がビルド版でもエラーにならずに描画される
-- [ ] **Step 5（controller）: 素の Vite の fixture を `ZUKAN_FROM_DIST=1` で dev 起動して確かめる**
-  - `/__zukan/` の一覧・詳細・プレビューが開き、アプリの `/` も動く
-  - `Counter.svelte` の編集がアプリとカタログの両方に HMR で反映される。`Counter.zukan.svelte` の編集ではカタログのタブだけが再読み込みされる
-  - `build: true` の `vite build` の結果を静的配信して、カタログが開く
-- [ ] **Step 6: 結果を台帳に書く**
+- [ ] **Step 1: Write the automated tests** (`fixtures/build.test.ts`, timeout 120 seconds)
+  - Run `node fixtures/monorepo/setup.mjs` in `beforeAll`
+  - `kit monorepo build`: run `node <repo>/node_modules/vite/bin/vite.js build` as a child process with `fixtures/monorepo/apps/catalog` as `cwd` (SvelteKit uses `process.cwd()` as the project root, so do not use `createBuilder` inside a vitest worker). Exit code 0, `zukan-dist/index.html` exists, none of `zukan-dist/assets/*.js` contains anything matching `/__SVELTEKIT_[A-Z_]+__/`, and `zukan-dist/_app` does not exist
+  - `plain vite build`: likewise run `vite build` in `fixtures/vite-svelte`. Exit code 0, and both the app's `dist/` and `zukan-dist/index.html` are produced
+- [ ] **Step 2: Create the files and confirm the tests pass.** `pnpm lint` and `pnpm check` pass
+- [ ] **Step 3: Commit** `chore: add SvelteKit and plain Vite fixtures`
+- [ ] **Step 4 (controller): After `node fixtures/monorepo/setup.mjs` and `pnpm build` (which builds the repo root's dist), start the fixture app's dev with the preview feature using `ZUKAN_FROM_DIST=1` and verify**
+  - With no configuration, the group `@fixture/ui` is attached, and the detail and preview of `#/@fixture/ui/lib/Card` open
+  - Two `Button`s appear side by side and can be told apart by `lib/forms` and `lib/nav`
+  - `#lib/label.js` inside Card is resolved on the ui side
+  - The `Section` of `svelte-zukan` loaded via `node_modules` uses the same context as the SPA (in a preview with `section` specified, only the specified section appears)
+  - Creating `packages/ui/src/lib/New/New.zukan.svelte` makes it appear in the list without a restart
+  - No 403 appears
+  - Starting with `vite.config.base.ts` opens `/app/__zukan/`
+  - `vite build` with `build: true` writes `zukan-dist/index.html`, and it opens when served statically. `#/@fixture/ui/lib/PageInfo` renders without errors in the built version too
+- [ ] **Step 5 (controller): Start the plain Vite fixture's dev with `ZUKAN_FROM_DIST=1` and verify**
+  - The list, detail, and preview at `/__zukan/` open, and the app's `/` works too
+  - Editing `Counter.svelte` is reflected in both the app and the catalog by HMR. Editing `Counter.zukan.svelte` reloads only the catalog's tab
+  - Serve the result of `vite build` with `build: true` statically, and the catalog opens
+- [ ] **Step 6: Write the results in the ledger**
