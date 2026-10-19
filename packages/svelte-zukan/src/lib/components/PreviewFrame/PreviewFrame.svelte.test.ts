@@ -116,8 +116,54 @@ describe('PreviewFrame resizing', () => {
     const target = doc.createElement('div');
     target.setAttribute('data-zukan-preview', '');
     target.style.height = '300px';
+    doc.body.style.margin = '0';
     doc.body.append(target);
     await expect.poll(() => iframe.style.height).toBe('300px');
+  });
+
+  it('height includes the body padding and margin of the preview page', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.style.margin = '8px';
+    doc.body.style.padding = '16px';
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    target.style.height = '300px';
+    doc.body.append(target);
+    await expect.poll(() => iframe.style.height).toBe('348px');
+    const scroller = doc.scrollingElement!;
+    expect(scroller.scrollHeight).toBeLessThanOrEqual(scroller.clientHeight);
+  });
+
+  it('height includes a horizontal scrollbar', async () => {
+    const screen = await render(PreviewFrame, { props });
+    screen.container.style.width = '400px';
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    target.style.cssText = 'height: 300px; width: 2000px';
+    doc.body.append(target);
+    const scroller = doc.scrollingElement!;
+    await expect.poll(() => scroller.scrollHeight <= scroller.clientHeight).toBe(true);
+  });
+
+  it('content with min-height: 100vh does not keep growing', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    target.style.minHeight = '100vh';
+    doc.body.append(target);
+    await new Promise((r) => setTimeout(r, 500));
+    const first = parseFloat(iframe.style.height);
+    await new Promise((r) => setTimeout(r, 500));
+    expect(parseFloat(iframe.style.height)).toBe(first);
   });
 
   it('shows no width before the stage is measured', async () => {

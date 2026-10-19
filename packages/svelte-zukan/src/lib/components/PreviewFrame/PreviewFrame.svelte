@@ -82,7 +82,18 @@
         target = found;
         observer!.observe(found);
       }
-      height = Math.max(MIN_HEIGHT, found.getBoundingClientRect().height);
+      const win = doc.defaultView!;
+      const body = win.getComputedStyle(doc.body);
+      // the app's CSS (loaded by the wrapper) may pad the body; a horizontal scrollbar takes height too
+      const bottom = found.getBoundingClientRect().bottom + win.scrollY;
+      const spacing = parseFloat(body.paddingBottom) + parseFloat(body.marginBottom);
+      // scrollingElement: in quirks mode (an about:blank test page) documentElement.clientHeight is the content height
+      const viewport = (doc.scrollingElement ?? doc.documentElement).clientHeight;
+      const scrollbar = win.innerHeight - viewport;
+      const own = found.getBoundingClientRect().height;
+      // ponytail: content as tall as the viewport (`100vh`) would grow with every added pixel, so it gets its own height
+      // and may keep an inner scrollbar; a growth limit would be the upgrade if that matters
+      height = Math.max(MIN_HEIGHT, Math.abs(own - viewport) < 1 ? own : Math.ceil(bottom + spacing + scrollbar));
     });
     observer.observe(doc.body);
   }
