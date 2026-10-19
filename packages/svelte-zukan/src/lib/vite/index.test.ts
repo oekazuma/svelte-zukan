@@ -255,12 +255,12 @@ describe('extendFsAllow', () => {
     expect(extendFsAllow(root, [`${root}/src`], ['/x'])).toBeUndefined();
   });
 
-  it('adds the workspace root, the existing allow and the dirs outside the root', async () => {
+  it('keeps an explicit allow list and adds the dirs outside the root', async () => {
     const { tmp, root, outside } = await makeApp();
     const ws = searchForWorkspaceRoot(root);
-    // inside the workspace still counts: SvelteKit sets an explicit allow list without the workspace root
+    // an explicit list (SvelteKit's, or the user's) is kept as it is; the workspace root stands in only for Vite's default
     expect(normalizePath(ws)).toBe(tmp);
-    expect(extendFsAllow(root, [`${root}/src`, outside], ['/x'])).toEqual([ws, '/x', outside]);
+    expect(extendFsAllow(root, [`${root}/src`, outside], ['/x'])).toEqual(['/x', outside]);
     expect(extendFsAllow(root, [outside], undefined)).toEqual([ws, outside]);
   });
 
@@ -270,7 +270,7 @@ describe('extendFsAllow', () => {
     // the library itself (src/lib here) is outside the temporary root
     expect(boot(root).config.server?.fs?.allow).toEqual([ws, libDir]);
     const { config } = boot(root, { groups: { a: 'src', b: '../outside' } }, ['/x']);
-    expect(config.server?.fs?.allow).toEqual([ws, '/x', outside, libDir]);
+    expect(config.server?.fs?.allow).toEqual(['/x', outside, libDir]);
   });
 
   it('adds the dirs of a wrapper and a logo outside the root', async () => {
