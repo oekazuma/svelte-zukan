@@ -29,9 +29,17 @@
   const t = $derived(messages[locale]);
   const route = $derived(parseHash(hash));
   const entry = $derived(route.view === 'list' ? undefined : catalog.find((e) => e.path === route.path));
+
+  // components in a preview and links in a doc can change the hash too; only catalog routes navigate
+  function onhashchange() {
+    const next = location.hash;
+    if (next !== '' && !next.startsWith('#/')) return;
+    if (route.view === 'preview' && parseHash(next).view !== 'preview') return;
+    hash = next;
+  }
 </script>
 
-<svelte:window onhashchange={() => (hash = location.hash)} />
+<svelte:window {onhashchange} />
 
 <svelte:head>
   <title>{route.view === 'detail' && entry ? `${entry.name} | ${title}` : title}</title>
