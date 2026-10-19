@@ -54,9 +54,9 @@ export const isInside = (dir: string, parent: string) =>
 
 /**
  * `server.fs.allow` with the dirs outside the root added, or undefined when nothing has to be added.
- * Compared with the root, not the workspace root: SvelteKit sets an explicit allow list, so Vite's default is not used there.
+ * Without a list, Vite's default (the workspace root) is kept; an explicit list, such as SvelteKit's, is not widened.
  */
 export function extendFsAllow(root: string, dirs: string[], allow: string[] | undefined): string[] | undefined {
   const outside = dirs.filter((dir) => !isInside(normalizePath(dir), normalizePath(root)));
-  return outside.length ? [searchForWorkspaceRoot(root), ...(allow ?? []), ...outside] : undefined;
+  return outside.length ? [...(allow ?? [searchForWorkspaceRoot(root)]), ...outside] : undefined;
 }

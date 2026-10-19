@@ -1,16 +1,27 @@
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
+import type { ZukanMeta } from '../types.js';
 import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
 import Wrapper from './Wrapper.test.svelte';
 
-const load = () => Promise.resolve({ default: Catalog, __zukan: { sections: [], doc: null } });
+// a negative assertion needs the hashchange to have been handled first
+async function setHash(hash: string) {
+  const changed = new Promise((r) => addEventListener('hashchange', r, { once: true }));
+  location.hash = hash;
+  await changed;
+  await tick();
+}
+
+const load = () => Promise.resolve({ default: Catalog });
+const meta = () => Promise.resolve<{ default: ZukanMeta }>({ default: { sections: [], doc: null } });
 
 function setup(hash: string) {
   location.hash = hash;
   const wrapper = vi.fn(() => Promise.resolve({ default: Wrapper }));
-  const catalog = [{ group: 'ui', name: 'Card', dir: '', path: 'ui/Card', load }];
+  const catalog = [{ group: 'ui', name: 'Card', dir: '', path: 'ui/Card', load, meta }];
   const searched = [{ group: 'ui', dirs: ['src', '../lib'] }];
   return { wrapper, props: { catalog, logo: null, wrapper, title: 'zukan', locale: 'en' as 'en' | 'ja', searched } };
 }
@@ -76,9 +87,19 @@ describe('App', () => {
 
   it('a load error is shown', async () => {
     const { props } = setup('#/ui/Card');
-    props.catalog[0].load = () => Promise.reject(new Error('boom'));
+    props.catalog[0].meta = () => Promise.reject(new Error('boom'));
     const screen = await render(App, { props });
     await expect.element(screen.getByText('Failed to load: boom')).toBeInTheDocument();
+  });
+
+  it('a detail page reads the metadata, not the component', async () => {
+    const { props } = setup('#/ui/Card');
+    const spy = vi.fn(load);
+    props.catalog[0].load = spy;
+    props.catalog[0].meta = () => Promise.resolve({ default: { sections: [], doc: '<p>Doc text</p>' } });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByText('Doc text')).toBeInTheDocument();
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it('follows hashchange', async () => {
@@ -88,9 +109,36 @@ describe('App', () => {
     await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
   });
 
+  it('a preview ignores hashes that are not preview routes', async () => {
+    const { props } = setup('#/preview/ui/Card?section=Two');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+    for (const hash of ['#', '#details', '#/ui/Card']) {
+      await setHash(hash);
+      await expect.element(screen.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+      expect(screen.container.querySelector('nav')).toBeNull();
+    }
+  });
+
+  it('a detail page ignores in-page anchors', async () => {
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    await setHash('#usage');
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+  });
+
+  it('an empty hash still shows the list', async () => {
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    location.hash = '';
+    await expect.element(screen.getByRole('heading', { level: 1, name: 'Components' })).toBeInTheDocument();
+  });
+
   it('the search filters the sidebar', async () => {
     const { props } = setup('');
-    props.catalog.push({ group: 'ui', name: 'Button', dir: 'forms', path: 'ui/forms/Button', load });
+    props.catalog.push({ group: 'ui', name: 'Button', dir: 'forms', path: 'ui/forms/Button', load, meta });
     const screen = await render(App, { props });
     const nav = screen.getByRole('navigation', { name: 'Components' });
     await screen.getByRole('searchbox', { name: 'Search' }).fill('FORMS');
@@ -107,12 +155,36 @@ describe('App', () => {
     await expect.element(screen.getByRole('searchbox', { name: 'Search' })).toHaveFocus();
   });
 
+  it('/ opens the menu and focuses the search on a narrow screen', async () => {
+    await page.viewport(400, 800);
+    const { props } = setup('');
+    const screen = await render(App, { props });
+    await userEvent.keyboard('/');
+    await expect.element(screen.getByRole('searchbox', { name: 'Search' })).toHaveFocus();
+    await expect.element(screen.getByRole('button', { name: 'Menu' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('navigating scrolls back to the top', async () => {
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    document.body.style.minHeight = '5000px';
+    try {
+      window.scrollTo(0, 1000);
+      expect(window.scrollY).toBe(1000);
+      location.hash = '#/ui/Nope';
+      await expect.poll(() => window.scrollY).toBe(0);
+    } finally {
+      document.body.style.minHeight = '';
+    }
+  });
+
   it('groups are labelled only when there are several', async () => {
     const { props } = setup('');
     const screen = await render(App, { props });
     const nav = screen.getByRole('navigation', { name: 'Components' });
     await expect.element(nav.getByRole('list', { name: 'ui' })).not.toBeInTheDocument();
-    props.catalog.push({ group: 'examples', name: 'Demo', dir: '', path: 'examples/Demo', load });
+    props.catalog.push({ group: 'examples', name: 'Demo', dir: '', path: 'examples/Demo', load, meta });
     await screen.rerender({ catalog: [...props.catalog] });
     await expect.element(nav.getByRole('list', { name: 'ui' })).toBeInTheDocument();
     await expect.element(nav.getByRole('list', { name: 'examples' })).toHaveTextContent('Demo');

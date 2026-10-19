@@ -1,24 +1,45 @@
-import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, extname, join, relative, resolve } from 'node:path';
 import { marked } from 'marked';
-import { normalizePath, type Plugin } from 'vite';
+import { normalizePath, type Plugin, type PreviewServer, type ViteDevServer } from 'vite';
 import type { CatalogGroup } from '../types.js';
 import { discoverGroups, listCatalog } from './discover.js';
-import { transformZukan } from './extract.js';
+import { extractSections } from './extract.js';
 import { renderHtml } from './html.js';
 import { detectSvelteKit } from './kit.js';
-import { SVELTE_STYLE_ID, createMatchers } from './matchers.js';
+import { createMatchers } from './matchers.js';
 import { appFile, extendFsAllow, isInside, libDir, resolveOptions, type ZukanOptions } from './options.js';
-import { CATALOG, ENTRY, generateCatalogModule, generateEntryModule } from './virtual.js';
+import { CATALOG, ENTRY, META, generateCatalogModule, generateEntryModule } from './virtual.js';
 
 export type { ZukanOptions };
 
 const ENTRY_SRC = '/@id/__x00__' + ENTRY;
 /** where the static catalog puts its files: apart from the app's, so that their URLs can be made relative */
 const OUT_PREFIX = '_zukan/';
+/** the types of what the catalog build writes; anything else is served as octet-stream, which browsers refuse for module scripts */
+const CONTENT_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.woff2': 'font/woff2',
+  '.json': 'application/json'
+};
+
+const printCatalogUrl = (server: ViteDevServer | PreviewServer) => {
+  const printUrls = server.printUrls;
+  server.printUrls = () => {
+    printUrls();
+    const local = server.resolvedUrls?.local[0];
+    if (local) server.config.logger.info(`  ➜  zukan:   ${local}__zukan/`);
+  };
+};
 
 export function zukan(options: ZukanOptions = {}): Plugin {
-  const { catalogId, isCatalogFile, isDocFile, docFileOf, catalogFileOf } = createMatchers(options.suffix ?? 'zukan');
+  const { isCatalogFile, isDocFile, docFileOf } = createMatchers(options.suffix ?? 'zukan');
   let root = '';
   let groups: CatalogGroup[] = [];
   let resolved: ReturnType<typeof resolveOptions>;
@@ -156,9 +177,31 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       }
     },
     resolveId(id) {
-      if (id === ENTRY || id === CATALOG) return '\0' + id;
+      if (id === ENTRY || id === CATALOG || id.startsWith(META)) return '\0' + id;
     },
     load(id) {
+      if (id.startsWith('\0' + META)) {
+        const raw = id.slice(META.length + 1);
+        // the dev server may already have decoded part of the id (e.g. `%20`)
+        let path = raw;
+        try {
+          path = decodeURIComponent(raw);
+        } catch {
+          // keep the raw id
+        }
+        // listed again on every load, so that files added after the start are found
+        const item = listCatalog(groups, resolved.suffix).find((i) => i.path === path);
+        if (!item) throw new Error(`svelte-zukan: no catalog file for ID "${path}"`);
+        this.addWatchFile(item.file);
+        const docPath = docFileOf(item.file);
+        let doc: string | null = null;
+        if (existsSync(docPath)) {
+          this.addWatchFile(docPath);
+          doc = marked.parse(readFileSync(docPath, 'utf-8'), { async: false });
+        }
+        const sections = extractSections(readFileSync(item.file, 'utf-8'), item.file);
+        return `export default ${JSON.stringify({ sections, doc })};\n`;
+      }
       if (id === '\0' + CATALOG) return generateCatalogModule(listCatalog(groups, resolved.suffix));
       if (id === '\0' + ENTRY) {
         // relative, so that absolute paths do not end up in the static build
@@ -170,7 +213,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       }
     },
     configureServer(server) {
-      const { root, base, logger } = server.config;
+      const { root, base } = server.config;
       const outside = scanned().filter((dir) => !isInside(dir, normalizePath(root)));
       if (outside.length) server.watcher.add(outside);
 
@@ -195,38 +238,51 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           .catch(next);
       });
 
-      const printUrls = server.printUrls;
-      server.printUrls = () => {
-        printUrls();
-        const local = server.resolvedUrls?.local[0];
-        if (local) logger.info(`  ➜  zukan:   ${local}__zukan/`);
-      };
+      printCatalogUrl(server);
     },
-    transform: {
-      filter: { id: { include: catalogId, exclude: [/^\0/, SVELTE_STYLE_ID] } },
-      handler(code, id) {
-        const filename = id.split(/[?#]/)[0];
-        const docPath = docFileOf(filename);
-        let doc: string | null = null;
-        if (existsSync(docPath)) {
-          this.addWatchFile(docPath);
-          doc = marked.parse(readFileSync(docPath, 'utf-8'), { async: false });
+    configurePreviewServer(server) {
+      const out = resolved.build;
+      if (!out) return;
+      const { base } = server.config;
+      const prefix = `${base}__zukan/`;
+      // called directly (not in a returned hook) to run before SvelteKit's preview middleware
+      server.middlewares.use((req, res, next) => {
+        if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+        const url = req.url ?? '';
+        const path = url.split(/[?#]/)[0];
+        if (path === `${base}__zukan`) {
+          res.statusCode = 302;
+          res.setHeader('location', `${prefix}${url.slice(path.length)}`);
+          return res.end();
         }
-        return transformZukan(code, filename, doc);
-      }
+        if (!path.startsWith(prefix)) return next();
+        let rel: string;
+        try {
+          rel = decodeURIComponent(path.slice(prefix.length)) || 'index.html';
+        } catch {
+          return next();
+        }
+        const file = normalizePath(resolve(out, rel));
+        if (!isInside(file, out) || !existsSync(file) || !statSync(file).isFile()) return next();
+        res.setHeader('content-type', CONTENT_TYPES[extname(file)] ?? 'application/octet-stream');
+        res.end(readFileSync(file));
+      });
+      printCatalogUrl(server);
     },
     hotUpdate({ type, file, modules, timestamp }) {
       const { moduleGraph } = this.environment;
+      // the metadata of an entry depends on its catalog file and its .md, which the component's module does not track
+      const metas = () => [...moduleGraph.idToModuleMap.values()].filter((m) => m.id?.startsWith('\0' + META));
       let targets: Iterable<(typeof modules)[number]>;
       if (isDocFile(file)) {
-        // the module graph is keyed by normalized paths; the catalog file may not be in it yet
-        targets = moduleGraph.getModulesByFile(normalizePath(catalogFileOf(file))) ?? [];
+        targets = metas();
       } else if (type === 'update' && isCatalogFile(file)) {
-        targets = modules;
+        targets = [...modules, ...metas()];
       } else if (isCatalogFile(file) && scanned().some((dir) => isInside(normalizePath(file), dir))) {
-        // created or deleted: the list is rebuilt when the module is loaded again
+        // created or deleted: the list is rebuilt when the module is loaded again, and Vite does not
+        // invalidate the file's own module on add or unlink, so a re-created file would keep its old module
         const list = moduleGraph.getModuleById('\0' + CATALOG);
-        targets = list ? [list] : [];
+        targets = [...modules, ...metas(), ...(list ? [list] : [])];
       } else return;
 
       for (const mod of targets) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);

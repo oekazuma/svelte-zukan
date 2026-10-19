@@ -6,3 +6,7 @@
 <Section title="Basic">
   <Counter />
 </Section>
+
+<Section title="Second">
+  <p>second section</p>
+</Section>

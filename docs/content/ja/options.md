@@ -16,15 +16,15 @@ zukan({
 });
 ```
 
-| オプション | 型                                   | 既定値     | 説明                                                                                                                           |
-| ---------- | ------------------------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `suffix`   | `string`                             | `'zukan'`  | カタログファイルの接尾辞。`/^[a-z0-9-]+$/i` に合う文字列                                                                       |
-| `groups`   | `Record<string, string \| string[]>` | 自動探索   | グループ名 → 探すディレクトリ。書くと[自動探索](/ja/guides/monorepo)は行わない。並び順はキー順。存在しないディレクトリはエラー |
-| `wrapper`  | `string`                             | なし       | [プレビューを囲む](/ja/guides/wrapper) `.svelte` のパス                                                                        |
-| `logo`     | `string \| false`                    | 同梱のロゴ | サイドバーのロゴ画像のパス。`false` でロゴを出さず `title` の文字列を表示                                                      |
-| `title`    | `string`                             | `'zukan'`  | サイドバーのロゴの `alt` と `<title>`                                                                                          |
-| `locale`   | `'en' \| 'ja'`                       | `'en'`     | UI の言語。`<html lang>` も合わせる                                                                                            |
-| `build`    | `boolean \| { outDir?: string }`     | `false`    | `vite build` のときにカタログを[静的に書き出す](/ja/guides/static-export)。`true` なら `outDir` は `'zukan-dist'`              |
+| オプション | 型                                   | 既定値     | 説明                                                                                                                                   |
+| ---------- | ------------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `suffix`   | `string`                             | `'zukan'`  | カタログファイルの接尾辞。`/^[a-z0-9-]+$/i` に合う文字列                                                                               |
+| `groups`   | `Record<string, string \| string[]>` | 自動探索   | グループ名 → 探すディレクトリ。書くと[自動探索](/ja/guides/monorepo)は行わない。並び順はキーを書いた順。存在しないディレクトリはエラー |
+| `wrapper`  | `string`                             | なし       | [プレビューを囲む](/ja/guides/wrapper) `.svelte` のパス                                                                                |
+| `logo`     | `string \| false`                    | 同梱のロゴ | サイドバーのロゴ画像のパス。`false` でロゴを出さず `title` の文字列を表示                                                              |
+| `title`    | `string`                             | `'zukan'`  | サイドバーのロゴの `alt` と `<title>`                                                                                                  |
+| `locale`   | `'en' \| 'ja'`                       | `'en'`     | UI の言語。`<html lang>` も合わせる                                                                                                    |
+| `build`    | `boolean \| { outDir?: string }`     | `false`    | `vite build` のときにカタログを[静的に書き出す](/ja/guides/static-export)。`true` なら `outDir` は `'zukan-dist'`                      |
 
 - パスはすべて Vite の root からの相対で、`.zukan/` のような `src` 外のディレクトリに置けます
 - 不正な値（`suffix` が規則に合わない、`locale` が未知、指定したファイルやディレクトリがない）は、設定の読み込み時にエラーになります
