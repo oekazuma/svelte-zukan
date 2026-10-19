@@ -1,9 +1,18 @@
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
 import Wrapper from './Wrapper.test.svelte';
+
+// a negative assertion needs the hashchange to have been handled first
+async function setHash(hash: string) {
+  const changed = new Promise((r) => addEventListener('hashchange', r, { once: true }));
+  location.hash = hash;
+  await changed;
+  await tick();
+}
 
 const load = () => Promise.resolve({ default: Catalog, __zukan: { sections: [], doc: null } });
 
@@ -86,6 +95,33 @@ describe('App', () => {
     const screen = await render(App, { props });
     location.hash = '#/ui/Card';
     await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+  });
+
+  it('a preview ignores hashes that are not preview routes', async () => {
+    const { props } = setup('#/preview/ui/Card?section=Two');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+    for (const hash of ['#', '#details', '#/ui/Card']) {
+      await setHash(hash);
+      await expect.element(screen.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+      expect(screen.container.querySelector('nav')).toBeNull();
+    }
+  });
+
+  it('a detail page ignores in-page anchors', async () => {
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    await setHash('#usage');
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+  });
+
+  it('an empty hash still shows the list', async () => {
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    location.hash = '';
+    await expect.element(screen.getByRole('heading', { level: 1, name: 'Components' })).toBeInTheDocument();
   });
 
   it('the search filters the sidebar', async () => {
