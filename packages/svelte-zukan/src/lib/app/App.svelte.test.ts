@@ -102,6 +102,23 @@ describe('App', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it('a file without sections says so', async () => {
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    await expect
+      .element(screen.getByText('This file has no <Section>, so there is nothing to preview.'))
+      .toBeInTheDocument();
+  });
+
+  it('a file with sections shows no such message', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = () =>
+      Promise.resolve({ default: { sections: [{ title: 'One', code: '<p>one</p>' }], doc: null } });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 2, name: 'One' })).toBeInTheDocument();
+    await expect.element(screen.getByText(/has no <Section>/)).not.toBeInTheDocument();
+  });
+
   it('follows hashchange', async () => {
     const { props } = setup('');
     const screen = await render(App, { props });

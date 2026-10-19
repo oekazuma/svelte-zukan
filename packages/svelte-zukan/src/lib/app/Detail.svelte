@@ -23,6 +23,9 @@
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       <div class="doc">{@html meta.doc}</div>
     {/if}
+    {#if !meta.sections.length}
+      <p class="empty">{t.noSections}</p>
+    {/if}
     {#each meta.sections as section (section.title)}
       <h2>{section.title}</h2>
       <PreviewFrame src="./{formatHash('preview', entry.path, section.title)}" title={section.title} labels={t} />
@@ -56,5 +59,9 @@
 
   .doc {
     line-height: 1.6;
+  }
+
+  .empty {
+    color: var(--_muted);
   }
 </style>
