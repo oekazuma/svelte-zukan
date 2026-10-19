@@ -174,15 +174,18 @@ describe('PreviewFrame resizing', () => {
 
   it('shows no width before the stage is measured', async () => {
     const hidden = document.body.appendChild(document.createElement('div'));
-    hidden.style.display = 'none';
-    const screen = await render(PreviewFrame, { props, target: hidden });
-    const handle = screen.getByRole('separator', { includeHidden: true }).element();
-    expect(hidden.querySelector('.width')!.textContent).toBe('');
-    for (const name of ['aria-valuenow', 'aria-valuemin', 'aria-valuemax'])
-      expect(handle.hasAttribute(name)).toBe(false);
-    hidden.style.display = '';
-    await expect.poll(() => handle.getAttribute('aria-valuenow')).not.toBeNull();
-    hidden.remove();
+    try {
+      hidden.style.display = 'none';
+      const screen = await render(PreviewFrame, { props, target: hidden });
+      const handle = screen.getByRole('separator', { includeHidden: true }).element();
+      expect(hidden.querySelector('.width')!.textContent).toBe('');
+      for (const name of ['aria-valuenow', 'aria-valuemin', 'aria-valuemax'])
+        expect(handle.hasAttribute(name)).toBe(false);
+      hidden.style.display = '';
+      await expect.poll(() => handle.getAttribute('aria-valuenow')).not.toBeNull();
+    } finally {
+      hidden.remove();
+    }
   });
 
   it('labels come from props', async () => {
@@ -210,24 +213,27 @@ describe('PreviewFrame resizing', () => {
 describe('PreviewFrame toolbar', () => {
   it('the background switch applies to every preview on the page', async () => {
     const targets = [0, 1].map(() => document.body.appendChild(document.createElement('div')));
-    for (const target of targets) await render(PreviewFrame, { props, target });
-    const [first, second] = targets.map((t) => page.elementLocator(t));
-    const iframes = targets.map((t) => t.querySelector('iframe')!);
-    for (const iframe of iframes) await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    try {
+      for (const target of targets) await render(PreviewFrame, { props, target });
+      const [first, second] = targets.map((t) => page.elementLocator(t));
+      const iframes = targets.map((t) => t.querySelector('iframe')!);
+      for (const iframe of iframes) await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
 
-    await first.getByRole('button', { name: 'Dark', exact: true }).click();
-    for (const iframe of iframes) {
-      await expect.poll(() => iframe.contentDocument!.documentElement.style.colorScheme).toBe('dark');
-      expect(iframe.style.colorScheme).toBe('dark');
-      expect(iframe.contentDocument!.documentElement.style.backgroundColor).toBe('rgb(13, 17, 23)');
+      await first.getByRole('button', { name: 'Dark', exact: true }).click();
+      for (const iframe of iframes) {
+        await expect.poll(() => iframe.contentDocument!.documentElement.style.colorScheme).toBe('dark');
+        expect(iframe.style.colorScheme).toBe('dark');
+        expect(iframe.contentDocument!.documentElement.style.backgroundColor).toBe('rgb(13, 17, 23)');
+      }
+      await expect
+        .element(second.getByRole('button', { name: 'Dark', exact: true }))
+        .toHaveAttribute('aria-pressed', 'true');
+
+      await second.getByRole('button', { name: 'Light', exact: true }).click();
+      await expect.poll(() => iframes[0].contentDocument!.documentElement.style.colorScheme).toBe('light');
+    } finally {
+      for (const target of targets) target.remove();
     }
-    await expect
-      .element(second.getByRole('button', { name: 'Dark', exact: true }))
-      .toHaveAttribute('aria-pressed', 'true');
-
-    await second.getByRole('button', { name: 'Light', exact: true }).click();
-    await expect.poll(() => iframes[0].contentDocument!.documentElement.style.colorScheme).toBe('light');
-    for (const target of targets) target.remove();
   });
 
   it('links to the preview in a new tab', async () => {

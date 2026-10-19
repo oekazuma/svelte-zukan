@@ -23,7 +23,10 @@ function setup(hash: string) {
   const wrapper = vi.fn(() => Promise.resolve({ default: Wrapper }));
   const catalog = [{ group: 'ui', name: 'Card', dir: '', path: 'ui/Card', load, meta }];
   const searched = [{ group: 'ui', dirs: ['src', '../lib'] }];
-  return { wrapper, props: { catalog, logo: null, wrapper, title: 'zukan', locale: 'en' as 'en' | 'ja', searched } };
+  return {
+    wrapper,
+    props: { catalog, logo: null as string | null, wrapper, title: 'zukan', locale: 'en' as 'en' | 'ja', searched }
+  };
 }
 
 beforeEach(async () => {
@@ -73,6 +76,14 @@ describe('App', () => {
       document.documentElement.style.colorScheme = '';
       document.documentElement.style.backgroundColor = '';
     }
+  });
+
+  it('shows the logo image with the title as its alt text', async () => {
+    const { props } = setup('');
+    props.logo = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E';
+    props.title = 'My UI';
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('img', { name: 'My UI' })).toBeInTheDocument();
   });
 
   it('an unknown ID is not found', async () => {

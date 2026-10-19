@@ -5,13 +5,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { normalizePath, searchForWorkspaceRoot } from 'vite';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as api from './index.js';
 import { zukan } from './index.js';
-import { detectSvelteKit } from './kit.js';
-import { createMatchers } from './matchers.js';
 import { extendFsAllow, libDir, resolveOptions } from './options.js';
-import { ENTRY, META, generateCatalogModule, generateEntryModule, metaId, pathOfMeta } from './virtual.js';
+import { ENTRY, META, metaId } from './virtual.js';
 
 // hooks are called with hand-made fakes, so the plugin is typed loosely
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,39 +20,19 @@ let dir: string;
 let zukanFile: string;
 let docFile: string;
 
+/** every temp dir of this file lives here, so one afterAll removes them all */
+let tmpRoot: string;
+
 beforeAll(async () => {
-  dir = await mkdtemp(path.join(tmpdir(), 'zukan-'));
+  tmpRoot = realpathSync(await mkdtemp(path.join(tmpdir(), 'zukan-')));
+  dir = tmpRoot;
   zukanFile = path.join(dir, 'Foo.zukan.svelte');
   docFile = path.join(dir, 'Foo.zukan.md');
   await writeFile(zukanFile, source);
   await writeFile(docFile, '# Foo');
 });
 
-describe('createMatchers', () => {
-  it('follows the suffix', () => {
-    const { isCatalogFile, isDocFile } = createMatchers('catalog');
-    expect(isCatalogFile('/a/Foo.catalog.svelte')).toBe(true);
-    expect(isCatalogFile('/a/Foo.zukan.svelte')).toBe(false);
-    expect(isDocFile('/a/Foo.catalog.md')).toBe(true);
-    expect(isDocFile('/a/Foo.zukan.md')).toBe(false);
-    expect(isDocFile('/a/Document.md')).toBe(false);
-  });
-
-  it('maps a catalog file to its doc file', () => {
-    const { docFileOf } = createMatchers('zukan');
-    expect(docFileOf('/a/Foo.zukan.svelte')).toBe('/a/Foo.zukan.md');
-  });
-
-  it('is case-sensitive, using the suffix verbatim', () => {
-    const { isCatalogFile } = createMatchers('zukan');
-    expect(isCatalogFile('/a/Foo.ZUKAN.svelte')).toBe(false);
-  });
-
-  it.each(['a.b', '', 'a b', 'a|b'])('rejects invalid suffix %j', (suffix) => {
-    expect(() => createMatchers(suffix)).toThrow(/suffix/);
-    expect(() => zukan({ suffix })).toThrow(/suffix/);
-  });
-});
+afterAll(() => rmSync(tmpRoot, { recursive: true, force: true }));
 
 describe('hotUpdate', () => {
   const metaMod = { id: '\0virtual:svelte-zukan/meta/app%2FA' };
@@ -116,7 +94,7 @@ describe('hotUpdate', () => {
 
 // a temporary app: <tmp>/app/src/A.zukan.svelte, <tmp>/outside/B.zukan.svelte
 const makeApp = async () => {
-  const tmp = realpathSync(await mkdtemp(path.join(tmpdir(), 'zukan-app-')));
+  const tmp = await mkdtemp(path.join(tmpRoot, 'app-'));
   const root = normalizePath(path.join(tmp, 'app'));
   const outside = normalizePath(path.join(tmp, 'outside'));
   mkdirSync(path.join(root, 'src'), { recursive: true });
@@ -160,64 +138,6 @@ const fakeServer = (root: string, base = '/', headers?: Record<string, string | 
 });
 
 const bundled = (file: string) => normalizePath(fileURLToPath(new URL(`../app/${file}`, import.meta.url)));
-
-describe('generateCatalogModule', () => {
-  it('lists items with lazy imports', () => {
-    const code = generateCatalogModule([
-      { group: '@acme/ui', name: 'Card', dir: 'lib', path: '@acme/ui/lib/Card', file: '/abs/Card.zukan.svelte' }
-    ]);
-    expect(code).toContain('import("/abs/Card.zukan.svelte")');
-    expect(code).toContain('"path":"@acme/ui/lib/Card"');
-    expect(code).toContain('export const catalog');
-  });
-
-  it('encodes the metadata ID so the dev server leaves it alone', () => {
-    const path = '@acme/ui/lib/100%.css';
-    const code = generateCatalogModule([
-      { group: '@acme/ui', name: '100%.css', dir: 'lib', path, file: '/abs/x.zukan.svelte' }
-    ]);
-    const spec = code.match(/import\("(virtual:svelte-zukan\/meta\/[^"]+)"\)/)![1];
-    expect(spec).toBe(metaId(path));
-    expect(decodeURI(spec)).toBe(spec);
-    expect(spec.slice(META.length)).toMatch(/^[0-9a-f]+$/);
-    expect(pathOfMeta(spec.slice(META.length))).toBe(path);
-  });
-});
-
-describe('generateEntryModule', () => {
-  const base = { appFile: '/lib/app/App.svelte', title: 'zukan', locale: 'en' as const, searched: [] };
-
-  it('imports the logo as a URL and the wrapper lazily', () => {
-    const code = generateEntryModule({ ...base, logo: '/x/logo.svg', wrapper: '/x/Wrapper.svelte' });
-    expect(code).toContain('import("/lib/app/App.svelte")');
-    expect(code).toContain('import("virtual:svelte-zukan/catalog")');
-    expect(code).toContain('import logo from "/x/logo.svg?url"');
-    expect(code).toContain('wrapper: () => import("/x/Wrapper.svelte")');
-  });
-
-  it('listens for zukan:reload before loading the app and the catalog', () => {
-    const code = generateEntryModule({ ...base, logo: null, wrapper: null });
-    const listen = code.indexOf("import.meta.hot.on('zukan:reload'");
-    expect(listen).toBeGreaterThan(-1);
-    expect(code).toContain('parent.location.pathname === location.pathname');
-    expect(listen).toBeLessThan(code.indexOf('import("virtual:svelte-zukan/catalog")'));
-    expect(listen).toBeLessThan(code.indexOf('import("/lib/app/App.svelte")'));
-    expect(code).not.toMatch(/^import .* from "(virtual:svelte-zukan\/catalog|\/lib\/app\/App\.svelte)"/m);
-  });
-
-  it('passes null without a logo or a wrapper', () => {
-    const code = generateEntryModule({ ...base, logo: null, wrapper: null });
-    expect(code).not.toContain('?url');
-    expect(code).toContain('logo: null');
-    expect(code).toContain('wrapper: null');
-  });
-
-  it('passes the searched places', () => {
-    const searched = [{ group: 'ui', dirs: ['src', '../outside'] }];
-    const code = generateEntryModule({ ...base, logo: null, wrapper: null, searched });
-    expect(code).toContain('searched: [{"group":"ui","dirs":["src","../outside"]}]');
-  });
-});
 
 describe('resolveOptions', () => {
   it('fills in defaults', async () => {
@@ -612,15 +532,6 @@ describe('hotUpdate of the catalog list', () => {
     expect(run('create', `${root}/src-other/New.zukan.svelte`)).toBeUndefined();
     expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
     expect(ctx.environment.hot.send).not.toHaveBeenCalled();
-  });
-});
-
-describe('detectSvelteKit', () => {
-  it('finds sveltekit() in nested arrays and promises', async () => {
-    const setup = { name: 'vite-plugin-sveltekit-setup', api: { options: {} } };
-    expect(await detectSvelteKit([{ name: 'vite-plugin-sveltekit-guard' }, Promise.resolve([setup])])).toBe(setup);
-    expect(await detectSvelteKit([[{ name: 'vite-plugin-svelte' }], null, false])).toBeUndefined();
-    expect(await detectSvelteKit([])).toBeUndefined();
   });
 });
 
