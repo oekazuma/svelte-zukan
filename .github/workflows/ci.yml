@@ -55,6 +55,8 @@ jobs:
         run: pnpm run package
       - name: Build example app
         run: pnpm --filter example build
+      - name: Build docs
+        run: pnpm --filter docs build
       - name: Setup Playwright
         uses: $/.github/workflows/setup-playwright
       - name: Run Vitest
