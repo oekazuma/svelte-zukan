@@ -43,7 +43,7 @@ A missing, dynamic, or empty `title`, a duplicate `title`, or a `<Section>` that
 
 ## Code view
 
-The detail page shows the contents of each section as code, together with the definitions in `<script>` that the section references. In the example above, the code for "Basic" also shows `label` and `count`.
+The detail page shows the contents of each section as code, together with the definitions in `<script>` that the section references. In the example above, the code for "Basic" also shows `label` and `count`. Top-level `{#snippet}` blocks, `<script module>` declarations and TypeScript types that the section uses are shown too. `Section` can be imported under another name, for example `import { Section as Example } from 'svelte-zukan'`.
 
 ## Markdown description
 
