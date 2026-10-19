@@ -162,6 +162,89 @@ describe('extractSections', () => {
     expect(extractSections(source, FILE)[0].code).toBe('<A />\n\n\t<B />');
   });
 
+  it('detects Section imported under another name', () => {
+    const source = `<script>
+  import { Section as Example } from 'svelte-zukan';
+</script>
+
+<Example title="a"><A /></Example>`;
+    expect(extractSections(source, FILE)).toEqual([{ title: 'a', code: '<A />' }]);
+  });
+
+  it('an own component named Section is not a section when the import is aliased', () => {
+    const source = `<script>
+  import { Section as Example } from 'svelte-zukan';
+  import Section from './Section.svelte';
+</script>
+
+<Example title="a"><Section /></Example>`;
+    expect(extractSections(source, FILE)).toEqual([
+      { title: 'a', code: `<script>\n  import Section from './Section.svelte';\n</script>\n\n<Section />` }
+    ]);
+  });
+
+  it('includes TypeScript types the section uses', () => {
+    const source = `<script lang="ts">
+  type Item = { id: number };
+  const items: Item[] = [];
+  type Unused = string;
+</script>
+
+<Section title="a"><List {items} /></Section>`;
+    expect(extractSections(source, FILE)[0].code).toBe(
+      `<script lang="ts">\n  type Item = { id: number };\n  const items: Item[] = [];\n</script>\n\n<List {items} />`
+    );
+  });
+
+  it('includes an exported declaration', () => {
+    const source = `<script>
+  export const size = 's';
+</script>
+
+<Section title="a"><A {size} /></Section>`;
+    expect(extractSections(source, FILE)[0].code).toContain(`  export const size = 's';`);
+  });
+
+  it('includes module script definitions', () => {
+    const source = `<script module>
+  export const sizes = ['s', 'm'];
+</script>
+
+<Section title="a">{#each sizes as s (s)}<A {s} />{/each}</Section>`;
+    expect(extractSections(source, FILE)[0].code).toMatch(
+      /^<script module>\n {2}export const sizes = \['s', 'm'\];\n<\/script>\n\n\{#each/
+    );
+  });
+
+  it('includes top-level snippets the section renders', () => {
+    const source = `<script>
+  import Row from './Row.svelte';
+</script>
+
+{#snippet row(item)}
+  <Row {item} />
+{/snippet}
+
+<Section title="a"><Table {row} /></Section>
+<Section title="b"><Other /></Section>`;
+    expect(extractSections(source, FILE)).toEqual([
+      {
+        title: 'a',
+        code: `<script>\n  import Row from './Row.svelte';\n</script>\n\n{#snippet row(item)}\n  <Row {item} />\n{/snippet}\n\n<Table {row} />`
+      },
+      { title: 'b', code: '<Other />' }
+    ]);
+  });
+
+  it('keeps generics on the script tag', () => {
+    const source = `<script lang="ts" generics="T">
+  let items: T[] = [];
+</script>
+
+<Section title="a"><A {items} /></Section>`;
+    expect(extractSections(source, FILE)[0].code).toMatch(/^<script lang="ts" generics="T">\n/);
+  });
+
   it('returns [] when no sections', () => {
     expect(extractSections('<p>hi</p>', FILE)).toEqual([]);
   });

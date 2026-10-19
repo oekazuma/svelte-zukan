@@ -43,7 +43,7 @@ src/lib/Button/
 
 ## コード表示
 
-詳細ページのコード表示には、セクションの中身と、そこから参照している `<script>` 内の定義が出ます。上の例では、「Basic」のコードに `label` と `count` も表示されます。
+詳細ページのコード表示には、セクションの中身と、そこから参照している `<script>` 内の定義が出ます。上の例では、「Basic」のコードに `label` と `count` も表示されます。セクションが使うトップレベルの `{#snippet}`、`<script module>` 内の宣言、TypeScript の型も表示します。`Section` は `import { Section as Example } from 'svelte-zukan'` のように別名で import しても使えます。
 
 ## Markdown の説明
 

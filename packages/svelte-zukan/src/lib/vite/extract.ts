@@ -5,7 +5,7 @@ import type { ZukanMeta, ZukanSection } from '../types.js';
 type Node = { type: string; start: number; end: number } & Record<string, unknown>;
 type Ast = AST.Root;
 
-const isSection = (n: Node) => n.type === 'Component' && n.name === 'Section';
+const isSection = (n: Node, name: string) => n.type === 'Component' && n.name === name;
 
 function walk(value: unknown, visit: (node: Node) => void) {
   if (Array.isArray(value)) return value.forEach((v) => walk(v, visit));
@@ -38,7 +38,13 @@ function identifiersOf(value: unknown) {
   const skip = new Set<unknown>();
   walk(value, (n) => {
     if (n.type === 'MemberExpression' && !n.computed) skip.add(n.property);
-    else if (['Property', 'MethodDefinition', 'PropertyDefinition'].includes(n.type) && !n.computed && !n.shorthand)
+    else if (
+      ['Property', 'MethodDefinition', 'PropertyDefinition', 'TSPropertySignature', 'TSMethodSignature'].includes(
+        n.type
+      ) &&
+      !n.computed &&
+      !n.shorthand
+    )
       skip.add(n.key);
     else if (n.type === 'Identifier' && !skip.has(n)) names.add(n.name as string);
     else if (['Component', 'UseDirective', 'TransitionDirective', 'AnimateDirective'].includes(n.type))
@@ -65,6 +71,26 @@ function declaredNames(node: Node) {
   return names;
 }
 
+// `import { Section as Example } from 'svelte-zukan'` names the tag `Example`
+function sectionName(ast: Ast) {
+  for (const n of (ast.instance?.content.body ?? []) as unknown as Node[]) {
+    if (n.type !== 'ImportDeclaration' || (n.source as { value: string }).value !== 'svelte-zukan') continue;
+    for (const s of n.specifiers as { type: string; imported?: { name?: string }; local: { name: string } }[])
+      if (s.type === 'ImportSpecifier' && s.imported?.name === 'Section') return s.local.name;
+  }
+  return 'Section';
+}
+
+function scriptTagOf(script: { attributes: unknown[] } | null | undefined, module: boolean) {
+  const attr = (name: string) =>
+    (
+      (script?.attributes as Node[] | undefined)?.find((a) => a.name === name)?.value as { data: string }[] | undefined
+    )?.[0]?.data;
+  const lang = attr('lang');
+  const generics = attr('generics');
+  return `<script${module ? ' module' : ''}${lang ? ` lang="${lang}"` : ''}${generics ? ` generics="${generics}"` : ''}>`;
+}
+
 function lineOf(source: string, pos: number) {
   return source.slice(0, pos).split('\n').length;
 }
@@ -73,33 +99,66 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
   const fail = (pos: number, message: string): never => {
     throw new Error(`${filename}:${lineOf(source, pos)} ${message}`);
   };
-  const top = (ast.fragment.nodes as unknown as Node[]).filter(isSection);
+  const name = sectionName(ast);
+  const top = (ast.fragment.nodes as unknown as Node[]).filter((n) => isSection(n, name));
   const topSet = new Set<Node>(top);
   walk(ast.fragment.nodes, (n) => {
-    if (isSection(n) && !topSet.has(n))
+    if (isSection(n, name) && !topSet.has(n))
       fail(
         n.start,
-        '<Section> must not be nested (if this is your own component named "Section", import it under another name)'
+        `<${name}> must not be nested (if this is your own component named "Section", import it under another name)`
       );
   });
   if (!top.length) return [];
 
-  const lang = (ast.instance?.attributes as Node[] | undefined)?.find((a) => a.name === 'lang');
-  const langValue = (lang?.value as { data: string }[] | undefined)?.[0]?.data;
-  const scriptTag = langValue ? `<script lang="${langValue}">` : '<script>';
-
-  const defs = ((ast.instance?.content.body ?? []) as unknown as Node[])
-    .filter(
-      (n) =>
-        (n.type === 'ImportDeclaration' && (n.source as { value: string }).value !== 'svelte-zukan') ||
-        ['VariableDeclaration', 'FunctionDeclaration', 'ClassDeclaration'].includes(n.type)
-    )
-    .map((node) => {
-      const lineStart = source.lastIndexOf('\n', node.start - 1) + 1;
-      const lead = source.slice(lineStart, node.start);
-      const text = dedent((lead.trim() ? '' : lead) + source.slice(node.start, node.end));
-      return { names: declaredNames(node), uses: identifiersOf(node), text };
-    });
+  const textOf = (node: Node) => {
+    const lineStart = source.lastIndexOf('\n', node.start - 1) + 1;
+    const lead = source.slice(lineStart, node.start);
+    return dedent((lead.trim() ? '' : lead) + source.slice(node.start, node.end));
+  };
+  const scriptDefs = (script: typeof ast.instance, kind: 'module' | 'script') =>
+    ((script?.content.body ?? []) as unknown as Node[])
+      .filter(
+        (n) =>
+          (n.type === 'ImportDeclaration' && (n.source as { value: string }).value !== 'svelte-zukan') ||
+          (n.type === 'ExportNamedDeclaration' && n.declaration) ||
+          [
+            'VariableDeclaration',
+            'FunctionDeclaration',
+            'ClassDeclaration',
+            'TSTypeAliasDeclaration',
+            'TSInterfaceDeclaration',
+            'TSEnumDeclaration'
+          ].includes(n.type)
+      )
+      .map((node) => ({
+        kind,
+        names: declaredNames((node.type === 'ExportNamedDeclaration' ? node.declaration : node) as Node),
+        uses: identifiersOf(node),
+        text: textOf(node)
+      }));
+  const snippetDefs = (ast.fragment.nodes as unknown as Node[])
+    .filter((n) => n.type === 'SnippetBlock')
+    .map((node) => ({
+      kind: 'snippet' as const,
+      names: [(node.expression as { name: string }).name],
+      uses: identifiersOf(node),
+      text: textOf(node)
+    }));
+  const defs = [...scriptDefs(ast.module, 'module'), ...scriptDefs(ast.instance, 'script'), ...snippetDefs];
+  const moduleTag = scriptTagOf(ast.module, true);
+  const scriptTag = scriptTagOf(ast.instance, false);
+  const block = (tag: string, list: typeof defs) =>
+    list.length
+      ? `${tag}\n${list
+          .map((d) =>
+            d.text
+              .split('\n')
+              .map((l) => (l ? `  ${l}` : l))
+              .join('\n')
+          )
+          .join('\n')}\n</script>`
+      : '';
 
   const titles = new Set<string>();
   return top.map((section) => {
@@ -137,15 +196,11 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
         grew = true;
       }
     }
-    const script = defs
-      .filter((d) => used.has(d))
-      .map((d) =>
-        d.text
-          .split('\n')
-          .map((l) => (l ? `  ${l}` : l))
-          .join('\n')
-      );
-    const code = script.length ? `${scriptTag}\n${script.join('\n')}\n</script>\n\n${body}` : body;
+    const usedOf = (kind: (typeof defs)[number]['kind']) => defs.filter((d) => d.kind === kind && used.has(d));
+    const snippets = usedOf('snippet').map((d) => d.text);
+    const code = [block(moduleTag, usedOf('module')), block(scriptTag, usedOf('script')), ...snippets, body]
+      .filter(Boolean)
+      .join('\n\n');
     return { title, code };
   });
 }
