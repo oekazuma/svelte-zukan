@@ -9,7 +9,7 @@ Without the `groups` option, svelte-zukan finds catalog files on its own, in thi
 1. The `src` of the package at Vite's root (the catalog app itself)
 2. The `src` of the workspace packages the app depends on, in the order of `dependencies` then `devDependencies` in the app's `package.json`
 
-The group name is the `name` in the package's `package.json`. A package without catalog files does not become a group.
+The group name is the `name` in the package's `package.json`, or the directory name when there is none. A package without catalog files does not become a group.
 
 ## How dependencies are found
 

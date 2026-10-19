@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-Put `<Name>.zukan.svelte` next to the component. `<Name>.zukan.md` is optional. Subdirectories such as `zukan/` are not used.
+Put `<Name>.zukan.svelte` next to the component. `<Name>.zukan.md` is optional. No dedicated directory such as `zukan/` is needed.
 
 ```text
 src/lib/Button/
@@ -38,8 +38,9 @@ A catalog file is a Svelte component made of `<Section>` blocks. Each section is
 
 - Put `<Section>` at the top level, not inside another element or block
 - `title` must be a non-empty static string, unique within the file
+- Write the markup and `<script>` in plain Svelte (TypeScript with `lang="ts"` is fine). Preprocessor languages, such as SCSS, work only inside `<style>`
 
-A missing, dynamic, or empty `title`, a duplicate `title`, or a `<Section>` that is not at the top level each cause a build error with the file name and line.
+A missing, dynamic, or empty `title`, a duplicate `title`, or a `<Section>` that is not at the top level each cause a build error with the file name and line. A file that is not plain Svelte markup also causes a build error with the file name.
 
 ## Code view
 
@@ -47,7 +48,7 @@ The detail page shows the contents of each section as code, together with the de
 
 ## Markdown description
 
-`Button.zukan.md` pairs only with the `Button.zukan.svelte` in the same directory. If it exists, it is rendered as HTML at the top of the detail page.
+`Button.zukan.md` pairs only with the `Button.zukan.svelte` in the same directory. If it exists, it is rendered as HTML at the top of the detail page. The HTML is inserted as it is, including any raw HTML in the `.md` file, so review `.md` files like code before you publish the catalog.
 
 ```md
 <!-- src/lib/Button/Button.zukan.md -->

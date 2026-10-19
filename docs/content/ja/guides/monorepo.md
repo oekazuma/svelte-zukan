@@ -9,7 +9,7 @@ sidebar:
 1. Vite の root にあるパッケージ（カタログ用のアプリ自身）の `src`
 2. そのアプリの `package.json` の `dependencies` → `devDependencies` の順に、依存しているワークスペースパッケージの `src`
 
-グループ名はパッケージの `package.json` の `name` です。カタログファイルがないパッケージはグループになりません。
+グループ名はパッケージの `package.json` の `name` です。`name` がなければディレクトリ名です。カタログファイルがないパッケージはグループになりません。
 
 ## 依存パッケージの見つけ方
 
