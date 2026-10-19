@@ -8,7 +8,9 @@ const { zukan } = process.env.ZUKAN_FROM_DIST
   ? await import('svelte-zukan/vite')
   : await import('../../../../../packages/svelte-zukan/src/lib/vite/index.js');
 
-export const config = (paths?: { base: '' | `/${string}` }) =>
+export const config = (
+  kit: { paths?: { base: '' | `/${string}` }; output?: { bundleStrategy: 'split' | 'single' | 'inline' } } = {}
+) =>
   defineConfig({
     resolve: {
       alias: process.env.ZUKAN_FROM_DIST
@@ -22,7 +24,7 @@ export const config = (paths?: { base: '' | `/${string}` }) =>
             }
           ]
     },
-    plugins: [zukan({ build: true }), sveltekit({ adapter: adapter(), paths })]
+    plugins: [zukan({ build: true }), sveltekit({ adapter: adapter(), ...kit })]
   });
 
 export default config();
