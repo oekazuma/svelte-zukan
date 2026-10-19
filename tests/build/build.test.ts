@@ -1,10 +1,14 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, globSync, readFileSync, rmSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
-import { preview } from 'vite';
+import { chromium } from 'playwright';
+import { normalizePath, preview } from 'vite';
 import { beforeAll, expect, test } from 'vitest';
 
 const fixtures = import.meta.dirname;
+// the Windows CI job runs this file without a browser
+const hasChromium = existsSync(chromium.executablePath());
 const vite = join(fixtures, 'node_modules/vite/bin/vite.js');
 // a production build: none of vitest's variables (ZUKAN_FROM_DIST=1 builds with the packaged library)
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -33,6 +37,13 @@ const missing = (dir: string, ids: string[]) => {
 
 const catalogJs = (dir: string) =>
   globSync('zukan-dist/_zukan/*.js', { cwd: dir }).map((f) => ({ f, code: readFileSync(join(dir, f), 'utf8') }));
+
+/** text files of the catalog that contain a local absolute path */
+const withLocalPaths = (dir: string) =>
+  globSync('zukan-dist/**/*.{html,js,css,json}', { cwd: dir }).filter((f) => {
+    const text = readFileSync(join(dir, f), 'utf8');
+    return [fixtures, normalizePath(fixtures), homedir(), normalizePath(homedir())].some((p) => text.includes(p));
+  });
 
 beforeAll(() => {
   execFileSync(process.execPath, [join(fixtures, 'monorepo/setup.mjs')]);
@@ -64,9 +75,10 @@ test('kit monorepo build', { timeout: 120_000 }, () => {
   const all = js.map(({ code }) => code).join('\n');
   for (const text of ['Long title', 'A card from']) expect(all).toContain(text);
   expect(unloadedCss(dir)).toEqual([]);
+  expect(withLocalPaths(dir)).toEqual([]);
 });
 
-test('kit monorepo build under paths.base', { timeout: 120_000 }, () => {
+test('kit monorepo build under paths.base', { timeout: 180_000 }, async () => {
   const dir = join(fixtures, 'monorepo/apps/catalog');
   build(dir, ['--config', 'vite.config.base.ts']);
   const html = readFileSync(join(dir, 'zukan-dist/index.html'), 'utf8');
@@ -74,6 +86,36 @@ test('kit monorepo build under paths.base', { timeout: 120_000 }, () => {
   expect(html).toContain('src="./_zukan/');
   const all = [html, ...catalogJs(dir).map(({ code }) => code)].join('\n');
   expect(all).not.toContain('/app/_zukan');
+  expect(withLocalPaths(dir)).toEqual([]);
+  if (!hasChromium) return;
+
+  // the catalog starts in a browser, and SvelteKit's runtime APIs give the values the docs promise
+  const server = await preview({
+    root: dir,
+    configFile: join(dir, 'vite.config.base.ts'),
+    logLevel: 'error',
+    preview: { port: 0 }
+  });
+  const browser = await chromium.launch();
+  try {
+    const origin = new URL(server.resolvedUrls!.local[0]).origin;
+    const page = await browser.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(`${origin}/app/__zukan/#/preview/@fixture/ui/lib/PageInfo?section=Runtime%20API`);
+    await expect.poll(() => page.locator('dd').textContent(), { timeout: 30_000 }).toBe('""');
+    // a new page: a preview ignores hash changes to other routes
+    const detail = await browser.newPage();
+    detail.on('pageerror', (e) => errors.push(e.message));
+    await detail.goto(`${origin}/app/__zukan/#/@fixture/ui/lib/Card`);
+    for (const name of ['Basic', 'Long title'])
+      await expect.poll(() => detail.getByRole('heading', { level: 2, name }).count(), { timeout: 30_000 }).toBe(1);
+    await expect.poll(() => detail.getByText('A card from').count(), { timeout: 30_000 }).toBe(1);
+    expect(errors).toEqual([]);
+  } finally {
+    await browser.close();
+    await server.close();
+  }
 });
 
 /** CSS files of the catalog that neither index.html nor any catalog JS file names */
@@ -98,6 +140,7 @@ test('plain vite build', { timeout: 120_000 }, async () => {
   expect(existsSync(join(dir, 'dist/index.html'))).toBe(true);
   expect(existsSync(join(dir, 'zukan-dist/index.html'))).toBe(true);
   expect(missing(dir, ['vite-svelte/lib/Counter'])).toEqual([]);
+  expect(withLocalPaths(dir)).toEqual([]);
 
   // `vite preview` serves the static catalog too
   const server = await preview({
