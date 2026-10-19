@@ -4,7 +4,7 @@ export type ZukanSection = { title: string; code: string };
 
 export type ZukanMeta = { sections: ZukanSection[]; doc: string | null };
 
-export type ZukanModule = { default: Component; __zukan?: ZukanMeta };
+export type ZukanModule = { default: Component };
 
 /** a group of directories to search for catalog files; `dirs` are absolute and normalized */
 export type CatalogGroup = { name: string; dirs: string[] };
@@ -13,4 +13,7 @@ export type CatalogGroup = { name: string; dirs: string[] };
 export type CatalogItem = { group: string; name: string; dir: string; path: string; file: string };
 
 /** an item of the virtual catalog module (`file` is left out so absolute paths stay out of the build) */
-export type Entry = Omit<CatalogItem, 'file'> & { load: () => Promise<ZukanModule> };
+export type Entry = Omit<CatalogItem, 'file'> & {
+  load: () => Promise<ZukanModule>;
+  meta: () => Promise<{ default: ZukanMeta }>;
+};

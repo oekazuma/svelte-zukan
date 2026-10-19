@@ -3,14 +3,15 @@ import { render } from 'vitest-browser-svelte';
 import EntryList from './EntryList.svelte';
 
 const load = () => Promise.reject(new Error('unused'));
+const meta = () => Promise.resolve({ default: { sections: [], doc: null } });
 
 describe('EntryList', () => {
   it('shows dir to tell same names apart', async () => {
     const screen = await render(EntryList, {
       props: {
         entries: [
-          { group: 'ui', name: 'Button', dir: 'lib/forms', path: 'ui/lib/forms/Button', load },
-          { group: 'ui', name: 'Button', dir: 'lib/nav', path: 'ui/lib/nav/Button', load }
+          { group: 'ui', name: 'Button', dir: 'lib/forms', path: 'ui/lib/forms/Button', load, meta },
+          { group: 'ui', name: 'Button', dir: 'lib/nav', path: 'ui/lib/nav/Button', load, meta }
         ]
       }
     });

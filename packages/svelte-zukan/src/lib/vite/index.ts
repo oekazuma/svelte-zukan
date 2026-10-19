@@ -4,12 +4,12 @@ import { marked } from 'marked';
 import { normalizePath, type Plugin } from 'vite';
 import type { CatalogGroup } from '../types.js';
 import { discoverGroups, listCatalog } from './discover.js';
-import { transformZukan } from './extract.js';
+import { extractSections } from './extract.js';
 import { renderHtml } from './html.js';
 import { detectSvelteKit } from './kit.js';
-import { SVELTE_STYLE_ID, createMatchers } from './matchers.js';
+import { createMatchers } from './matchers.js';
 import { appFile, extendFsAllow, isInside, libDir, resolveOptions, type ZukanOptions } from './options.js';
-import { CATALOG, ENTRY, generateCatalogModule, generateEntryModule } from './virtual.js';
+import { CATALOG, ENTRY, META, generateCatalogModule, generateEntryModule } from './virtual.js';
 
 export type { ZukanOptions };
 
@@ -18,9 +18,7 @@ const ENTRY_SRC = '/@id/__x00__' + ENTRY;
 const OUT_PREFIX = '_zukan/';
 
 export function zukan(options: ZukanOptions = {}): Plugin {
-  const { catalogId, isCatalogId, isCatalogFile, isDocFile, docFileOf, catalogFileOf } = createMatchers(
-    options.suffix ?? 'zukan'
-  );
+  const { isCatalogFile, isDocFile, docFileOf } = createMatchers(options.suffix ?? 'zukan');
   let root = '';
   let groups: CatalogGroup[] = [];
   let resolved: ReturnType<typeof resolveOptions>;
@@ -158,9 +156,31 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       }
     },
     resolveId(id) {
-      if (id === ENTRY || id === CATALOG) return '\0' + id;
+      if (id === ENTRY || id === CATALOG || id.startsWith(META)) return '\0' + id;
     },
     load(id) {
+      if (id.startsWith('\0' + META)) {
+        const raw = id.slice(META.length + 1);
+        // the dev server may already have decoded part of the id (e.g. `%20`)
+        let path = raw;
+        try {
+          path = decodeURIComponent(raw);
+        } catch {
+          // keep the raw id
+        }
+        // listed again on every load, so that files added after the start are found
+        const item = listCatalog(groups, resolved.suffix).find((i) => i.path === path);
+        if (!item) throw new Error(`svelte-zukan: no catalog file for ID "${path}"`);
+        this.addWatchFile(item.file);
+        const docPath = docFileOf(item.file);
+        let doc: string | null = null;
+        if (existsSync(docPath)) {
+          this.addWatchFile(docPath);
+          doc = marked.parse(readFileSync(docPath, 'utf-8'), { async: false });
+        }
+        const sections = extractSections(readFileSync(item.file, 'utf-8'), item.file);
+        return `export default ${JSON.stringify({ sections, doc })};\n`;
+      }
       if (id === '\0' + CATALOG) return generateCatalogModule(listCatalog(groups, resolved.suffix));
       if (id === '\0' + ENTRY) {
         // relative, so that absolute paths do not end up in the static build
@@ -204,33 +224,20 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         if (local) logger.info(`  ➜  zukan:   ${local}__zukan/`);
       };
     },
-    transform: {
-      filter: { id: { include: catalogId, exclude: [/^\0/, SVELTE_STYLE_ID] } },
-      handler(code, id) {
-        if (!isCatalogId(id)) return;
-        const filename = id.split(/[?#]/)[0];
-        const docPath = docFileOf(filename);
-        let doc: string | null = null;
-        if (existsSync(docPath)) {
-          this.addWatchFile(docPath);
-          doc = marked.parse(readFileSync(docPath, 'utf-8'), { async: false });
-        }
-        return transformZukan(code, filename, doc);
-      }
-    },
     hotUpdate({ type, file, modules, timestamp }) {
       const { moduleGraph } = this.environment;
+      // the metadata of an entry depends on its catalog file and its .md, which the component's module does not track
+      const metas = () => [...moduleGraph.idToModuleMap.values()].filter((m) => m.id?.startsWith('\0' + META));
       let targets: Iterable<(typeof modules)[number]>;
       if (isDocFile(file)) {
-        // the module graph is keyed by normalized paths; the catalog file may not be in it yet
-        targets = moduleGraph.getModulesByFile(normalizePath(catalogFileOf(file))) ?? [];
+        targets = metas();
       } else if (type === 'update' && isCatalogFile(file)) {
-        targets = modules;
+        targets = [...modules, ...metas()];
       } else if (isCatalogFile(file) && scanned().some((dir) => isInside(normalizePath(file), dir))) {
         // created or deleted: the list is rebuilt when the module is loaded again, and Vite does not
-        // invalidate the file's own module on add or unlink, so a re-created file would keep its old transform
+        // invalidate the file's own module on add or unlink, so a re-created file would keep its old module
         const list = moduleGraph.getModuleById('\0' + CATALOG);
-        targets = list ? [...modules, list] : modules;
+        targets = [...modules, ...metas(), ...(list ? [list] : [])];
       } else return;
 
       for (const mod of targets) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);

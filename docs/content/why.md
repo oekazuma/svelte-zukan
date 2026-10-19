@@ -33,7 +33,7 @@ svelte-zukan does one thing: it shows your Svelte components in a catalog. It is
 
 ## Why choose svelte-zukan
 
-- **Small.** The plugin and its two runtime dependencies (`marked` and `magic-string`) are about 1 MB. There is nothing else to install, update, or keep compatible
+- **Small.** The plugin and its one runtime dependency (`marked`) are about 1 MB. There is nothing else to install, update, or keep compatible
 - **Nothing to configure.** One line in `vite.config.ts`. Your aliases, plugins, and CSS pipeline already apply, because the catalog runs on your app's own dev server. There is no second process to start
 - **Nothing new to learn.** A catalog file is an ordinary Svelte component. You import your component and write examples in the same Svelte 5 code you use everywhere else
 - **Next to your code.** `Button.zukan.svelte` and `Button.zukan.md` sit next to `Button.svelte`, so moving or deleting a component takes its catalog with it

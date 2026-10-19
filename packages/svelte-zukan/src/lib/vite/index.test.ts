@@ -16,8 +16,6 @@ import { ENTRY, generateCatalogModule, generateEntryModule } from './virtual.js'
 // hooks are called with hand-made fakes, so the plugin is typed loosely
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const plugin = zukan() as any;
-// transformZukan escapes "<" as < in the injected JSON
-const h1 = '\\u003ch1>Foo\\u003c/h1>';
 const source = '<Section title="Foo"><div>x</div></Section>';
 
 let dir: string;
@@ -30,30 +28,11 @@ beforeAll(async () => {
   docFile = path.join(dir, 'Foo.zukan.md');
   await writeFile(zukanFile, source);
   await writeFile(docFile, '# Foo');
-  await writeFile(path.join(dir, 'Foo.catalog.md'), '# Foo');
 });
 
-const transform = (code: string, id: string, p = plugin, ctx = { addWatchFile: vi.fn() }) =>
-  p.transform.handler.call(ctx, code, id);
-
 describe('createMatchers', () => {
-  it('matches catalog files, with or without a query', () => {
-    const { isCatalogId } = createMatchers('zukan');
-    expect(isCatalogId('/a/Foo.zukan.svelte')).toBe(true);
-    expect(isCatalogId('/a/Foo.zukan.svelte?v=1')).toBe(true);
-  });
-
-  it('rejects style modules, virtual modules and other files', () => {
-    const { isCatalogId } = createMatchers('zukan');
-    expect(isCatalogId('/a/Foo.zukan.svelte?svelte&type=style&lang.css')).toBe(false);
-    expect(isCatalogId('\0/a/Foo.zukan.svelte')).toBe(false);
-    expect(isCatalogId('/a/Foo.svelte')).toBe(false);
-  });
-
   it('follows the suffix', () => {
-    const { isCatalogId, isCatalogFile, isDocFile } = createMatchers('catalog');
-    expect(isCatalogId('/a/Foo.catalog.svelte')).toBe(true);
-    expect(isCatalogId('/a/Foo.zukan.svelte')).toBe(false);
+    const { isCatalogFile, isDocFile } = createMatchers('catalog');
     expect(isCatalogFile('/a/Foo.catalog.svelte')).toBe(true);
     expect(isCatalogFile('/a/Foo.zukan.svelte')).toBe(false);
     expect(isDocFile('/a/Foo.catalog.md')).toBe(true);
@@ -74,8 +53,7 @@ describe('createMatchers', () => {
   });
 
   it('is case-sensitive, using the suffix verbatim', () => {
-    const { isCatalogId, isCatalogFile } = createMatchers('zukan');
-    expect(isCatalogId('/a/Foo.ZUKAN.svelte')).toBe(false);
+    const { isCatalogFile } = createMatchers('zukan');
     expect(isCatalogFile('/a/Foo.ZUKAN.svelte')).toBe(false);
   });
 
@@ -85,106 +63,45 @@ describe('createMatchers', () => {
   });
 });
 
-describe('transform', () => {
-  it('uses a hook filter', () => {
-    expect(plugin.name).toBe('vite-plugin-svelte-zukan');
-    expect(plugin.enforce).toBe('pre');
-    expect(plugin.transform.filter.id).toHaveProperty('include');
-    expect(plugin.transform.filter.id).toHaveProperty('exclude');
-  });
-
-  it('filter agrees with isCatalogId', () => {
-    const { isCatalogId } = createMatchers('zukan');
-    const { include, exclude } = plugin.transform.filter.id as { include: RegExp; exclude: RegExp[] };
-    const ids = [
-      '/a/Foo.zukan.svelte',
-      '/a/Foo.zukan.svelte?v=1',
-      '/a/Foo.zukan.svelte#x',
-      '/a/Foo.zukan.svelte?svelte&type=style&lang.css',
-      '/a/Foo.zukan.svelte?foo&svelte&type=style',
-      '\0/a/Foo.zukan.svelte',
-      '/a/Foo.svelte',
-      '/a/Foo.zukan.svelte.ts',
-      '/a/Foo.catalog.svelte',
-      '/a/Foo.zukan.md'
-    ];
-    for (const id of ids) {
-      expect(include.test(id) && !exclude.some((r) => r.test(id)), id).toBe(isCatalogId(id));
-    }
-  });
-
-  it('injects doc html', () => {
-    const ctx = { addWatchFile: vi.fn() };
-    const result = transform(source, zukanFile, plugin, ctx);
-    expect(result.code).toContain(h1);
-    expect(result.map).toBeDefined();
-    expect(ctx.addWatchFile).toHaveBeenCalledWith(docFile);
-  });
-
-  it('reads Foo.<suffix>.md for a custom suffix', () => {
-    const catalog = zukan({ suffix: 'catalog' }) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const ctx = { addWatchFile: vi.fn() };
-    const result = transform(source, path.join(dir, 'Foo.catalog.svelte'), catalog, ctx);
-    expect(result.code).toContain(h1);
-    expect(ctx.addWatchFile).toHaveBeenCalledWith(path.join(dir, 'Foo.catalog.md'));
-  });
-
-  it('doc is null without Foo.zukan.md', async () => {
-    const other = await mkdtemp(path.join(tmpdir(), 'zukan-'));
-    const ctx = { addWatchFile: vi.fn() };
-    const result = transform(source, path.join(other, 'Foo.zukan.svelte'), plugin, ctx);
-    expect(result.code).toContain('"doc":null');
-    expect(ctx.addWatchFile).not.toHaveBeenCalled();
-  });
-
-  it('handler ignores non-catalog ids', () => {
-    expect(transform(source, '/a/Foo.svelte')).toBeUndefined();
-  });
-
-  it('strips query from id', () => {
-    const ctx = { addWatchFile: vi.fn() };
-    const result = transform(source, `${zukanFile}?v=123`, plugin, ctx);
-    expect(result.code).toContain(h1);
-    expect(ctx.addWatchFile).toHaveBeenCalledWith(docFile);
-  });
-});
-
 describe('hotUpdate', () => {
-  const setup = (consumer: 'client' | 'server', found: Set<unknown> | null = new Set([{ id: 'mod' }])) => {
+  const metaMod = { id: '\0virtual:svelte-zukan/meta/app%2FA' };
+  const setup = (consumer: 'client' | 'server', metas: Map<string, unknown> = new Map([[metaMod.id, metaMod]])) => {
     const ctx = {
       environment: {
         config: { consumer },
         hot: { send: vi.fn() },
         moduleGraph: {
-          getModulesByFile: vi.fn(() => found ?? undefined),
+          idToModuleMap: metas,
           invalidateModule: vi.fn()
         }
       }
     };
     const run = (type: string, file: string, modules: unknown[] = []) =>
       plugin.hotUpdate.call(ctx, { type, file, modules, timestamp: 1 });
-    return { ctx, run, mod: [...(found ?? [])][0] };
+    return { ctx, run };
   };
 
-  it.each(['create', 'update', 'delete'])('invalidates the catalog file on %s of its .md', (type) => {
-    const { mod, ctx, run } = setup('client');
+  it.each(['create', 'update', 'delete'])('invalidates the metadata on %s of an .md', (type) => {
+    const { ctx, run } = setup('client');
     expect(run(type, docFile)).toEqual([]);
-    expect(ctx.environment.moduleGraph.getModulesByFile).toHaveBeenCalledWith(normalizePath(zukanFile));
-    expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(mod);
+    expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(metaMod);
     expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
     expect(ctx.environment.hot.send).not.toHaveBeenCalledWith({ type: 'full-reload' });
   });
 
-  it('does not throw when the catalog file is not in the module graph', () => {
-    const { ctx, run } = setup('client', null);
+  it('does not invalidate other modules of the graph', () => {
+    const other = { id: '/a/Button.svelte' };
+    const { ctx, run } = setup('client', new Map([[other.id, other]]));
     expect(run('create', docFile)).toEqual([]);
     expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
   });
 
   it('reloads on catalog file update', () => {
-    const { mod, ctx, run } = setup('client');
+    const { ctx, run } = setup('client');
+    const mod = { id: zukanFile };
     expect(run('update', zukanFile, [mod])).toEqual([]);
-    expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(mod);
+    const invalidated = ctx.environment.moduleGraph.invalidateModule.mock.calls.map((c: unknown[]) => c[0]);
+    expect(invalidated).toEqual(expect.arrayContaining([mod, metaMod]));
     expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
   });
 
@@ -398,6 +315,60 @@ describe('virtual modules', () => {
   });
 });
 
+describe('metadata modules', () => {
+  const meta = (path: string) => `\0virtual:svelte-zukan/meta/${path}`;
+
+  it('resolves the metadata of an entry and lists it in the catalog', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    expect(p.resolveId('virtual:svelte-zukan/meta/app%2FA')).toBe(meta('app%2FA'));
+    expect(p.load('\0virtual:svelte-zukan/catalog')).toContain('import("virtual:svelte-zukan/meta/app%2FA")');
+  });
+
+  it('exports the sections and no absolute path', async () => {
+    const { tmp, root } = await makeApp();
+    const { p } = boot(root);
+    const addWatchFile = vi.fn();
+    const code = p.load.call({ addWatchFile }, meta('app%2FA'));
+    expect(code).toContain('"title":"Foo"');
+    expect(code).toContain('"doc":null');
+    expect(code).not.toContain(tmp);
+    expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/A.zukan.svelte`);
+  });
+
+  it('renders the .md next to the file and watches it', async () => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/A.zukan.md'), '# A');
+    const { p } = boot(root);
+    const addWatchFile = vi.fn();
+    expect(p.load.call({ addWatchFile }, meta('app%2FA'))).toContain('<h1>A</h1>');
+    expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/A.zukan.md`);
+  });
+
+  it('reads B.<suffix>.md for a custom suffix', async () => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/B.catalog.svelte'), '<Section title="B"><p>b</p></Section>');
+    await writeFile(path.join(root, 'src/B.catalog.md'), '# B');
+    const { p } = boot(root, { suffix: 'catalog' });
+    const addWatchFile = vi.fn();
+    expect(p.load.call({ addWatchFile }, meta('app%2FB'))).toContain('<h1>B</h1>');
+    expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/B.catalog.md`);
+  });
+
+  it('throws for an unknown ID', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    expect(() => p.load.call({ addWatchFile: vi.fn() }, meta('app%2FNope'))).toThrow(/no catalog file/);
+  });
+
+  it.each(['app%2FMy%20Button', 'app%2FMy Button'])('finds an ID with a space (%s)', async (id) => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/My Button.zukan.svelte'), '<Section title="B"><p>b</p></Section>');
+    const { p } = boot(root);
+    expect(p.load.call({ addWatchFile: vi.fn() }, meta(id))).toContain('"title":"B"');
+  });
+});
+
 describe('configureServer', () => {
   type Res = { status?: string | number; body?: string; type?: string; location?: string };
   const request = (mw: (...a: unknown[]) => void, url: string) =>
@@ -483,36 +454,38 @@ describe('hotUpdate of the catalog list', () => {
     const { root, outside } = await makeApp();
     const { p } = boot(root);
     const catalogMod = { id: '\0virtual:svelte-zukan/catalog' };
+    const metaMod = { id: '\0virtual:svelte-zukan/meta/app%2FA' };
     const ctx = {
       environment: {
         config: { consumer },
         hot: { send: vi.fn() },
         moduleGraph: {
           getModuleById: vi.fn((id: string) => (id === catalogMod.id ? catalogMod : undefined)),
-          getModulesByFile: vi.fn(() => undefined),
+          idToModuleMap: new Map([[metaMod.id, metaMod]]),
           invalidateModule: vi.fn()
         }
       }
     };
     const run = (type: string, file: string, modules: unknown[] = []) =>
       p.hotUpdate.call(ctx, { type, file, modules, timestamp: 1 });
-    return { root, outside, ctx, run, catalogMod };
+    return { root, outside, ctx, run, catalogMod, metaMod };
   };
 
   it.each(['create', 'delete'])('invalidates the list on %s inside a scanned dir', async (type) => {
-    const { root, ctx, run, catalogMod } = await setup();
+    const { root, ctx, run, catalogMod, metaMod } = await setup();
     expect(run(type, `${root}/src/lib/New.zukan.svelte`)).toEqual([]);
-    expect(ctx.environment.moduleGraph.invalidateModule.mock.calls[0][0]).toBe(catalogMod);
+    const invalidated = ctx.environment.moduleGraph.invalidateModule.mock.calls.map((c: unknown[]) => c[0]);
+    expect(invalidated).toEqual(expect.arrayContaining([catalogMod, metaMod]));
     expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
     expect(ctx.environment.hot.send).not.toHaveBeenCalledWith({ type: 'full-reload' });
   });
 
   it.each(['create', 'delete'])('also invalidates the file itself on %s', async (type) => {
-    const { root, ctx, run, catalogMod } = await setup();
+    const { root, ctx, run, catalogMod, metaMod } = await setup();
     const own = { id: `${root}/src/lib/New.zukan.svelte` };
     expect(run(type, `${root}/src/lib/New.zukan.svelte`, [own])).toEqual([]);
     const invalidated = ctx.environment.moduleGraph.invalidateModule.mock.calls.map((c: unknown[]) => c[0]);
-    expect(invalidated).toEqual(expect.arrayContaining([own, catalogMod]));
+    expect(invalidated).toEqual(expect.arrayContaining([own, catalogMod, metaMod]));
   });
 
   it('server environment invalidates without sending', async () => {
@@ -832,5 +805,11 @@ describe('build', () => {
 describe('public API', () => {
   it('exports only zukan', () => {
     expect(Object.keys(api)).toEqual(['zukan']);
+  });
+
+  it('is a pre plugin without a transform hook', () => {
+    expect(plugin.name).toBe('vite-plugin-svelte-zukan');
+    expect(plugin.enforce).toBe('pre');
+    expect(plugin.transform).toBeUndefined();
   });
 });

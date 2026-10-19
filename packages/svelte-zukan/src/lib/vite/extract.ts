@@ -1,6 +1,5 @@
-import MagicString from 'magic-string';
 import { parse, type AST } from 'svelte/compiler';
-import type { ZukanMeta, ZukanSection } from '../types.js';
+import type { ZukanSection } from '../types.js';
 
 type Node = { type: string; start: number; end: number } & Record<string, unknown>;
 type Ast = AST.Root;
@@ -227,15 +226,4 @@ function parseZukan(source: string, filename: string): Ast {
 
 export function extractSections(source: string, filename: string): ZukanSection[] {
   return sectionsFrom(parseZukan(source, filename), source, filename);
-}
-
-export function transformZukan(source: string, filename: string, doc: string | null) {
-  const ast = parseZukan(source, filename);
-  const meta: ZukanMeta = { sections: sectionsFrom(ast, source, filename), doc };
-  // `<` is escaped so a "</script>" inside the code strings cannot end the script block
-  const exported = `export const __zukan = ${JSON.stringify(meta).replace(/</g, '\\u003c')};`;
-  const s = new MagicString(source);
-  if (ast.module) s.appendLeft((ast.module.content as unknown as Node).start, exported);
-  else s.append(`\n<script module>${exported}</script>\n`);
-  return { code: s.toString(), map: s.generateMap({ hires: 'boundary', source: filename, includeContent: true }) };
 }

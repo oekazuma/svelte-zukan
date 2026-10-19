@@ -15,7 +15,7 @@
       "automerge": true
     },
     {
-      "description": "marked and magic-string ship as runtime dependencies of the published package, so their updates reach every consumer — keep them manually reviewed.",
+      "description": "marked ships as a runtime dependency of the published package, so its updates reach every consumer — keep them manually reviewed.",
       "groupName": "dependencies",
       "matchDepTypes": ["dependencies"],
       "automerge": false
