@@ -1,0 +1,5 @@
+{
+  "name": "vite-svelte",
+  "private": true,
+  "type": "module"
+}

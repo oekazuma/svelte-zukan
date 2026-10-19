@@ -8,6 +8,7 @@ node_modules
 /.svelte-kit
 /build
 /dist
+/zukan-dist
 
 # OS
 .DS_Store
@@ -28,3 +29,12 @@ vite.config.ts.timestamp-*
 .vitest-attachments/
 
 .pnpm-store/
+
+# Superpowers (agent workspace)
+/.superpowers/
+
+# Fixture outputs
+fixtures/**/.svelte-kit
+fixtures/**/build
+fixtures/**/dist
+fixtures/**/zukan-dist

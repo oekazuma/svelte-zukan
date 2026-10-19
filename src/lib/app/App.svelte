@@ -1,0 +1,97 @@
+<script lang="ts">
+  import type { Component, Snippet } from 'svelte';
+  import type { Entry } from '../types.js';
+  import Detail from './Detail.svelte';
+  import { parseHash } from './hash.js';
+  import { messages } from './i18n.js';
+  import List from './List.svelte';
+  import Preview from './Preview.svelte';
+  import Sidebar from './Sidebar.svelte';
+
+  let {
+    catalog,
+    logo,
+    wrapper,
+    title,
+    locale,
+    searched
+  }: {
+    catalog: Entry[];
+    logo: string | null;
+    wrapper: (() => Promise<{ default: Component<{ children: Snippet }> }>) | null;
+    title: string;
+    locale: 'en' | 'ja';
+    searched: { group: string; dirs: string[] }[];
+  } = $props();
+
+  let hash = $state(location.hash);
+
+  const t = $derived(messages[locale]);
+  const route = $derived(parseHash(hash));
+  const entry = $derived(route.view === 'list' ? undefined : catalog.find((e) => e.path === route.path));
+</script>
+
+<svelte:window onhashchange={() => (hash = location.hash)} />
+
+<svelte:head>
+  <title>{route.view === 'detail' && entry ? `${entry.name} | ${title}` : title}</title>
+</svelte:head>
+
+{#if route.view === 'preview'}
+  {#if entry}
+    {#key hash}
+      <Preview {entry} section={route.section} {wrapper} {t} />
+    {/key}
+  {:else}
+    <p>{t.notFound}</p>
+  {/if}
+{:else}
+  <div class="zukan">
+    <Sidebar entries={catalog} current={entry?.path} {logo} {title} {t} />
+    <main>
+      {#if route.view === 'list'}
+        <List entries={catalog} {searched} {t} />
+      {:else if entry}
+        <Detail {entry} {t} />
+      {:else}
+        <h1>{t.notFound}</h1>
+      {/if}
+    </main>
+  </div>
+{/if}
+
+<style>
+  /* the catalog is its own page; the preview's height is measured from its content, so no body margin either */
+  :global(body) {
+    margin: 0;
+  }
+
+  /* internal theme; the catalog page loads no app CSS, so these are not meant to be overridden */
+  .zukan {
+    --_bg: #fff;
+    --_text: #1f2328;
+    --_muted: #59636e;
+    --_border: #d1d9e0;
+    --_accent: #0969da;
+    --_code-bg: #f6f8fa;
+    --_font: system-ui, sans-serif;
+    --_mono: ui-monospace, monospace;
+    --_sidebar-width: 240px;
+
+    display: grid;
+    grid-template-columns: var(--_sidebar-width) minmax(0, 1fr);
+    min-height: 100vh;
+    background: var(--_bg);
+    color: var(--_text);
+    font-family: var(--_font);
+  }
+
+  main {
+    padding: 24px;
+  }
+
+  h1 {
+    margin: 0 0 16px;
+    font-size: 24px;
+  }
+</style>

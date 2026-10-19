@@ -1,0 +1,26 @@
+import { fileURLToPath } from 'node:url';
+import adapter from '@sveltejs/adapter-static';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { defineConfig } from 'vite';
+
+// ZUKAN_FROM_DIST=1: the built package (`pnpm build`), linked by setup.mjs; otherwise the repo's source
+const { zukan } = process.env.ZUKAN_FROM_DIST
+  ? await import('svelte-zukan/vite')
+  : await import('../../../../src/lib/vite/index.js');
+
+export const config = (paths?: { base: '' | `/${string}` }) =>
+  defineConfig({
+    resolve: {
+      alias: process.env.ZUKAN_FROM_DIST
+        ? []
+        : [
+            {
+              find: /^svelte-zukan$/,
+              replacement: fileURLToPath(new URL('../../../../src/lib/index.ts', import.meta.url))
+            }
+          ]
+    },
+    plugins: [zukan({ build: true }), sveltekit({ adapter: adapter(), paths })]
+  });
+
+export default config();
