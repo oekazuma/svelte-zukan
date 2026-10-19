@@ -10,7 +10,10 @@ The catalog is a hash-routed SPA. It has only one HTML file, so deep links work 
 | ----------------------------------------- | -------------------------------------- |
 | `/__zukan/`                               | List                                   |
 | `/__zukan/#/<ID>`                         | Detail page                            |
+| `/__zukan/#/<ID>?section=<title>`         | Detail page, scrolled to that section  |
 | `/__zukan/#/preview/<ID>?section=<title>` | Preview for the iframe (no catalog UI) |
+
+Each section heading on a detail page links to that section, so you can share it.
 
 ## IDs
 

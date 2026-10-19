@@ -133,6 +133,72 @@ describe('App', () => {
     await expect.element(screen.getByText(/has no <Section>/)).not.toBeInTheDocument();
   });
 
+  const twoSections = () =>
+    Promise.resolve({
+      default: {
+        sections: [
+          { title: 'One', code: '<p>1</p>' },
+          { title: 'Two', code: '<p>2</p>' }
+        ],
+        doc: null
+      }
+    });
+
+  it('each section heading links to itself', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = twoSections;
+    const screen = await render(App, { props });
+    await expect
+      .element(screen.getByRole('heading', { level: 2, name: 'Two' }).getByRole('link'))
+      .toHaveAttribute('href', '#/ui/Card?section=Two');
+  });
+
+  it('a detail URL with ?section scrolls that section into view', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card?section=Two');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      expect(spy.mock.contexts.map((el) => (el as Element).textContent)).toEqual(['Two']);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('changing only the section scrolls without remounting the page', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      const one = screen.getByRole('heading', { level: 2, name: 'One' });
+      await expect.element(one).toBeInTheDocument();
+      const node = one.element();
+      expect(spy).not.toHaveBeenCalled();
+      await setHash('#/ui/Card?section=One');
+      await expect.poll(() => spy.mock.calls.length).toBe(1);
+      expect(spy.mock.contexts[0]).toBe(node);
+      expect(one.element()).toBe(node);
+      expect(document.title).toBe('Card | zukan');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('an unknown section shows the page without scrolling', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card?section=Nope');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('follows hashchange', async () => {
     const { props } = setup('');
     const screen = await render(App, { props });

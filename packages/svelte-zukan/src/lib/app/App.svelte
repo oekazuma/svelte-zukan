@@ -49,7 +49,7 @@
     }
     hash = next;
     // the browser keeps the scroll position on a hash change; the previous page's position means nothing on the next
-    if (route.view !== 'preview') tick().then(() => scrollTo(0, 0));
+    if (route.view === 'list' || (route.view === 'detail' && route.section === null)) tick().then(() => scrollTo(0, 0));
   }
 </script>
 
@@ -74,7 +74,7 @@
       {#if route.view === 'list'}
         <List entries={catalog} {searched} {t} />
       {:else if entry}
-        <Detail {entry} {t} />
+        <Detail {entry} section={route.view === 'detail' ? route.section : null} {t} />
       {:else}
         <h1>{t.notFound}</h1>
       {/if}

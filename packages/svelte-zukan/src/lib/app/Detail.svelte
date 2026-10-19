@@ -6,7 +6,13 @@
   import { formatHash } from './hash.js';
   import type { Messages } from './i18n.js';
 
-  let { entry, t }: { entry: Entry; t: Messages } = $props();
+  let { entry, section = null, t }: { entry: Entry; section?: string | null; t: Messages } = $props();
+
+  // the detail page is not remounted when only the section changes, so the action also runs on update
+  function reveal(node: HTMLElement, active: boolean) {
+    if (active) node.scrollIntoView();
+    return { update: (next: boolean) => next && node.scrollIntoView() };
+  }
 </script>
 
 <h1>
@@ -26,15 +32,13 @@
     {#if !meta.sections.length}
       <p class="empty">{t.noSections}</p>
     {/if}
-    {#each meta.sections as section (section.title)}
-      <h2>{section.title}</h2>
+    {#each meta.sections as s (s.title)}
+      <!-- a hash route of this catalog, not a SvelteKit route -->
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+      <h2 use:reveal={section === s.title}><a href={formatHash('detail', entry.path, s.title)}>{s.title}</a></h2>
       <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
-      <PreviewFrame
-        src={location.pathname + formatHash('preview', entry.path, section.title)}
-        title={section.title}
-        labels={t}
-      />
-      <CodeBlock code={section.code} labels={t} />
+      <PreviewFrame src={location.pathname + formatHash('preview', entry.path, s.title)} title={s.title} labels={t} />
+      <CodeBlock code={s.code} labels={t} />
     {/each}
   {:catch error}
     <p>{t.loadFailed} {error instanceof Error ? error.message : String(error)}</p>
@@ -60,6 +64,16 @@
   h2 {
     margin: 24px 0 8px;
     font-size: 18px;
+  }
+
+  h2 a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  h2 a:hover,
+  h2 a:focus-visible {
+    text-decoration: underline;
   }
 
   .doc {
