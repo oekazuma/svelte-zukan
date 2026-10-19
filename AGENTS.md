@@ -88,7 +88,7 @@ Versioning and publishing go through **Changesets**:
 
 2. On every push to `main`, `.github/workflows/release.yml` runs `changesets/action`. If there are pending changesets, it opens/updates a "Version Packages" PR (bumping `packages/svelte-zukan/package.json` + CHANGELOG). If there are none (including right after that PR is merged), it runs `pnpm run release` (`changeset publish`), which publishes to npm with provenance any public package whose current version is not on npm yet — usually a no-op. `prepublishOnly` runs `pnpm run package`.
 
-**Not released yet**: `packages/svelte-zukan/package.json` has `"private": true`, so `changeset publish` skips it and the Release job does nothing (otherwise the first push to `main` would publish `0.0.1`). Before the first release, remove `"private": true` and add the first changeset in the same PR.
+Publishing uses npm **trusted publishing** (OIDC from `release.yml`, no npm token in the repository); provenance is generated automatically. Do not add an `NPM_TOKEN` secret.
 
 Do **not** bump versions or edit `CHANGELOG.md` manually. `pnpm-workspace.yaml` sets a `minimumReleaseAge` so new dependency releases are only installed after a cooldown — preserve that field when editing the workspace file.
 
