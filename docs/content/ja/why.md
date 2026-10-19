@@ -8,24 +8,24 @@ svelte-zukan がやることは 1 つだけで、Svelte のコンポーネント
 
 ## Storybook と Histoire との比較
 
-|                            | svelte-zukan                                                        | Storybook                                                    | Histoire                                                    |
-| -------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------- |
-| インストール量<sup>1</sup> | **1.0 MB、4 パッケージ**                                            | 78 MB、82 パッケージ                                         | 90 MB、218 パッケージ                                       |
-| Svelte 5                   | 対応                                                                | 対応                                                         | 非対応。Svelte プラグインの対応は Svelte 3 と 4<sup>2</sup> |
-| 導入                       | `vite.config.ts` に `zukan()` を足す                                | `.storybook/` ディレクトリに専用の設定ファイルを置く         | `histoire.config.ts` に Svelte プラグインを登録する         |
-| 動く場所                   | アプリ自身の dev サーバーの `/__zukan/`                             | 専用の dev サーバー                                          | 専用の dev サーバー                                         |
-| 書くもの                   | `<Section>` を並べた普通の Svelte コンポーネント                    | Svelte CSF（`defineMeta`、`<Story>`）または CSF のストーリー | `<Hst.Story>` と `<Hst.Variant>` を使ったストーリー         |
-| コンポーネントごとの説明   | コンポーネントの隣に置く Markdown ファイル                          | MDX と autodocs                                              | Markdown                                                    |
-| コード表示                 | セクションごとに、使っている `<script>` の定義も表示                | あり                                                         | あり                                                        |
-| プレビューの幅             | プリセットとドラッグ                                                | ビューポートのツールバー                                     | プリセット                                                  |
-| ライトとダークの背景       | あり                                                                | あり                                                         | あり                                                        |
-| 検索                       | あり                                                                | あり                                                         | あり                                                        |
-| props の操作パネル         | なし（意図的。下記を参照）                                          | あり                                                         | あり                                                        |
-| イベントのログ             | なし                                                                | あり（actions）                                              | あり                                                        |
-| テストと a11y の検査       | なし                                                                | あり（操作テスト、a11y アドオン、ビジュアルテスト）          | なし                                                        |
-| SvelteKit の `$app/*`      | 本物のモジュールを既定の状態で使う                                  | モック（`$app/state` を含む）                                | —                                                           |
-| 静的な書き出し             | アプリの `vite build` で `build: true`。どのパスでも動く            | `storybook build`                                            | `histoire build`                                            |
-| 動作条件                   | Vite 8 以上、Svelte 5、SvelteKit 3 以上（または素の Vite + Svelte） | 複数のバンドラーとフレームワーク                             | Vite。Vue と Svelte 3/4                                     |
+|                            | svelte-zukan                                                                | Storybook                                                    | Histoire                                                    |
+| -------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------- |
+| インストール量<sup>1</sup> | **1.0 MB、4 パッケージ**                                                    | 78 MB、82 パッケージ                                         | 90 MB、218 パッケージ                                       |
+| Svelte 5                   | 対応                                                                        | 対応                                                         | 非対応。Svelte プラグインの対応は Svelte 3 と 4<sup>2</sup> |
+| 導入                       | `vite.config.ts` に `zukan()` を足す                                        | `.storybook/` ディレクトリに専用の設定ファイルを置く         | `histoire.config.ts` に Svelte プラグインを登録する         |
+| 動く場所                   | アプリ自身の dev サーバーの `/__zukan/`                                     | 専用の dev サーバー                                          | 専用の dev サーバー                                         |
+| 書くもの                   | `<Section>` を並べた普通の Svelte コンポーネント                            | Svelte CSF（`defineMeta`、`<Story>`）または CSF のストーリー | `<Hst.Story>` と `<Hst.Variant>` を使ったストーリー         |
+| コンポーネントごとの説明   | コンポーネントの隣に置く Markdown ファイル                                  | MDX と autodocs                                              | Markdown                                                    |
+| コード表示                 | セクションごとに、使っている `<script>` の定義も表示                        | あり                                                         | あり                                                        |
+| プレビューの幅             | プリセットとドラッグ                                                        | ビューポートのツールバー                                     | プリセット                                                  |
+| ライトとダークの背景       | あり                                                                        | あり                                                         | あり                                                        |
+| 検索                       | あり                                                                        | あり                                                         | あり                                                        |
+| props の操作パネル         | なし（意図的。下記を参照）                                                  | あり                                                         | あり                                                        |
+| イベントのログ             | なし                                                                        | あり（actions）                                              | あり                                                        |
+| テストと a11y の検査       | なし                                                                        | あり（操作テスト、a11y アドオン、ビジュアルテスト）          | なし                                                        |
+| SvelteKit の `$app/*`      | 本物のモジュールを既定の状態で使う                                          | モック（`$app/state` を含む）                                | —                                                           |
+| 静的な書き出し             | アプリの `vite build` で `build: true`。どのパスでも動く                    | `storybook build`                                            | `histoire build`                                            |
+| 動作条件                   | Vite 8 以上、Svelte 5.20 以上、SvelteKit 3 以上（または素の Vite + Svelte） | 複数のバンドラーとフレームワーク                             | Vite。Vue と Svelte 3/4                                     |
 
 <sup>1</sup> 2026-10-19 に、空のディレクトリで `npm install` して測りました。どれを選んでも共通する peer dependencies（`svelte`、`vite`、`@sveltejs/kit`）は除いています。Storybook は `storybook` と `@storybook/sveltekit` だけで、アドオンは入れていません。Histoire は `histoire` と `@histoire/plugin-svelte` です。
 
