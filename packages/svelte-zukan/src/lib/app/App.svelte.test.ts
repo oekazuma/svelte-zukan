@@ -155,6 +155,30 @@ describe('App', () => {
     await expect.element(screen.getByRole('searchbox', { name: 'Search' })).toHaveFocus();
   });
 
+  it('/ opens the menu and focuses the search on a narrow screen', async () => {
+    await page.viewport(400, 800);
+    const { props } = setup('');
+    const screen = await render(App, { props });
+    await userEvent.keyboard('/');
+    await expect.element(screen.getByRole('searchbox', { name: 'Search' })).toHaveFocus();
+    await expect.element(screen.getByRole('button', { name: 'Menu' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('navigating scrolls back to the top', async () => {
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    document.body.style.minHeight = '5000px';
+    try {
+      window.scrollTo(0, 1000);
+      expect(window.scrollY).toBe(1000);
+      location.hash = '#/ui/Nope';
+      await expect.poll(() => window.scrollY).toBe(0);
+    } finally {
+      document.body.style.minHeight = '';
+    }
+  });
+
   it('groups are labelled only when there are several', async () => {
     const { props } = setup('');
     const screen = await render(App, { props });

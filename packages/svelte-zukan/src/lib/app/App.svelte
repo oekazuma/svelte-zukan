@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Component, Snippet } from 'svelte';
+  import { tick, type Component, type Snippet } from 'svelte';
   import type { Entry } from '../types.js';
   import Detail from './Detail.svelte';
   import { parseHash } from './hash.js';
@@ -36,6 +36,8 @@
     if (next !== '' && !next.startsWith('#/')) return;
     if (route.view === 'preview' && parseHash(next).view !== 'preview') return;
     hash = next;
+    // the browser keeps the scroll position on a hash change; the previous page's position means nothing on the next
+    if (route.view !== 'preview') tick().then(() => scrollTo(0, 0));
   }
 </script>
 
