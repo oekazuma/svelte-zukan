@@ -27,7 +27,7 @@ pnpm run test      # Vitest: the library's server and browser tests, and the bui
 
 Run `pnpm run format` to auto-fix formatting issues found by `pnpm run lint`.
 
-6. Open pull request
+6. Open pull request. Write commit messages and the PR description in English, using Conventional Commits prefixes (`feat:`, `fix:`, `chore:`, `docs:`). Write changesets in English too.
 
 ## Work with svelte-zukan
 

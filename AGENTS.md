@@ -8,11 +8,11 @@ This is a **pnpm workspace monorepo**. The pnpm version is pinned via `packageMa
 
 Workspace members:
 
-- `packages/svelte-zukan/` — the published library (the only public package). Source is in `src/lib/`. The package consumes itself (dogfooding): `vite.config.ts` registers `zukan({ groups: { ui: 'src/lib', examples: 'src/examples' }, wrapper: '.zukan/Wrapper.svelte', build: true, locale: 'ja' })`, `src/routes/` is a one-page introduction that links to `/__zukan/`, and `src/examples/` holds sample catalog files. `vite build` writes the intro page to `build/` and the catalog to `zukan-dist/`.
+- `packages/svelte-zukan/` — the published library (the only public package). Source is in `src/lib/`. The package consumes itself (dogfooding): `vite.config.ts` registers `zukan({ groups: { ui: 'src/lib', examples: 'src/examples' }, wrapper: '.zukan/Wrapper.svelte', build: true })`, `src/routes/` is a one-page introduction that links to `/__zukan/`, and `src/examples/` holds sample catalog files. `vite build` writes the intro page to `build/` and the catalog to `zukan-dist/`.
 - `example/` — a SvelteKit app that imports `svelte-zukan` as `workspace:*` and so resolves it from `dist/`. It has no tests of its own, but CI's `test` job builds it (`pnpm --filter example build`) as a smoke check of the built package.
 - `tests/build/` (package `build-tests`) — Vitest tests that run `vite build` in a child process on two fixtures and check the written catalog: `monorepo/` (SvelteKit app `apps/catalog` depending on the workspace package `packages/ui`) and `vite-svelte/` (plain Vite + `svelte()`). The fixtures are not workspace members; `monorepo/setup.mjs` links their packages the way pnpm would (directory junctions, so it also works on Windows without admin rights) and links `svelte-zukan` to `packages/svelte-zukan`. The fixtures use the library's **source** unless `ZUKAN_FROM_DIST=1` is set.
 
-`docs/` is not a workspace member: `docs/specs/2026-10-16-catalog.md` is the design (in Japanese) and the source of truth for behaviour; `docs/plans/` holds the implementation plans.
+`docs/` is not a workspace member: `docs/specs/2026-10-16-catalog.md` is the design and the source of truth for behaviour; `docs/plans/` holds the implementation plans.
 
 ## Common commands
 
@@ -85,7 +85,7 @@ Versioning and publishing go through **Changesets**:
    feat: add the `logo` option.
    ```
 
-   Internal-only changes (tests, CI, example app, docs) need **no** changeset.
+   Write changesets in English. Internal-only changes (tests, CI, example app, docs) need **no** changeset.
 
 2. On every push to `main`, `.github/workflows/release.yml` runs `changesets/action`. If there are pending changesets, it opens/updates a "Version Packages" PR (bumping `packages/svelte-zukan/package.json` + CHANGELOG). If there are none (including right after that PR is merged), it runs `pnpm run release` (`changeset publish`), which publishes to npm with provenance any public package whose current version is not on npm yet — usually a no-op. `prepublishOnly` runs `pnpm run package`.
 
@@ -106,6 +106,7 @@ Do **not** bump versions or edit `CHANGELOG.md` manually. `pnpm-workspace.yaml` 
 - Prettier: 120 col, single quotes, no trailing commas, `prettier-plugin-svelte` (`.prettierrc`). Run `pnpm run format` before committing — CI's `lint` job will fail otherwise.
 - ESLint (`eslint.config.js`): `@eslint/js`, `typescript-eslint` and `eslint-plugin-svelte` recommended configs plus `eslint-config-prettier`, ignoring what `.gitignore` ignores. `.svelte` files use `projectService`, which needs the `$app/tsconfig` that `svelte-kit sync` generates (the library's `prepare` script runs it on install); the build fixtures and the example are linted without type information.
 - `.gitignore`: `build`, `dist`, `zukan-dist` and `.svelte-kit` are ignored in every directory, with `!/tests/build/` re-including the build tests package itself. Keep that negation if you touch those lines.
+- Language: everything is in English. Commit messages and PR descriptions use Conventional Commits prefixes (`feat:`, `fix:`, `chore:`, `docs:`), and changesets are in English. The only Japanese kept on purpose is the `ja` dictionary in `src/lib/app/i18n.ts` and the tests that cover Japanese / non-ASCII handling.
 - Svelte 5 only: use runes (`$props`, `$state`, `$derived`, `$effect`) — do not introduce Svelte 4 reactive `$:` syntax. The supported ranges live in `peerDependencies` (`svelte`, `vite`) of `packages/svelte-zukan/package.json`.
 - `marked` and `magic-string` are runtime dependencies of the plugin. Keep them in `dependencies`; Renovate does not auto-merge their updates because they reach every consumer.
 - No new dependencies for small things: file listing uses Node's `fs.globSync` (Node 22.17+), and the UI has its own two-language dictionary instead of an i18n library.

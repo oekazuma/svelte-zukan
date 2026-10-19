@@ -3,10 +3,10 @@
   import Badge from './Badge.svelte';
 </script>
 
-<Section title="基本">
+<Section title="Basic">
   <Badge label="components" />
 </Section>
 
-<Section title="長いラベル">
+<Section title="Long label">
   <Badge label="a-rather-long-group-name" />
 </Section>

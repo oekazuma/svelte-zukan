@@ -18,8 +18,7 @@ export default defineConfig(({ command }) => ({
     zukan({
       groups: { ui: 'src/lib', examples: 'src/examples' },
       wrapper: '.zukan/Wrapper.svelte',
-      build: true,
-      locale: 'ja'
+      build: true
     }),
     sveltekit({
       compilerOptions: {

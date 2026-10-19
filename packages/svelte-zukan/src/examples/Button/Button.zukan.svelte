@@ -3,13 +3,13 @@
   import Button from './Button.svelte';
 
   let count = $state(0);
-  const label = $derived(`${count} 回押した`);
+  const label = $derived(`${count} clicks`);
 </script>
 
-<Section title="基本">
+<Section title="Basic">
   <Button onclick={() => count++}>{label}</Button>
 </Section>
 
-<Section title="無効">
-  <Button disabled>押せない</Button>
+<Section title="Disabled">
+  <Button disabled>Disabled</Button>
 </Section>

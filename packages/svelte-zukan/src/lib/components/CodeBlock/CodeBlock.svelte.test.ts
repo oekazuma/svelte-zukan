@@ -35,9 +35,9 @@ describe('CodeBlock', () => {
   });
 
   it('labels come from props', async () => {
-    const labels = { code: 'コード', copy: 'コピー', copied: 'コピーしました', copyFailed: 'コピーできませんでした' };
+    const labels = { code: 'Source', copy: 'Copy code', copied: 'Copied!', copyFailed: 'Copy error' };
     const screen = await render(CodeBlock, { props: { code: '', labels } });
-    await expect.element(screen.getByText('コード')).toBeInTheDocument();
-    await expect.element(screen.getByRole('button', { name: 'コピー' })).toBeInTheDocument();
+    await expect.element(screen.getByText('Source')).toBeInTheDocument();
+    await expect.element(screen.getByRole('button', { name: 'Copy code' })).toBeInTheDocument();
   });
 });

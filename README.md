@@ -6,18 +6,18 @@
 </p>
 
 <p align="center">
-  Svelte のコンポーネントカタログ。コンポーネントの隣にカタログ用のファイルを置くと、一覧・プレビュー・コード表示がそろいます。
+  A component catalog for Svelte. Put a catalog file next to a component and you get a list, a live preview, and a code view.
 </p>
 
-zukan は日本語で「図鑑」（illustrated encyclopedia）という意味です。
+"zukan" (図鑑) is Japanese for "illustrated encyclopedia".
 
-> svelte-zukan は Svelte の公式プロジェクトではありません（not affiliated with or endorsed by the Svelte team）。ロゴの S の図形は Svelte のロゴに由来します。
+> svelte-zukan is not an official Svelte project (not affiliated with or endorsed by the Svelte team). The S shape in the logo is derived from the Svelte logo.
 
-## リンク
+## Links
 
-- [README](packages/svelte-zukan/README.md)（セットアップ、カタログファイルの書き方、設定）
-- [コントリビューションガイド](CONTRIBUTING.md)
+- [README](packages/svelte-zukan/README.md) (setup, writing catalog files, options)
+- [Contributing guide](CONTRIBUTING.md)
 
-## ライセンス
+## License
 
 [MIT](LICENSE.md)

@@ -1,1 +1,1 @@
-クリックできる基本のボタン。`disabled` などの `<button>` の属性はそのまま渡せる。
+A basic clickable button. Attributes of `<button>`, such as `disabled`, are passed through as-is.

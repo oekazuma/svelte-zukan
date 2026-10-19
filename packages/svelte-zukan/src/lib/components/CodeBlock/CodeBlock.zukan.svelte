@@ -3,10 +3,10 @@
   import CodeBlock from './CodeBlock.svelte';
 </script>
 
-<Section title="基本">
-  <CodeBlock code="<button>押す</button>" />
+<Section title="Basic">
+  <CodeBlock code="<button>Press</button>" />
 </Section>
 
-<Section title="複数行">
-  <CodeBlock code={'const count = $state(0);\nconst label = $derived(`${count} 回`);'} />
+<Section title="Multiple lines">
+  <CodeBlock code={'const count = $state(0);\nconst label = $derived(`${count} clicks`);'} />
 </Section>
