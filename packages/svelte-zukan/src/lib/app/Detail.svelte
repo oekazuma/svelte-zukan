@@ -80,7 +80,6 @@
               <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
               <a href={formatHash('detail', entry.path, s.title)}>{s.title}</a>
             </h2>
-            <!-- one card: the preview with its code under it -->
             <div class="example">
               <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
               <PreviewFrame
@@ -238,7 +237,6 @@
     color: var(--_muted);
   }
 
-  /* the table of contents sits beside the content when the page is wide enough */
   .page {
     container-type: inline-size;
   }

@@ -14,7 +14,6 @@
     )
   );
 
-  // the same name always gets the same color
   const hue = (name: string) => [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 11);
   const id = $props.id();
 </script>

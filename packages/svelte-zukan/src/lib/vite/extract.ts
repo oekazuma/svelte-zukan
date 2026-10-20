@@ -209,7 +209,6 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
  * Same length, newlines kept: offsets and line numbers still point into `source`.
  */
 function parseZukan(source: string, filename: string): Ast {
-  // ponytail: a "<style>" inside a comment or a string is blanked too; harmless unless a "</style>" follows it
   const blanked = source.replace(
     /(<style(?=[\s/>])[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
     (_, open: string, css: string, close: string) => open + css.replace(/[^\r\n]/g, ' ') + close

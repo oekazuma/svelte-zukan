@@ -2,7 +2,6 @@
   import { messages, type Messages } from '../../app/i18n.js';
   import { BACKGROUNDS, readWidth, writeWidth, type Theme } from './storage.js';
 
-  /** typical widths of each kind of screen; the icons are 24×24 stroke paths */
   const PRESETS = [
     {
       width: 375,
@@ -53,7 +52,6 @@
   }: {
     src: string;
     title: string;
-    /** the catalog's theme, applied to the preview page */
     theme?: Theme;
     labels?: Pick<
       Messages,
@@ -90,7 +88,6 @@
   let doc = $state.raw<Document>();
 
   // a stage narrower than MIN_WIDTH lowers the minimum, so aria-valuenow never goes below aria-valuemin
-  // the widest the iframe can be: the stage minus the grip
   const max = $derived(Math.max(0, stageWidth - HANDLE));
   const min = $derived(Math.min(MIN_WIDTH, max));
   // the frame is capped by max-width and min-width in CSS, so report the effective width
@@ -149,9 +146,6 @@
       const viewport = (doc.scrollingElement ?? doc.documentElement).clientHeight;
       const scrollbar = win.innerHeight - viewport;
       const own = found.getBoundingClientRect().height;
-      // ponytail: content that still matches the viewport after the viewport changed follows it (`100vh`) and would grow
-      // with every added pixel, so it keeps its own height and may keep an inner scrollbar; one match is a coincidence
-      // (e.g. 80px content in the initial 80px frame). A growth limit would be the upgrade if that matters
       const tied = Math.abs(own - viewport) < 1;
       const follows = tied && tiedTo !== -1 && Math.abs(tiedTo - viewport) >= 1;
       if (tied) tiedTo = viewport;
@@ -334,7 +328,6 @@
     color: var(--_text);
   }
 
-  /* the expanded preview covers the catalog; the page behind stays as it is */
   .expanded {
     position: fixed;
     inset: 16px;
@@ -515,7 +508,6 @@
     background: var(--_code-bg);
   }
 
-  /* two short lines, the usual sign of a splitter */
   .handle::after {
     content: '';
     position: absolute;

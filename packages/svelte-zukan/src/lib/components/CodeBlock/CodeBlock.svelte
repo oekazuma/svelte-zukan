@@ -81,7 +81,6 @@
     color: var(--_text);
   }
 
-  /* a clear button on the summary row: an icon, a label and a pressed feel */
   .copy {
     position: absolute;
     top: 6px;

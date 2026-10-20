@@ -20,7 +20,6 @@
       .map((part) => part[0].toUpperCase())
       .join('')
   );
-  // the same name always gets the same color
   const hue = $derived([...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7));
 </script>
 
