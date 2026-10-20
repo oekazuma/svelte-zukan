@@ -58,6 +58,11 @@
       "description": "Actions run in release.yml with publishing rights; a pinned SHA only helps if someone reads the bump.",
       "matchManagers": ["github-actions"],
       "automerge": false
+    },
+    {
+      "description": "takumi 2.16 renamed FontSubset's ranges, which blume still reads (see the override in pnpm-workspace.yaml). Allow 2.16 once blume reads the new field.",
+      "matchPackageNames": ["takumi-js"],
+      "allowedVersions": "<2.16.0"
     }
   ]
 }
