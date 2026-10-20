@@ -1,0 +1,1 @@
+This file is `examples/nav/Button/Button.zukan.svelte`, next to `examples/Button/Button.zukan.svelte`. Both are named `Button`, but their directories give them different IDs (`examples/nav/Button` and `examples/Button`), and the list shows `nav` next to the name.
