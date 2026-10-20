@@ -9,6 +9,10 @@ export type Messages = {
   copied: string;
   copyFailed: string;
   previewWidth: string;
+  mobile: string;
+  tablet: string;
+  laptop: string;
+  desktop: string;
   fullWidth: string;
   search: string;
   noMatches: string;
@@ -30,7 +34,11 @@ export const messages: Record<'en' | 'ja', Messages> = {
     copied: 'Copied',
     copyFailed: 'Copy failed',
     previewWidth: 'Preview width',
-    fullWidth: '100%',
+    mobile: 'Mobile',
+    tablet: 'Tablet',
+    laptop: 'Laptop',
+    desktop: 'Desktop',
+    fullWidth: 'Full width',
     search: 'Search',
     noMatches: 'No matches',
     menu: 'Menu',
@@ -49,7 +57,11 @@ export const messages: Record<'en' | 'ja', Messages> = {
     copied: 'コピーしました',
     copyFailed: 'コピーできませんでした',
     previewWidth: 'プレビューの幅',
-    fullWidth: '100%',
+    mobile: 'スマートフォン',
+    tablet: 'タブレット',
+    laptop: 'ノート PC',
+    desktop: 'デスクトップ',
+    fullWidth: '全幅',
     search: '検索',
     noMatches: '一致するものがありません',
     menu: 'メニュー',

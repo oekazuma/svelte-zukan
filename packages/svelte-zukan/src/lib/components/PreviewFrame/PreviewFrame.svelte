@@ -2,7 +2,38 @@
   import { messages, type Messages } from '../../app/i18n.js';
   import { BACKGROUNDS, readWidth, writeWidth, type Theme } from './storage.js';
 
-  const PRESETS = [375, 768, 1024, 1280];
+  /** typical widths of each kind of screen; the icons are 24×24 stroke paths */
+  const PRESETS = [
+    {
+      width: 375,
+      label: 'mobile',
+      icon: [
+        'M8 2.5h8a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V4A1.5 1.5 0 0 1 8 2.5z',
+        'M11 18h2'
+      ]
+    },
+    {
+      width: 768,
+      label: 'tablet',
+      icon: ['M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z', 'M11 17.5h2']
+    },
+    {
+      width: 1024,
+      label: 'laptop',
+      icon: ['M5.5 5h13A1.5 1.5 0 0 1 20 6.5V16H4V6.5A1.5 1.5 0 0 1 5.5 5z', 'M2 19h20']
+    },
+    {
+      width: 1280,
+      label: 'desktop',
+      icon: [
+        'M4.5 4h15A1.5 1.5 0 0 1 21 5.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 14.5v-9A1.5 1.5 0 0 1 4.5 4z',
+        'M12 16v4',
+        'M8.5 20h7'
+      ]
+    }
+  ] as const;
+  const FULL_ICON = ['M4 12h16', 'M7.5 8.5 4 12l3.5 3.5', 'M16.5 8.5 20 12l-3.5 3.5'];
+  const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'];
   const MIN_WIDTH = 200;
   const MIN_HEIGHT = 80;
   const KEY_STEP = 10;
@@ -17,7 +48,7 @@
     title: string;
     /** the catalog's theme, applied to the preview page */
     theme?: Theme;
-    labels?: Pick<Messages, 'previewWidth' | 'fullWidth' | 'openInNewTab'>;
+    labels?: Pick<Messages, 'previewWidth' | 'mobile' | 'tablet' | 'laptop' | 'desktop' | 'fullWidth' | 'openInNewTab'>;
   } = $props();
 
   // null = 100%; the frame is recreated per entry, so `src` is read once
@@ -56,7 +87,8 @@
   }
 
   function onpointermove(e: PointerEvent) {
-    if (dragging) width = clamp(startWidth + (e.clientX - startX));
+    // whole pixels: the frame's own width can be fractional, and nobody reads 489.796875px
+    if (dragging) width = clamp(Math.round(startWidth + (e.clientX - startX)));
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -115,19 +147,58 @@
   $effect(() => () => observer?.disconnect());
 </script>
 
+{#snippet icon(paths: readonly string[])}
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    {#each paths as d (d)}<path {d} />{/each}
+  </svg>
+{/snippet}
+
 <div class="preview">
   <div class="toolbar">
     <div class="group" role="group" aria-label={labels.previewWidth}>
-      {#each PRESETS as preset (preset)}
-        <button type="button" aria-pressed={width === preset} onclick={() => (width = preset)}>{preset}</button>
+      {#each PRESETS as preset (preset.width)}
+        {@const name = `${labels[preset.label]} (${preset.width}px)`}
+        <button
+          type="button"
+          class="icon"
+          aria-label={name}
+          title={name}
+          aria-pressed={width === preset.width}
+          onclick={() => (width = preset.width)}
+        >
+          {@render icon(preset.icon)}
+        </button>
       {/each}
-      <button type="button" aria-pressed={width === null} onclick={() => (width = null)}>{labels.fullWidth}</button>
+      <button
+        type="button"
+        class="icon"
+        aria-label={labels.fullWidth}
+        title={labels.fullWidth}
+        aria-pressed={width === null}
+        onclick={() => (width = null)}
+      >
+        {@render icon(FULL_ICON)}
+      </button>
     </div>
     <!-- the handle reports the same value (aria-valuenow); a live region here would announce every pixel while dragging -->
-    <span class="width" aria-hidden="true">{stageWidth ? `${current}px` : ''}</span>
+    <span class="width" aria-hidden="true">
+      {#if stageWidth}{Math.round(current)}<span class="unit">px</span>{/if}
+    </span>
     <!-- the preview page of this catalog, not a SvelteKit route -->
     <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-    <a href={src} target="_blank" rel="noopener">{labels.openInNewTab}</a>
+    <a href={src} target="_blank" rel="noopener" aria-label={labels.openInNewTab} title={labels.openInNewTab}>
+      {@render icon(OPEN_ICON)}<span class="label">{labels.openInNewTab}</span>
+    </a>
   </div>
   <div class="stage" bind:clientWidth={stageWidth}>
     <div class="frame" style:width={width === null ? '100%' : `${width}px`}>
@@ -154,7 +225,7 @@
         aria-label={labels.previewWidth}
         aria-valuemin={stageWidth ? min : undefined}
         aria-valuemax={stageWidth || undefined}
-        aria-valuenow={stageWidth ? current : undefined}
+        aria-valuenow={stageWidth ? Math.round(current) : undefined}
         tabindex="0"
         {onpointerdown}
         {onpointermove}
@@ -176,46 +247,83 @@
   }
 
   .toolbar {
+    container-type: inline-size;
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 4px;
+    gap: 12px;
     padding: 6px 8px;
     border-bottom: 1px solid var(--_border);
     background: var(--_code-bg);
   }
 
-  .toolbar button {
-    padding: 2px 8px;
-    border: 1px solid var(--_border);
-    border-radius: 4px;
-    background: var(--_bg);
-    color: var(--_text);
-    font: inherit;
-    font-size: 12px;
+  .group {
+    display: flex;
+    gap: 2px;
+  }
+
+  .icon {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: none;
+    color: var(--_muted);
     cursor: pointer;
   }
 
-  .toolbar button[aria-pressed='true'] {
-    border-color: var(--_accent);
+  .icon:hover {
+    background: var(--_bg);
+    color: var(--_text);
+  }
+
+  .icon[aria-pressed='true'] {
+    border-color: color-mix(in srgb, var(--_accent) 40%, transparent);
+    background: color-mix(in srgb, var(--_accent) 12%, var(--_bg));
     color: var(--_accent);
+  }
+
+  .icon:focus-visible,
+  .toolbar a:focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: 1px;
   }
 
   .width {
     margin-left: auto;
     font-family: var(--_mono);
-    font-size: 12px;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--_text);
+  }
+
+  .unit {
+    margin-left: 1px;
     color: var(--_muted);
   }
 
-  .group {
-    display: flex;
-    gap: 4px;
+  .toolbar a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    color: var(--_accent);
+    font-size: 13px;
+    text-decoration: none;
   }
 
-  .toolbar a {
-    color: var(--_accent);
-    font-size: 12px;
+  .toolbar a:hover {
+    background: var(--_bg);
+  }
+
+  /* a narrow toolbar keeps the icon; the link's name stays in aria-label */
+  @container (max-width: 380px) {
+    .label {
+      display: none;
+    }
   }
 
   .stage {
