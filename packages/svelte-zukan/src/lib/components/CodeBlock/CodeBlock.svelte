@@ -37,7 +37,25 @@
             >{:else}{part.text}{/if}{/each}</code
       ></pre>
   </details>
-  <button type="button" onclick={copy} aria-live="polite">
+  <button type="button" class={['copy', status]} onclick={copy} aria-live="polite">
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      {#if status === 'copied'}
+        <path d="M5 12.5l4.5 4.5L19 7" />
+      {:else}
+        <path d="M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1z" />
+        <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+      {/if}
+    </svg>
     {status === 'copied' ? labels.copied : status === 'failed' ? labels.copyFailed : labels.copy}
   </button>
 </div>
@@ -52,26 +70,59 @@
   }
 
   summary {
-    padding: 6px 160px 6px 10px;
+    padding: 0 170px 0 12px;
     font-size: 13px;
-    line-height: 20px;
+    line-height: 40px;
     color: var(--_muted);
     cursor: pointer;
   }
 
-  button {
+  summary:hover {
+    color: var(--_text);
+  }
+
+  /* a clear button on the summary row: an icon, a label and a pressed feel */
+  .copy {
     position: absolute;
-    top: 5px;
-    right: 6px;
-    padding: 0 8px;
+    top: 6px;
+    right: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 12px;
     border: 1px solid var(--_border);
-    border-radius: 4px;
+    border-radius: 6px;
     background: var(--_bg);
     color: var(--_text);
     font: inherit;
-    font-size: 12px;
-    line-height: 20px;
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  .copy:hover {
+    border-color: var(--_accent);
+    color: var(--_accent);
+  }
+
+  .copy:active {
+    transform: translateY(1px);
+  }
+
+  .copy:focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: 1px;
+  }
+
+  .copy.copied {
+    border-color: color-mix(in srgb, var(--_accent) 40%, transparent);
+    background: color-mix(in srgb, var(--_accent) 12%, var(--_bg));
+    color: var(--_accent);
   }
 
   /* the catalog's theme defines the palette; outside it (the component's own catalog file) the code stays plain */

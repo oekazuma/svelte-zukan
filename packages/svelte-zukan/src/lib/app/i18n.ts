@@ -20,6 +20,10 @@ export type Messages = {
   darkMode: string;
   openInNewTab: string;
   noSections: string;
+  outline: string;
+  expand: string;
+  collapse: string;
+  loading: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -44,7 +48,11 @@ export const messages: Record<'en' | 'ja', Messages> = {
     menu: 'Menu',
     darkMode: 'Dark mode',
     openInNewTab: 'Open in new tab',
-    noSections: 'This file has no <Section>, so there is nothing to preview.'
+    noSections: 'This file has no <Section>, so there is nothing to preview.',
+    outline: 'Show outlines',
+    expand: 'Expand',
+    collapse: 'Exit expanded view (Esc)',
+    loading: 'Loading the preview'
   },
   ja: {
     nav: 'コンポーネント',
@@ -67,6 +75,10 @@ export const messages: Record<'en' | 'ja', Messages> = {
     menu: 'メニュー',
     darkMode: 'ダークモード',
     openInNewTab: '新しいタブで開く',
-    noSections: 'このファイルには <Section> がないため、プレビューするものがありません。'
+    noSections: 'このファイルには <Section> がないため、プレビューするものがありません。',
+    outline: '要素の枠線を表示',
+    expand: '拡大して表示',
+    collapse: '拡大表示を終える（Esc）',
+    loading: 'プレビューを読み込み中'
   }
 };

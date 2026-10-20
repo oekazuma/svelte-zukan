@@ -33,6 +33,11 @@
     }
   ] as const;
   const FULL_ICON = ['M4 12h16', 'M7.5 8.5 4 12l3.5 3.5', 'M16.5 8.5 20 12l-3.5 3.5'];
+  const OUTLINE_ICON = ['M4 4h6v6H4z', 'M14 4h6v6h-6z', 'M4 14h6v6H4z', 'M14 14h6v6h-6z'];
+  const EXPAND_ICON = ['M4 9V4h5', 'M20 9V4h-5', 'M4 15v5h5', 'M20 15v5h-5'];
+  const COLLAPSE_ICON = ['M9 4v5H4', 'M15 4v5h5', 'M9 20v-5H4', 'M15 20v-5h5'];
+  /** in the preview page; `!important`, since the app's own CSS may set outlines */
+  const OUTLINE_CSS = '*{outline:1px solid rgb(232 62 140 / 0.6) !important;outline-offset:-1px !important}';
   const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'];
   const MIN_WIDTH = 200;
   const MIN_HEIGHT = 80;
@@ -50,7 +55,20 @@
     title: string;
     /** the catalog's theme, applied to the preview page */
     theme?: Theme;
-    labels?: Pick<Messages, 'previewWidth' | 'mobile' | 'tablet' | 'laptop' | 'desktop' | 'fullWidth' | 'openInNewTab'>;
+    labels?: Pick<
+      Messages,
+      | 'previewWidth'
+      | 'mobile'
+      | 'tablet'
+      | 'laptop'
+      | 'desktop'
+      | 'fullWidth'
+      | 'openInNewTab'
+      | 'outline'
+      | 'expand'
+      | 'collapse'
+      | 'loading'
+    >;
   } = $props();
 
   // null = 100%; the frame is recreated per entry, so `src` is read once
@@ -60,6 +78,11 @@
   let stageWidth = $state(0);
   let height = $state(MIN_HEIGHT);
   let dragging = $state(false);
+  let outlined = $state(false);
+  let expanded = $state(false);
+  // until the first height is measured, a skeleton covers the frame (lazy frames load only when scrolled to)
+  let ready = $state(false);
+  let expandButton: HTMLButtonElement | undefined = $state();
   let startX = 0;
   let startWidth = 0;
 
@@ -134,7 +157,10 @@
       if (tied) tiedTo = viewport;
       const next = Math.max(MIN_HEIGHT, follows ? own : Math.ceil(bottom + spacing + scrollbar));
       // resizing the frame inside the callback would resize what is observed in the same frame (a "ResizeObserver loop")
-      requestAnimationFrame(() => (height = next));
+      requestAnimationFrame(() => {
+        height = next;
+        ready = true;
+      });
     });
     observer.observe(doc.body);
   }
@@ -145,6 +171,20 @@
     doc.documentElement.style.colorScheme = theme;
     doc.documentElement.style.backgroundColor = BACKGROUNDS[theme];
   });
+
+  $effect(() => {
+    if (!doc) return;
+    const style = doc.createElement('style');
+    style.textContent = OUTLINE_CSS;
+    if (outlined) doc.head.append(style);
+    return () => style.remove();
+  });
+
+  function toggleExpanded() {
+    expanded = !expanded;
+    // the button moves with the toolbar; keep the focus on it
+    queueMicrotask(() => expandButton?.focus());
+  }
 
   $effect(() => writeWidth(src, width));
 
@@ -167,7 +207,18 @@
   </svg>
 {/snippet}
 
-<div class="preview">
+<svelte:window
+  onkeydown={(e) => {
+    if (expanded && e.key === 'Escape') toggleExpanded();
+  }}
+/>
+
+{#if expanded}
+  <!-- clicking outside the expanded preview also leaves it -->
+  <div class="backdrop" aria-hidden="true" onclick={toggleExpanded}></div>
+{/if}
+
+<div class={['preview', { expanded }]}>
   <div class="toolbar">
     <div class="group" role="group" aria-label={labels.previewWidth}>
       {#each PRESETS as preset (preset.width)}
@@ -198,6 +249,29 @@
     <span class="width" aria-hidden="true">
       {#if stageWidth}{Math.round(current)}<span class="unit">px</span>{/if}
     </span>
+    <div class="group">
+      <button
+        type="button"
+        class="icon"
+        aria-label={labels.outline}
+        title={labels.outline}
+        aria-pressed={outlined}
+        onclick={() => (outlined = !outlined)}
+      >
+        {@render icon(OUTLINE_ICON)}
+      </button>
+      <button
+        bind:this={expandButton}
+        type="button"
+        class="icon"
+        aria-label={expanded ? labels.collapse : labels.expand}
+        title={expanded ? labels.collapse : labels.expand}
+        aria-pressed={expanded}
+        onclick={toggleExpanded}
+      >
+        {@render icon(expanded ? COLLAPSE_ICON : EXPAND_ICON)}
+      </button>
+    </div>
     <!-- the preview page of this catalog, not a SvelteKit route -->
     <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
     <a href={src} target="_blank" rel="noopener" aria-label={labels.openInNewTab} title={labels.openInNewTab}>
@@ -205,7 +279,17 @@
     </a>
   </div>
   <div class="stage" bind:clientWidth={stageWidth}>
-    <div class="frame" style:width={width === null ? '100%' : `${width + HANDLE}px`} style:--handle="{HANDLE}px">
+    <div
+      class="frame"
+      style:width={width === null ? '100%' : `${width + HANDLE}px`}
+      style:--handle="{HANDLE}px"
+      aria-busy={!ready}
+    >
+      {#if !ready}
+        <div class="skeleton" role="status" aria-label={labels.loading}>
+          <span></span><span></span><span></span>
+        </div>
+      {/if}
       <!-- the iframe's color-scheme is what `prefers-color-scheme` reports inside it -->
       <iframe
         {src}
@@ -248,6 +332,71 @@
     overflow: hidden;
     font-family: var(--_font);
     color: var(--_text);
+  }
+
+  /* the expanded preview covers the catalog; the page behind stays as it is */
+  .expanded {
+    position: fixed;
+    inset: 16px;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    background: var(--_bg);
+    box-shadow: 0 24px 64px -12px rgb(0 0 0 / 0.45);
+  }
+
+  .expanded .stage {
+    flex: 1;
+    overflow: auto;
+  }
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 19;
+    background: rgb(0 0 0 / 0.45);
+  }
+
+  .skeleton {
+    position: absolute;
+    inset: 0 var(--handle) 0 0;
+    display: grid;
+    align-content: center;
+    gap: 8px;
+    padding: 0 24px;
+    background: var(--_bg);
+  }
+
+  .skeleton span {
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(90deg, var(--_code-bg) 0%, var(--_border) 50%, var(--_code-bg) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s ease-in-out infinite;
+  }
+
+  .skeleton span:nth-child(2) {
+    width: 70%;
+  }
+
+  .skeleton span:nth-child(3) {
+    width: 45%;
+  }
+
+  @keyframes shimmer {
+    from {
+      background-position: 100% 0;
+    }
+
+    to {
+      background-position: -100% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton span {
+      animation: none;
+    }
   }
 
   .toolbar {

@@ -236,7 +236,11 @@ describe('PreviewFrame resizing', () => {
           laptop: 'Notebook',
           desktop: 'Monitor',
           fullWidth: 'Full',
-          openInNewTab: 'Pop out'
+          openInNewTab: 'Pop out',
+          outline: 'Boxes',
+          expand: 'Bigger',
+          collapse: 'Smaller',
+          loading: 'Wait'
         }
       }
     });
@@ -292,5 +296,52 @@ describe('PreviewFrame storage', () => {
     const screen = await render(PreviewFrame, { props });
     screen.container.style.width = '1000px';
     await expect.poll(() => iframeWidth(screen.container)).toBe(768);
+  });
+});
+
+describe('PreviewFrame tools', () => {
+  const addPreview = (iframe: HTMLIFrameElement, height = '120px') => {
+    const doc = iframe.contentDocument!;
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    target.style.height = height;
+    doc.body.append(target);
+    return doc;
+  };
+
+  it('outlines the elements of the preview page', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = addPreview(iframe);
+    const toggle = screen.getByRole('button', { name: 'Show outlines' });
+    await toggle.click();
+    await expect.element(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => doc.head.querySelector('style')?.textContent ?? '').toContain('outline');
+    await toggle.click();
+    await expect.poll(() => doc.head.querySelector('style')).toBeNull();
+  });
+
+  it('expands over the page and leaves with Escape', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const preview = screen.container.querySelector('.preview')!;
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    expect(preview.classList.contains('expanded')).toBe(true);
+    await expect
+      .element(screen.getByRole('button', { name: 'Exit expanded view (Esc)' }))
+      .toHaveAttribute('aria-pressed', 'true');
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
+    await expect.element(screen.getByRole('button', { name: 'Expand' })).toHaveFocus();
+  });
+
+  it('shows a skeleton until the preview is measured', async () => {
+    const screen = await render(PreviewFrame, { props });
+    await expect.element(screen.getByRole('status', { name: 'Loading the preview' })).toBeInTheDocument();
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    addPreview(iframe);
+    await expect.element(screen.getByRole('status', { name: 'Loading the preview' })).not.toBeInTheDocument();
+    expect(screen.container.querySelector('.frame')!.getAttribute('aria-busy')).toBe('false');
   });
 });
