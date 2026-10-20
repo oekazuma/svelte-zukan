@@ -36,6 +36,12 @@ jobs:
         run: pnpm --filter svelte-zukan build
       - name: Put the demo catalog under the docs
         run: cp -r packages/svelte-zukan/zukan-dist docs/dist/demo
+      - name: Build the Japanese demo catalog
+        run: pnpm --filter svelte-zukan build
+        env:
+          ZUKAN_DEMO_LOCALE: ja
+      - name: Put the Japanese demo catalog under the docs
+        run: cp -r packages/svelte-zukan/zukan-dist docs/dist/demo/ja
       - name: Configure GitHub Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Upload Pages artifact

@@ -9,8 +9,6 @@ import { zukan } from './src/lib/vite/index.js';
 export default defineConfig(({ command }) => ({
   // the DevTools server keeps the process alive, so `vite build` would never exit; vitest also runs as 'serve' and only gets noise from it
   devtools: command === 'serve' && !process.env.VITEST,
-  // browsers with light-dark(): lowered, it follows prefers-color-scheme instead of the catalog's theme switch
-  build: { cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5'] },
   resolve: {
     // exact match so that `svelte-zukan/vite` is not captured
     alias: [{ find: /^svelte-zukan$/, replacement: fileURLToPath(new URL('./src/lib/index.ts', import.meta.url)) }]
@@ -20,6 +18,7 @@ export default defineConfig(({ command }) => ({
     zukan({
       groups: { ui: 'src/lib', examples: 'src/examples' },
       wrapper: '.zukan/Wrapper.svelte',
+      locale: process.env.ZUKAN_DEMO_LOCALE === 'ja' ? 'ja' : 'en',
       build: true
     }),
     sveltekit({
