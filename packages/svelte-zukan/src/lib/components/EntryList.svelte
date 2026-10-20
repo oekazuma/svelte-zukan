@@ -77,7 +77,8 @@
 <!-- group names are shown only when there is more than one group -->
 {#each groups as [group, items], i (group)}
   {#if groups.size > 1}
-    <div class="group" id="{id}-{i}">{group}<span class="count">{items.length}</span></div>
+    <!-- the list is named by the group alone, not by its count -->
+    <div class="group"><span id="{id}-{i}">{group}</span><span class="count">{items.length}</span></div>
   {/if}
   {@render list(tree(items), groups.size > 1 ? `${id}-${i}` : undefined)}
 {/each}
@@ -188,8 +189,17 @@
     font-size: 13px;
   }
 
+  /* a guide mark drawn with a border, so nothing is added to the link's accessible name */
+  .hits a {
+    position: relative;
+  }
+
   .hits a::before {
-    content: '# ';
-    color: var(--_border);
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    width: 5px;
+    border-top: 1px solid var(--_border);
   }
 </style>
