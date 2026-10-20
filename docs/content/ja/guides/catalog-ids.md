@@ -21,7 +21,7 @@ ID は `<グループ名>/<相対パス>` です。相対パスは、探索デ�
 
 - グループ名が `my-app` のとき、`src/lib/forms/Button.zukan.svelte` は `my-app/lib/forms/Button` になります
 - 最後の 2 セグメントが同じとき（`Button/Button`）は 1 つにまとめます。`src/lib/Button/Button.zukan.svelte` は `my-app/lib/Button` になります
-- 同名のカタログファイル（`forms/Button.zukan.svelte` と `nav/Button.zukan.svelte`）も、ディレクトリが違えば別の ID になります。一覧には名前（`Button`）を主に、ディレクトリ（`lib/forms`）を控えめな色で添えて表示するので、見分けられます
+- 同名のカタログファイル（`forms/Button.zukan.svelte` と `nav/Button.zukan.svelte`）も、ディレクトリが違えば別の ID になります。サイドバーではディレクトリを折りたためるフォルダ（`lib` › `forms`）として、一覧ページでは名前の下にディレクトリを表示するので、見分けられます
 
 ID はファイルを動かさない限り変わりません。自動探索で `lib/` が付くのは `src` 全体を探すためです。気になるときは [`groups`](/ja/options) で `src/lib` を指定してください。
 

@@ -10,9 +10,31 @@
   let {
     entry,
     section = null,
+    previous,
+    next,
     theme,
     t
-  }: { entry: Entry; section?: string | null; theme: Theme; t: Messages } = $props();
+  }: {
+    entry: Entry;
+    section?: string | null;
+    previous?: Entry;
+    next?: Entry;
+    theme: Theme;
+    t: Messages;
+  } = $props();
+
+  // the section whose heading was last scrolled past the top third of the window
+  let active = $state<string | null>(null);
+  function track(node: HTMLElement, title: string) {
+    const observer = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) active = title;
+      },
+      { rootMargin: '0px 0px -66% 0px' }
+    );
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  }
 
   // the detail page is not remounted when only the section changes, so the action also runs on update
   function reveal(node: HTMLElement, active: boolean) {
@@ -20,6 +42,17 @@
     return { update: (next: boolean) => next && node.scrollIntoView() };
   }
 </script>
+
+{#snippet pagerLink(to: Entry, rel: 'prev' | 'next')}
+  <!-- a hash route of this catalog, not a SvelteKit route -->
+  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+  <a class={rel} href={formatHash('detail', to.path)} {rel}>
+    <span class="hint">{rel === 'prev' ? `← ${t.previous}` : `${t.next} →`}</span>
+    <span class="target"
+      >{to.name}{#if to.dir}<span class="dir">{to.dir}</span>{/if}</span
+    >
+  </a>
+{/snippet}
 
 <h1>
   {entry.name}
@@ -30,30 +63,62 @@
 <!-- recreate everything on navigation so no PreviewFrame keeps the previous entry's width or height -->
 {#key entry.path}
   {#await entry.meta() then { default: meta }}
-    {#if meta.doc}
-      <!-- the HTML comes from the user's own .md file, rendered by the plugin -->
-      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      <div class="doc">{@html meta.doc}</div>
-    {/if}
-    {#if !meta.sections.length}
-      <p class="empty">{t.noSections}</p>
-    {/if}
-    {#each meta.sections as s (s.title)}
-      <!-- a hash route of this catalog, not a SvelteKit route -->
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-      <h2 use:reveal={section === s.title}><a href={formatHash('detail', entry.path, s.title)}>{s.title}</a></h2>
-      <!-- one card: the preview with its code under it -->
-      <div class="example">
-        <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
-        <PreviewFrame
-          src={location.pathname + formatHash('preview', entry.path, s.title)}
-          title={s.title}
-          {theme}
-          labels={t}
-        />
-        <CodeBlock code={s.code} labels={t} />
+    <div class="page">
+      <div class={['layout', { toc: meta.sections.length > 1 }]}>
+        <div class="content">
+          {#if meta.doc}
+            <!-- the HTML comes from the user's own .md file, rendered by the plugin -->
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+            <div class="doc">{@html meta.doc}</div>
+          {/if}
+          {#if !meta.sections.length}
+            <p class="empty">{t.noSections}</p>
+          {/if}
+          {#each meta.sections as s (s.title)}
+            <h2 use:reveal={section === s.title} use:track={s.title}>
+              <!-- a hash route of this catalog, not a SvelteKit route -->
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+              <a href={formatHash('detail', entry.path, s.title)}>{s.title}</a>
+            </h2>
+            <!-- one card: the preview with its code under it -->
+            <div class="example">
+              <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
+              <PreviewFrame
+                src={location.pathname + formatHash('preview', entry.path, s.title)}
+                title={s.title}
+                {theme}
+                labels={t}
+              />
+              <CodeBlock code={s.code} labels={t} />
+            </div>
+          {/each}
+          {#if previous || next}
+            <nav class="pager" aria-label="{t.previous} / {t.next}">
+              {#if previous}{@render pagerLink(previous, 'prev')}{/if}
+              {#if next}{@render pagerLink(next, 'next')}{/if}
+            </nav>
+          {/if}
+        </div>
+        {#if meta.sections.length > 1}
+          <nav class="contents" aria-label={t.onThisPage}>
+            <p>{t.onThisPage}</p>
+            <ul>
+              {#each meta.sections as s (s.title)}
+                <li>
+                  <!-- a hash route of this catalog, not a SvelteKit route -->
+                  <!-- eslint-disable svelte/no-navigation-without-resolve -->
+                  <a
+                    href={formatHash('detail', entry.path, s.title)}
+                    aria-current={active === s.title ? 'location' : undefined}>{s.title}</a
+                  >
+                  <!-- eslint-enable svelte/no-navigation-without-resolve -->
+                </li>
+              {/each}
+            </ul>
+          </nav>
+        {/if}
       </div>
-    {/each}
+    </div>
   {:catch error}
     <p>{t.loadFailed} {error instanceof Error ? error.message : String(error)}</p>
   {/await}
@@ -171,5 +236,107 @@
 
   .empty {
     color: var(--_muted);
+  }
+
+  /* the table of contents sits beside the content when the page is wide enough */
+  .page {
+    container-type: inline-size;
+  }
+
+  .layout.toc {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 200px;
+    gap: 40px;
+  }
+
+  .contents {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    font-size: 13px;
+  }
+
+  .contents p {
+    margin: 0 0 8px;
+    color: var(--_muted);
+    font-weight: 600;
+  }
+
+  .contents ul {
+    margin: 0;
+    padding: 0;
+    border-left: 1px solid var(--_border);
+    list-style: none;
+  }
+
+  .contents a {
+    display: block;
+    margin-left: -1px;
+    padding: 4px 12px;
+    border-left: 2px solid transparent;
+    color: var(--_muted);
+    text-decoration: none;
+  }
+
+  .contents a:hover {
+    color: var(--_text);
+  }
+
+  .contents a[aria-current='location'] {
+    border-left-color: var(--_accent);
+    color: var(--_accent);
+    font-weight: 600;
+  }
+
+  @container (max-width: 900px) {
+    .layout.toc {
+      display: block;
+    }
+
+    .contents {
+      display: none;
+    }
+  }
+
+  .pager {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 40px;
+  }
+
+  .pager a {
+    display: grid;
+    gap: 2px;
+    padding: 12px 16px;
+    border: 1px solid var(--_border);
+    border-radius: 10px;
+    color: var(--_text);
+    text-decoration: none;
+  }
+
+  .pager a:hover {
+    border-color: var(--_accent);
+  }
+
+  .pager .next {
+    grid-column: 2;
+    text-align: right;
+  }
+
+  .hint {
+    color: var(--_muted);
+    font-size: 12px;
+  }
+
+  .target {
+    font-weight: 600;
+  }
+
+  .target .dir {
+    margin-left: 6px;
+    font-size: 12px;
   }
 </style>

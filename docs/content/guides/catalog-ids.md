@@ -21,7 +21,7 @@ An ID is `<group name>/<relative path>`. The relative path is the path from the 
 
 - With the group name `my-app`, `src/lib/forms/Button.zukan.svelte` becomes `my-app/lib/forms/Button`
 - When the last two segments are the same (`Button/Button`), they are merged into one. `src/lib/Button/Button.zukan.svelte` becomes `my-app/lib/Button`
-- Catalog files with the same name in different directories (`forms/Button.zukan.svelte` and `nav/Button.zukan.svelte`) get different IDs. The list shows the name (`Button`) prominently and the directory (`lib/forms`) in a subdued color, so you can tell them apart
+- Catalog files with the same name in different directories (`forms/Button.zukan.svelte` and `nav/Button.zukan.svelte`) get different IDs. The sidebar shows the directories as folders (`lib` › `forms`) that fold, and the list page shows the directory under the name, so you can tell them apart
 
 An ID does not change unless you move the file. With automatic discovery, `lib/` appears in the ID because the whole `src` directory is scanned. If that bothers you, point [`groups`](/options) at `src/lib`.
 

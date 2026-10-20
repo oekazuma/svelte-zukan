@@ -148,6 +148,75 @@ describe('App', () => {
     await expect.element(main.getByRole('link', { name: /Card/ })).toHaveAttribute('href', '#/ui/Card');
   });
 
+  const three = () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog.unshift({ group: 'ui', name: 'Alert', dir: '', path: 'ui/Alert', load, meta });
+    props.catalog.push({ group: 'ui', name: 'Tabs', dir: '', path: 'ui/Tabs', load, meta });
+    return props;
+  };
+
+  it('a detail page links to the previous and next components', async () => {
+    const screen = await render(App, { props: three() });
+    const pager = screen.getByRole('navigation', { name: 'Previous / Next' });
+    await expect.element(pager.getByRole('link', { name: /Previous.*Alert/ })).toHaveAttribute('href', '#/ui/Alert');
+    await expect.element(pager.getByRole('link', { name: /Next.*Tabs/ })).toHaveAttribute('href', '#/ui/Tabs');
+  });
+
+  it('J and K move to the next and previous components', async () => {
+    const screen = await render(App, { props: three() });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    await userEvent.keyboard('j');
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+    await userEvent.keyboard('k');
+    await userEvent.keyboard('k');
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Alert/ })).toBeInTheDocument();
+  });
+
+  it('J does nothing while typing in the search box', async () => {
+    const screen = await render(App, { props: three() });
+    await screen.getByRole('searchbox', { name: 'Search' }).fill('');
+    screen.getByRole('searchbox', { name: 'Search' }).element().focus();
+    await userEvent.keyboard('j');
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+  });
+
+  it('? and the sidebar button open the shortcuts', async () => {
+    const screen = await render(App, { props: three() });
+    const dialog = screen.container.querySelector('dialog')!;
+    await screen.getByRole('button', { name: 'Keyboard shortcuts' }).click();
+    await expect.poll(() => dialog.open).toBe(true);
+    await expect.element(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
+    await screen.getByRole('button', { name: 'Close' }).click();
+    await expect.poll(() => dialog.open).toBe(false);
+    await userEvent.keyboard('?');
+    await expect.poll(() => dialog.open).toBe(true);
+  });
+
+  it('a page with several sections has a table of contents', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = () =>
+      Promise.resolve({
+        default: {
+          sections: [
+            { title: 'One', code: '' },
+            { title: 'Two', code: '' }
+          ],
+          doc: null
+        }
+      });
+    const screen = await render(App, { props });
+    const toc = screen.getByRole('navigation', { name: 'On this page' });
+    await expect.element(toc.getByRole('link', { name: 'Two' })).toHaveAttribute('href', '#/ui/Card?section=Two');
+  });
+
+  it('a page with one section has no table of contents', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = () => Promise.resolve({ default: { sections: [{ title: 'One', code: '' }], doc: null } });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 2, name: 'One' })).toBeInTheDocument();
+    await expect.element(screen.getByRole('navigation', { name: 'On this page' })).not.toBeInTheDocument();
+  });
+
   it('an empty catalog lists the searched places', async () => {
     const { props } = setup('');
     props.catalog = [];
@@ -332,6 +401,19 @@ describe('App', () => {
     await expect.element(nav.getByRole('link', { name: 'Card' })).not.toBeInTheDocument();
     await screen.getByRole('searchbox', { name: 'Search' }).fill('nothing');
     await expect.element(nav.getByText('No matches')).toBeInTheDocument();
+  });
+
+  it('the search also finds section titles and links to them', async () => {
+    const { props } = setup('');
+    props.catalog[0].meta = () =>
+      Promise.resolve({ default: { sections: [{ title: 'Dismissible', code: '' }], doc: null } });
+    const screen = await render(App, { props });
+    const nav = screen.getByRole('navigation', { name: 'Components' });
+    await screen.getByRole('searchbox', { name: 'Search' }).fill('dismiss');
+    await expect
+      .element(nav.getByRole('link', { name: 'Dismissible' }))
+      .toHaveAttribute('href', '#/ui/Card?section=Dismissible');
+    await expect.element(nav.getByRole('link', { name: 'Card' })).toBeInTheDocument();
   });
 
   it('/ focuses the search', async () => {
