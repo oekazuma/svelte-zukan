@@ -1,12 +1,6 @@
-<script lang="ts" module>
-  import { BACKGROUNDS, readBackground, readWidth, writeBackground, writeWidth, type Background } from './storage.js';
-
-  // shared by every preview on the page, so one click switches them all
-  let background = $state<Background>(readBackground() ?? 'light');
-</script>
-
 <script lang="ts">
   import { messages, type Messages } from '../../app/i18n.js';
+  import { BACKGROUNDS, readWidth, writeWidth, type Theme } from './storage.js';
 
   const PRESETS = [375, 768, 1024, 1280];
   const MIN_WIDTH = 200;
@@ -16,11 +10,14 @@
   let {
     src,
     title,
+    theme = 'light',
     labels = messages.en
   }: {
     src: string;
     title: string;
-    labels?: Pick<Messages, 'previewWidth' | 'fullWidth' | 'background' | 'light' | 'dark' | 'openInNewTab'>;
+    /** the catalog's theme, applied to the preview page */
+    theme?: Theme;
+    labels?: Pick<Messages, 'previewWidth' | 'fullWidth' | 'openInNewTab'>;
   } = $props();
 
   // null = 100%; the frame is recreated per entry, so `src` is read once
@@ -109,8 +106,8 @@
   // the preview page has no catalog CSS; `color-scheme` also switches `light-dark()` and form controls in it
   $effect(() => {
     if (!doc) return;
-    doc.documentElement.style.colorScheme = background;
-    doc.documentElement.style.backgroundColor = BACKGROUNDS[background];
+    doc.documentElement.style.colorScheme = theme;
+    doc.documentElement.style.backgroundColor = BACKGROUNDS[theme];
   });
 
   $effect(() => writeWidth(src, width));
@@ -128,20 +125,6 @@
     </div>
     <!-- the handle reports the same value (aria-valuenow); a live region here would announce every pixel while dragging -->
     <span class="width" aria-hidden="true">{stageWidth ? `${current}px` : ''}</span>
-    <div class="group" role="group" aria-label={labels.background}>
-      {#each ['light', 'dark'] as const as value (value)}
-        <button
-          type="button"
-          aria-pressed={background === value}
-          onclick={() => {
-            background = value;
-            writeBackground(value);
-          }}
-        >
-          {labels[value]}
-        </button>
-      {/each}
-    </div>
     <!-- the preview page of this catalog, not a SvelteKit route -->
     <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
     <a href={src} target="_blank" rel="noopener">{labels.openInNewTab}</a>
@@ -161,7 +144,7 @@
         }}
         class:dragging
         style:height="{height}px"
-        style:color-scheme={background}
+        style:color-scheme={theme}
       ></iframe>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <div

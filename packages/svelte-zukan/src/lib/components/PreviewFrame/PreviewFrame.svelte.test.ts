@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import { page, userEvent } from 'vitest/browser';
+import { userEvent } from 'vitest/browser';
 import PreviewFrame from './PreviewFrame.svelte';
 
 const props = { src: 'about:blank', title: 'preview' };
@@ -205,50 +205,30 @@ describe('PreviewFrame resizing', () => {
 
   it('labels come from props', async () => {
     const screen = await render(PreviewFrame, {
-      props: {
-        ...props,
-        labels: {
-          previewWidth: 'Frame width',
-          fullWidth: 'Full',
-          background: 'Backdrop',
-          light: 'Day',
-          dark: 'Night',
-          openInNewTab: 'Pop out'
-        }
-      }
+      props: { ...props, labels: { previewWidth: 'Frame width', fullWidth: 'Full', openInNewTab: 'Pop out' } }
     });
     await expect.element(screen.getByRole('separator', { name: 'Frame width' })).toBeInTheDocument();
     await expect.element(screen.getByRole('button', { name: 'Full' })).toBeInTheDocument();
-    await expect.element(screen.getByRole('group', { name: 'Backdrop' })).toBeInTheDocument();
-    await expect.element(screen.getByRole('button', { name: 'Night' })).toBeInTheDocument();
     await expect.element(screen.getByRole('link', { name: 'Pop out' })).toBeInTheDocument();
   });
 });
 
 describe('PreviewFrame toolbar', () => {
-  it('the background switch applies to every preview on the page', async () => {
-    const targets = [0, 1].map(() => document.body.appendChild(document.createElement('div')));
-    try {
-      for (const target of targets) await render(PreviewFrame, { props, target });
-      const [first, second] = targets.map((t) => page.elementLocator(t));
-      const iframes = targets.map((t) => t.querySelector('iframe')!);
-      for (const iframe of iframes) await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+  it('applies the theme to the preview page and follows it', async () => {
+    const screen = await render(PreviewFrame, { props: { ...props, theme: 'dark' } });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    await expect.poll(() => iframe.contentDocument!.documentElement.style.colorScheme).toBe('dark');
+    expect(iframe.style.colorScheme).toBe('dark');
+    expect(iframe.contentDocument!.documentElement.style.backgroundColor).toBe('rgb(13, 17, 23)');
+    await screen.rerender({ theme: 'light' });
+    await expect.poll(() => iframe.contentDocument!.documentElement.style.colorScheme).toBe('light');
+    expect(iframe.style.colorScheme).toBe('light');
+  });
 
-      await first.getByRole('button', { name: 'Dark', exact: true }).click();
-      for (const iframe of iframes) {
-        await expect.poll(() => iframe.contentDocument!.documentElement.style.colorScheme).toBe('dark');
-        expect(iframe.style.colorScheme).toBe('dark');
-        expect(iframe.contentDocument!.documentElement.style.backgroundColor).toBe('rgb(13, 17, 23)');
-      }
-      await expect
-        .element(second.getByRole('button', { name: 'Dark', exact: true }))
-        .toHaveAttribute('aria-pressed', 'true');
-
-      await second.getByRole('button', { name: 'Light', exact: true }).click();
-      await expect.poll(() => iframes[0].contentDocument!.documentElement.style.colorScheme).toBe('light');
-    } finally {
-      for (const target of targets) target.remove();
-    }
+  it('has no theme buttons of its own', async () => {
+    const screen = await render(PreviewFrame, { props });
+    await expect.element(screen.getByRole('button', { name: 'Dark', exact: true })).not.toBeInTheDocument();
   });
 
   it('links to the preview in a new tab', async () => {
@@ -265,14 +245,6 @@ describe('PreviewFrame toolbar', () => {
 });
 
 describe('PreviewFrame storage', () => {
-  it('remembers the background in localStorage', async () => {
-    const screen = await render(PreviewFrame, { props });
-    await screen.getByRole('button', { name: 'Dark', exact: true }).click();
-    expect(localStorage.getItem('svelte-zukan:background')).toBe('dark');
-    await screen.getByRole('button', { name: 'Light', exact: true }).click();
-    expect(localStorage.getItem('svelte-zukan:background')).toBe('light');
-  });
-
   it('remembers the width per preview in sessionStorage', async () => {
     const screen = await render(PreviewFrame, { props });
     await screen.getByRole('button', { name: '375', exact: true }).click();
@@ -285,22 +257,5 @@ describe('PreviewFrame storage', () => {
     sessionStorage.setItem('svelte-zukan:width:about:blank', '768');
     const screen = await render(PreviewFrame, { props });
     expect(frameStyle(screen.container).width).toBe('768px');
-  });
-
-  it('still switches the background when storage throws', async () => {
-    const screen = await render(PreviewFrame, { props });
-    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('blocked');
-    });
-    try {
-      await screen.getByRole('button', { name: 'Dark', exact: true }).click();
-      await expect
-        .element(screen.getByRole('button', { name: 'Dark', exact: true }))
-        .toHaveAttribute('aria-pressed', 'true');
-    } finally {
-      spy.mockRestore();
-      // the background is shared by every frame in the file
-      await screen.getByRole('button', { name: 'Light', exact: true }).click();
-    }
   });
 });

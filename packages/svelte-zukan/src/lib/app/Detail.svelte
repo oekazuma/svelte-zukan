@@ -2,11 +2,17 @@
   import Badge from '../components/Badge/Badge.svelte';
   import CodeBlock from '../components/CodeBlock/CodeBlock.svelte';
   import PreviewFrame from '../components/PreviewFrame/PreviewFrame.svelte';
+  import type { Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
   import { formatHash } from './hash.js';
   import type { Messages } from './i18n.js';
 
-  let { entry, section = null, t }: { entry: Entry; section?: string | null; t: Messages } = $props();
+  let {
+    entry,
+    section = null,
+    theme,
+    t
+  }: { entry: Entry; section?: string | null; theme: Theme; t: Messages } = $props();
 
   // the detail page is not remounted when only the section changes, so the action also runs on update
   function reveal(node: HTMLElement, active: boolean) {
@@ -37,7 +43,12 @@
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
       <h2 use:reveal={section === s.title}><a href={formatHash('detail', entry.path, s.title)}>{s.title}</a></h2>
       <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
-      <PreviewFrame src={location.pathname + formatHash('preview', entry.path, s.title)} title={s.title} labels={t} />
+      <PreviewFrame
+        src={location.pathname + formatHash('preview', entry.path, s.title)}
+        title={s.title}
+        {theme}
+        labels={t}
+      />
       <CodeBlock code={s.code} labels={t} />
     {/each}
   {:catch error}

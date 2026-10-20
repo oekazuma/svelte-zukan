@@ -1,6 +1,6 @@
 <script lang="ts">
   import { setContext, type Component, type Snippet } from 'svelte';
-  import { BACKGROUNDS, readBackground } from '../components/PreviewFrame/storage.js';
+  import { BACKGROUNDS, readTheme } from '../components/PreviewFrame/storage.js';
   import { PREVIEW_SECTION_KEY } from '../context.js';
   import type { Entry } from '../types.js';
   import type { Messages } from './i18n.js';
@@ -22,7 +22,7 @@
   if (section !== null) setContext(PREVIEW_SECTION_KEY, section);
 
   // a preview opened in its own tab has no catalog page to set it; inside the catalog, the frame sets the same value
-  const stored = readBackground();
+  const stored = readTheme();
   if (stored) {
     document.documentElement.style.colorScheme = stored;
     document.documentElement.style.backgroundColor = BACKGROUNDS[stored];

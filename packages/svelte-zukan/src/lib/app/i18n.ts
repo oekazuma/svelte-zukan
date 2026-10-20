@@ -13,9 +13,7 @@ export type Messages = {
   search: string;
   noMatches: string;
   menu: string;
-  background: string;
-  light: string;
-  dark: string;
+  darkMode: string;
   openInNewTab: string;
   noSections: string;
 };
@@ -36,9 +34,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     search: 'Search',
     noMatches: 'No matches',
     menu: 'Menu',
-    background: 'Preview background',
-    light: 'Light',
-    dark: 'Dark',
+    darkMode: 'Dark mode',
     openInNewTab: 'Open in new tab',
     noSections: 'This file has no <Section>, so there is nothing to preview.'
   },
@@ -57,9 +53,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     search: '検索',
     noMatches: '一致するものがありません',
     menu: 'メニュー',
-    background: 'プレビューの背景',
-    light: 'ライト',
-    dark: 'ダーク',
+    darkMode: 'ダークモード',
     openInNewTab: '新しいタブで開く',
     noSections: 'このファイルには <Section> がないため、プレビューするものがありません。'
   }

@@ -64,15 +64,15 @@ describe('App', () => {
     expect(screen.container.querySelector('nav')).toBeNull();
   });
 
-  it('a preview page applies the stored background', async () => {
-    localStorage.setItem('svelte-zukan:background', 'dark');
+  it('a preview page applies the stored theme', async () => {
+    localStorage.setItem('svelte-zukan:theme', 'dark');
     try {
       const { props } = setup('#/preview/ui/Card?section=Two');
       const screen = await render(App, { props });
       await expect.element(screen.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
       expect(document.documentElement.style.colorScheme).toBe('dark');
     } finally {
-      localStorage.removeItem('svelte-zukan:background');
+      localStorage.removeItem('svelte-zukan:theme');
       document.documentElement.style.colorScheme = '';
       document.documentElement.style.backgroundColor = '';
     }
@@ -84,6 +84,52 @@ describe('App', () => {
     props.title = 'My UI';
     const screen = await render(App, { props });
     await expect.element(screen.getByRole('img', { name: 'My UI' })).toBeInTheDocument();
+  });
+
+  it('the theme switch changes the catalog and is remembered', async () => {
+    localStorage.setItem('svelte-zukan:theme', 'light');
+    try {
+      const { props } = setup('#/ui/Card');
+      const screen = await render(App, { props });
+      const zukan = screen.container.querySelector('.zukan')!;
+      const toggle = screen.getByRole('button', { name: 'Dark mode' });
+      expect(zukan.getAttribute('data-theme')).toBe('light');
+      await expect.element(toggle).toHaveAttribute('aria-pressed', 'false');
+      await toggle.click();
+      expect(zukan.getAttribute('data-theme')).toBe('dark');
+      await expect.element(toggle).toHaveAttribute('aria-pressed', 'true');
+      expect(getComputedStyle(zukan).backgroundColor).toBe('rgb(13, 17, 23)');
+      expect(localStorage.getItem('svelte-zukan:theme')).toBe('dark');
+    } finally {
+      localStorage.removeItem('svelte-zukan:theme');
+    }
+  });
+
+  it('starts from the stored theme', async () => {
+    localStorage.setItem('svelte-zukan:theme', 'dark');
+    try {
+      const { props } = setup('');
+      const screen = await render(App, { props });
+      expect(screen.container.querySelector('.zukan')!.getAttribute('data-theme')).toBe('dark');
+    } finally {
+      localStorage.removeItem('svelte-zukan:theme');
+    }
+  });
+
+  it('the theme switch still works when storage throws', async () => {
+    localStorage.setItem('svelte-zukan:theme', 'light');
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    try {
+      const { props } = setup('');
+      const screen = await render(App, { props });
+      await screen.getByRole('button', { name: 'Dark mode' }).click();
+      expect(screen.container.querySelector('.zukan')!.getAttribute('data-theme')).toBe('dark');
+    } finally {
+      spy.mockRestore();
+      localStorage.removeItem('svelte-zukan:theme');
+    }
   });
 
   it('an unknown ID is not found', async () => {

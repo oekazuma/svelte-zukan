@@ -1,6 +1,6 @@
 /* the app's global CSS: design tokens shared by the example components */
 :root {
-  /* the preview background switch sets color-scheme inline; a preview opened alone follows the system */
+  /* the catalog's theme switch sets color-scheme inline; a preview opened alone follows the system */
   color-scheme: light dark;
 
   --ex-font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
