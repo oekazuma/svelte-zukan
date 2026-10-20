@@ -19,7 +19,7 @@ describe('PreviewFrame', () => {
   it('preset sets frame width', async () => {
     const screen = await render(PreviewFrame, { props });
     screen.container.style.width = '1000px';
-    await screen.getByRole('button', { name: '768', exact: true }).click();
+    await screen.getByRole('button', { name: 'Tablet (768px)', exact: true }).click();
     expect(frameStyle(screen.container).width).toBe('768px');
     await expect.element(screen.getByText('768px', { exact: true })).toBeInTheDocument();
   });
@@ -27,42 +27,46 @@ describe('PreviewFrame', () => {
   it('width presets are a labelled group and the readout is not a live region', async () => {
     const screen = await render(PreviewFrame, { props });
     await expect
-      .element(screen.getByRole('group', { name: 'Preview width' }).getByRole('button', { name: '768', exact: true }))
+      .element(
+        screen
+          .getByRole('group', { name: 'Preview width' })
+          .getByRole('button', { name: 'Tablet (768px)', exact: true })
+      )
       .toBeInTheDocument();
     expect(screen.container.querySelector('output')).toBeNull();
   });
 
   it('full width preset', async () => {
     const screen = await render(PreviewFrame, { props });
-    await screen.getByRole('button', { name: '375', exact: true }).click();
+    await screen.getByRole('button', { name: 'Mobile (375px)', exact: true }).click();
     expect(frameStyle(screen.container).width).toBe('375px');
-    await screen.getByRole('button', { name: '100%', exact: true }).click();
+    await screen.getByRole('button', { name: 'Full width', exact: true }).click();
     expect(frameStyle(screen.container).width).toBe('100%');
   });
 
   it('reports the effective width when the stage is narrower than the preset', async () => {
     const screen = await render(PreviewFrame, { props });
     screen.container.style.width = '600px';
-    await screen.getByRole('button', { name: '1280', exact: true }).click();
+    await screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }).click();
     expect(frameStyle(screen.container).width).toBe('1280px');
     await expect.element(screen.getByText('600px', { exact: true })).toBeInTheDocument();
     await expect.element(screen.getByRole('separator')).toHaveAttribute('aria-valuenow', '600');
     await expect
-      .element(screen.getByRole('button', { name: '1280', exact: true }))
+      .element(screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }))
       .toHaveAttribute('aria-pressed', 'true');
   });
 
   it('presets are buttons with aria-pressed', async () => {
     const screen = await render(PreviewFrame, { props });
-    await screen.getByRole('button', { name: '1024', exact: true }).click();
+    await screen.getByRole('button', { name: 'Laptop (1024px)', exact: true }).click();
     await expect
-      .element(screen.getByRole('button', { name: '1024', exact: true }))
+      .element(screen.getByRole('button', { name: 'Laptop (1024px)', exact: true }))
       .toHaveAttribute('aria-pressed', 'true');
     await expect
-      .element(screen.getByRole('button', { name: '768', exact: true }))
+      .element(screen.getByRole('button', { name: 'Tablet (768px)', exact: true }))
       .toHaveAttribute('aria-pressed', 'false');
     await expect
-      .element(screen.getByRole('button', { name: '100%', exact: true }))
+      .element(screen.getByRole('button', { name: 'Full width', exact: true }))
       .toHaveAttribute('aria-pressed', 'false');
   });
 });
@@ -85,7 +89,7 @@ describe('PreviewFrame resizing', () => {
   it('drag resize', async () => {
     const screen = await render(PreviewFrame, { props });
     screen.container.style.width = '1000px';
-    await screen.getByRole('button', { name: '375', exact: true }).click();
+    await screen.getByRole('button', { name: 'Mobile (375px)', exact: true }).click();
     const handle = screen.getByRole('separator').element();
     const iframe = screen.container.querySelector('iframe')!;
     const send = (type: string, clientX: number, button = 0) =>
@@ -101,6 +105,20 @@ describe('PreviewFrame resizing', () => {
     send('pointerup', 150);
     await expect.poll(() => frameStyle(screen.container).width).toBe('425px');
     expect(getComputedStyle(iframe).pointerEvents).not.toBe('none');
+  });
+
+  it('dragging keeps whole pixels', async () => {
+    const screen = await render(PreviewFrame, { props });
+    screen.container.style.width = '1000px';
+    await screen.getByRole('button', { name: 'Mobile (375px)', exact: true }).click();
+    const handle = screen.getByRole('separator').element();
+    const send = (type: string, clientX: number) =>
+      handle.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, button: 0, clientX }));
+    send('pointerdown', 100);
+    send('pointermove', 150.4);
+    send('pointerup', 150.4);
+    await expect.poll(() => frameStyle(screen.container).width).toBe('425px');
+    await expect.element(screen.getByText('425px', { exact: true })).toBeInTheDocument();
   });
 
   it('aria-valuemin follows a narrow stage', async () => {
@@ -205,10 +223,22 @@ describe('PreviewFrame resizing', () => {
 
   it('labels come from props', async () => {
     const screen = await render(PreviewFrame, {
-      props: { ...props, labels: { previewWidth: 'Frame width', fullWidth: 'Full', openInNewTab: 'Pop out' } }
+      props: {
+        ...props,
+        labels: {
+          previewWidth: 'Frame width',
+          mobile: 'Phone',
+          tablet: 'Pad',
+          laptop: 'Notebook',
+          desktop: 'Monitor',
+          fullWidth: 'Full',
+          openInNewTab: 'Pop out'
+        }
+      }
     });
     await expect.element(screen.getByRole('separator', { name: 'Frame width' })).toBeInTheDocument();
     await expect.element(screen.getByRole('button', { name: 'Full' })).toBeInTheDocument();
+    await expect.element(screen.getByRole('button', { name: 'Phone (375px)' })).toBeInTheDocument();
     await expect.element(screen.getByRole('link', { name: 'Pop out' })).toBeInTheDocument();
   });
 });
@@ -247,9 +277,9 @@ describe('PreviewFrame toolbar', () => {
 describe('PreviewFrame storage', () => {
   it('remembers the width per preview in sessionStorage', async () => {
     const screen = await render(PreviewFrame, { props });
-    await screen.getByRole('button', { name: '375', exact: true }).click();
+    await screen.getByRole('button', { name: 'Mobile (375px)', exact: true }).click();
     await expect.poll(() => sessionStorage.getItem('svelte-zukan:width:about:blank')).toBe('375');
-    await screen.getByRole('button', { name: '100%', exact: true }).click();
+    await screen.getByRole('button', { name: 'Full width', exact: true }).click();
     await expect.poll(() => sessionStorage.getItem('svelte-zukan:width:about:blank')).toBeNull();
   });
 
