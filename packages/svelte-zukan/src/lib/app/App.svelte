@@ -113,6 +113,12 @@
     --_border: #d1d9e0;
     --_accent: #0969da;
     --_code-bg: #f6f8fa;
+    --_syntax-comment: #6e7781;
+    --_syntax-string: #0a3069;
+    --_syntax-tag: #116329;
+    --_syntax-attr: #0550ae;
+    --_syntax-keyword: #cf222e;
+    --_syntax-block: #8250df;
     --_font: system-ui, sans-serif;
     --_mono: ui-monospace, monospace;
     --_sidebar-width: 240px;
@@ -132,6 +138,12 @@
     --_border: #3d444d;
     --_accent: #4493f8;
     --_code-bg: #151b23;
+    --_syntax-comment: #9198a1;
+    --_syntax-string: #a5d6ff;
+    --_syntax-tag: #7ee787;
+    --_syntax-attr: #79c0ff;
+    --_syntax-keyword: #ff7b72;
+    --_syntax-block: #d2a8ff;
   }
 
   main {
