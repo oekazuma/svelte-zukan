@@ -75,6 +75,8 @@
   function observe(doc: Document) {
     observer?.disconnect();
     let target: Element | null = null;
+    /** the viewport height the content last matched */
+    let tiedTo = -1;
     observer = new ResizeObserver(() => {
       const found = doc.querySelector('[data-zukan-preview]');
       if (!found) return;
@@ -91,9 +93,15 @@
       const viewport = (doc.scrollingElement ?? doc.documentElement).clientHeight;
       const scrollbar = win.innerHeight - viewport;
       const own = found.getBoundingClientRect().height;
-      // ponytail: content as tall as the viewport (`100vh`) would grow with every added pixel, so it gets its own height
-      // and may keep an inner scrollbar; a growth limit would be the upgrade if that matters
-      height = Math.max(MIN_HEIGHT, Math.abs(own - viewport) < 1 ? own : Math.ceil(bottom + spacing + scrollbar));
+      // ponytail: content that still matches the viewport after the viewport changed follows it (`100vh`) and would grow
+      // with every added pixel, so it keeps its own height and may keep an inner scrollbar; one match is a coincidence
+      // (e.g. 80px content in the initial 80px frame). A growth limit would be the upgrade if that matters
+      const tied = Math.abs(own - viewport) < 1;
+      const follows = tied && tiedTo !== -1 && Math.abs(tiedTo - viewport) >= 1;
+      if (tied) tiedTo = viewport;
+      const next = Math.max(MIN_HEIGHT, follows ? own : Math.ceil(bottom + spacing + scrollbar));
+      // resizing the frame inside the callback would resize what is observed in the same frame (a "ResizeObserver loop")
+      requestAnimationFrame(() => (height = next));
     });
     observer.observe(doc.body);
   }

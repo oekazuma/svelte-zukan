@@ -157,6 +157,21 @@ describe('PreviewFrame resizing', () => {
     await expect.poll(() => scroller.scrollHeight <= scroller.clientHeight).toBe(true);
   });
 
+  it('content exactly as tall as the initial frame still gets the body spacing', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.style.margin = '0';
+    doc.body.style.padding = '24px';
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    // 80px is also the frame's height before the first measurement
+    target.style.height = '80px';
+    doc.body.append(target);
+    await expect.poll(() => iframe.style.height).toBe('128px');
+  });
+
   it('content with min-height: 100vh does not keep growing', async () => {
     const screen = await render(PreviewFrame, { props });
     const iframe = screen.container.querySelector('iframe')!;
