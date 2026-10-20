@@ -3,7 +3,7 @@
   import { readTheme, writeTheme, type Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
   import Detail from './Detail.svelte';
-  import { parseHash } from './hash.js';
+  import { formatHash, parseHash } from './hash.js';
   import { messages } from './i18n.js';
   import List from './List.svelte';
   import Preview from './Preview.svelte';
@@ -44,6 +44,27 @@
   const t = $derived(messages[locale]);
   const route = $derived(parseHash(hash));
   const entry = $derived(route.view === 'list' ? undefined : catalog.find((e) => e.path === route.path));
+  // the sidebar's order
+  const index = $derived(entry ? catalog.indexOf(entry) : -1);
+  const previous = $derived(index > 0 ? catalog[index - 1] : undefined);
+  const next = $derived(index === -1 ? (route.view === 'list' ? catalog[0] : undefined) : catalog[index + 1]);
+
+  let shortcuts: HTMLDialogElement | undefined = $state();
+
+  function onkeydown(e: KeyboardEvent) {
+    if (route.view === 'preview' || e.metaKey || e.ctrlKey || e.altKey) return;
+    const target = e.target as HTMLElement;
+    if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+    if (e.key === '?') {
+      e.preventDefault();
+      shortcuts?.showModal();
+      return;
+    }
+    const to = e.key === 'j' ? next : e.key === 'k' ? previous : undefined;
+    if (!to) return;
+    e.preventDefault();
+    location.hash = formatHash('detail', to.path);
+  }
 
   // components in a preview and links in a doc can change the hash too; only catalog routes navigate
   function onhashchange() {
@@ -61,7 +82,7 @@
   }
 </script>
 
-<svelte:window {onhashchange} />
+<svelte:window {onhashchange} {onkeydown} />
 
 <svelte:head>
   <title>{route.view === 'detail' && entry ? `${entry.name} | ${title}` : title}</title>
@@ -77,16 +98,42 @@
   {/if}
 {:else}
   <div class="zukan" data-theme={theme}>
-    <Sidebar entries={catalog} current={entry?.path} {logo} {title} {theme} ontoggletheme={toggleTheme} {t} />
+    <Sidebar
+      entries={catalog}
+      current={entry?.path}
+      {logo}
+      {title}
+      {theme}
+      ontoggletheme={toggleTheme}
+      onshortcuts={() => shortcuts?.showModal()}
+      {t}
+    />
     <main>
       {#if route.view === 'list'}
         <List entries={catalog} {searched} {t} />
       {:else if entry}
-        <Detail {entry} section={route.view === 'detail' ? route.section : null} {theme} {t} />
+        <Detail {entry} section={route.view === 'detail' ? route.section : null} {previous} {next} {theme} {t} />
       {:else}
         <h1>{t.notFound}</h1>
       {/if}
     </main>
+    <!-- inside .zukan, so the dialog gets the catalog's theme -->
+    <dialog bind:this={shortcuts} class="shortcuts" aria-labelledby="zukan-shortcuts">
+      <h2 id="zukan-shortcuts">{t.shortcuts}</h2>
+      <dl>
+        <dt><kbd>/</kbd></dt>
+        <dd>{t.shortcutSearch}</dd>
+        <dt><kbd>J</kbd></dt>
+        <dd>{t.shortcutNext}</dd>
+        <dt><kbd>K</kbd></dt>
+        <dd>{t.shortcutPrevious}</dd>
+        <dt><kbd>Esc</kbd></dt>
+        <dd>{t.shortcutExpanded}</dd>
+        <dt><kbd>?</kbd></dt>
+        <dd>{t.shortcutHelp}</dd>
+      </dl>
+      <form method="dialog"><button>{t.close}</button></form>
+    </dialog>
   </div>
 {/if}
 
@@ -164,5 +211,66 @@
   h1 {
     margin: 0 0 16px;
     font-size: 24px;
+  }
+
+  .shortcuts {
+    min-width: 280px;
+    padding: 20px 24px;
+    border: 1px solid var(--_border);
+    border-radius: 12px;
+    background: var(--_bg);
+    color: var(--_text);
+    font-family: var(--_font);
+    box-shadow: 0 24px 64px -12px rgb(0 0 0 / 0.45);
+  }
+
+  .shortcuts::backdrop {
+    background: rgb(0 0 0 / 0.45);
+  }
+
+  .shortcuts h2 {
+    margin: 0 0 16px;
+    font-size: 16px;
+  }
+
+  .shortcuts dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px 16px;
+    margin: 0 0 20px;
+    font-size: 14px;
+  }
+
+  .shortcuts dt {
+    text-align: right;
+  }
+
+  .shortcuts dd {
+    margin: 0;
+    color: var(--_muted);
+  }
+
+  kbd {
+    display: inline-block;
+    min-width: 1.6em;
+    padding: 1px 6px;
+    border: 1px solid var(--_border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--_code-bg);
+    font-family: var(--_mono);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .shortcuts button {
+    padding: 6px 14px;
+    border: 1px solid var(--_border);
+    border-radius: 6px;
+    background: var(--_bg);
+    color: var(--_text);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
   }
 </style>

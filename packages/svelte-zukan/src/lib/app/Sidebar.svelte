@@ -12,6 +12,7 @@
     title,
     theme,
     ontoggletheme,
+    onshortcuts,
     t
   }: {
     entries: Entry[];
@@ -20,6 +21,7 @@
     title: string;
     theme: Theme;
     ontoggletheme: () => void;
+    onshortcuts: () => void;
     t: Messages;
   } = $props();
 
@@ -57,6 +59,21 @@
       {/if}
     </a>
     <div class="actions">
+      <button type="button" class="theme keys" title="{t.shortcuts} (?)" onclick={onshortcuts}>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <rect x="2.5" y="6" width="19" height="12" rx="2" />
+          <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" stroke-linecap="round" />
+        </svg>
+        <span class="sr-only">{t.shortcuts}</span>
+      </button>
       <button type="button" class="theme" aria-pressed={theme === 'dark'} title={t.darkMode} onclick={ontoggletheme}>
         <!-- the icon shows the current theme; the button's name and pressed state say what it does -->
         <svg

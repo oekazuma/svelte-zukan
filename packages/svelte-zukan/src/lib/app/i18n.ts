@@ -24,6 +24,16 @@ export type Messages = {
   expand: string;
   collapse: string;
   loading: string;
+  onThisPage: string;
+  previous: string;
+  next: string;
+  shortcuts: string;
+  shortcutSearch: string;
+  shortcutNext: string;
+  shortcutPrevious: string;
+  shortcutExpanded: string;
+  shortcutHelp: string;
+  close: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -52,7 +62,17 @@ export const messages: Record<'en' | 'ja', Messages> = {
     outline: 'Show outlines',
     expand: 'Expand',
     collapse: 'Exit expanded view (Esc)',
-    loading: 'Loading the preview'
+    loading: 'Loading the preview',
+    onThisPage: 'On this page',
+    previous: 'Previous',
+    next: 'Next',
+    shortcuts: 'Keyboard shortcuts',
+    shortcutSearch: 'Search the components',
+    shortcutNext: 'Next component',
+    shortcutPrevious: 'Previous component',
+    shortcutExpanded: 'Leave an expanded preview',
+    shortcutHelp: 'Show these shortcuts',
+    close: 'Close'
   },
   ja: {
     nav: 'コンポーネント',
@@ -79,6 +99,16 @@ export const messages: Record<'en' | 'ja', Messages> = {
     outline: '要素の枠線を表示',
     expand: '拡大して表示',
     collapse: '拡大表示を終える（Esc）',
-    loading: 'プレビューを読み込み中'
+    loading: 'プレビューを読み込み中',
+    onThisPage: 'このページの内容',
+    previous: '前へ',
+    next: '次へ',
+    shortcuts: 'キーボードショートカット',
+    shortcutSearch: 'コンポーネントを検索',
+    shortcutNext: '次のコンポーネント',
+    shortcutPrevious: '前のコンポーネント',
+    shortcutExpanded: '拡大表示を終える',
+    shortcutHelp: 'このショートカット一覧を表示',
+    close: '閉じる'
   }
 };
