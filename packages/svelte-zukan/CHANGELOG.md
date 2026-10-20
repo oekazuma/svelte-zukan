@@ -1,5 +1,32 @@
 # svelte-zukan
 
+## 0.4.0
+
+### Minor Changes
+
+- 25adfe4: feat: a more polished catalog UI. The list page shows each group as a grid of component cards. Each section's preview and code form one card, and the code view has syntax colors. The resize grip sits beside the preview instead of over it, so the iframe is exactly the chosen width. Markdown descriptions get styled inline code, code blocks, lists and tables.
+- 49dbde4: feat: a detail page with several sections gets a table of contents that follows the scroll, and every detail page links to the previous and next components. `J` and `K` move between components, and `?` (or the keyboard button in the sidebar) lists the shortcuts.
+- e384600: feat: each preview gets a button that outlines its elements, a button that expands it over the page (Esc leaves), and a loading skeleton until it is measured. The Copy button of the code view is larger, with an icon and a clear copied state.
+- a9c7520: feat: each preview's width is remembered across reloads, and a preview opened in its own tab uses the catalog's theme.
+- 2b7f4f4: feat: link to one section of a detail page with `#/<ID>?section=<title>`; each section heading links to itself.
+- fc075bd: feat: the sidebar shows each component's directory as a folder that folds, with counts, and the search also matches section titles and links straight to the matching section.
+- 4954dbe: feat: one theme button at the top of the sidebar switches the catalog UI and every preview between light and dark. It starts from the system setting and is remembered; it replaces the Light/Dark buttons on each preview's toolbar.
+
+### Patch Changes
+
+- 3f32585: fix: a `logo` outside the Vite root adds only that file to `server.fs.allow`, not its whole directory.
+- 34c1705: fix: the catalog page and the static catalog served by `vite preview` carry the headers from `server.headers` and `preview.headers`, like the app.
+- 6b4cbb5: fix: load the static catalog's CSS when the app disables CSS code splitting (for example SvelteKit's `bundleStrategy: 'inline'`), and remove SvelteKit's `version.json` from a custom `appDir`.
+- 08b6f9d: fix: the narrow-screen menu closes on every navigation, previews load when the catalog is opened as `index.html`, and a catalog shown inside an editor's iframe reloads after edits.
+- 266b0af: feat: the preview width presets are device icons (phone, tablet, laptop, desktop, full width) with their widths in the tooltip, the width readout shows whole pixels in a larger font, and the new-tab link keeps only its icon on a narrow toolbar.
+- 44eb591: fix: show the same code view for files with CRLF line endings, and detect a `Section` alias imported in `<script module>`.
+- e6082c0: fix: reloading the catalog after following an in-page anchor in a preview or a doc shows the same page again.
+- 7c2dcf4: fix: a catalog file without `<Section>` explains its empty detail page, and a `<Section>` without content no longer throws in dev.
+- 91ee80e: fix: the supported Node version is back to 22.17 or later, as documented (a dependency update had raised `engines.node`), and the sidebar's search hits and group counts no longer add stray text to the accessible names of their links and lists.
+- 82592c7: fix: the detail page of a catalog file whose name contains `%` loads in dev, and building a large catalog no longer rescans every directory per entry.
+- 7c880ad: fix: a preview's height includes the body padding and margin set by the app's CSS, and a horizontal scrollbar.
+- 505960e: fix: a preview whose content is exactly as tall as the initial frame (80px) gets its body spacing too, instead of being cut off.
+
 ## 0.3.0
 
 ### Minor Changes
