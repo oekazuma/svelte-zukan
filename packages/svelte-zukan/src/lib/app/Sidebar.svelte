@@ -30,9 +30,26 @@
   let open = $state(false);
   let search: HTMLInputElement;
 
+  // section titles live in each entry's metadata module, so they are loaded on the first search only
+  let titles = $state.raw<Map<string, string[]>>();
+  let loadingTitles = false;
+  function loadTitles() {
+    if (titles || loadingTitles) return;
+    loadingTitles = true;
+    Promise.all(entries.map(async (e) => [e.path, (await e.meta()).default.sections.map((s) => s.title)] as const))
+      .then((pairs) => (titles = new Map(pairs)))
+      // a broken file still shows its own error on its page; the search just matches IDs
+      .catch(() => (titles = new Map()));
+  }
+
   const matches = $derived.by(() => {
     const q = query.trim().toLowerCase();
-    return q ? entries.filter((e) => e.path.toLowerCase().includes(q)) : entries;
+    if (!q) return { entries, hits: new Map<string, string[]>() };
+    const sections = entries.map(
+      (e) => [e.path, (titles?.get(e.path) ?? []).filter((title) => title.toLowerCase().includes(q))] as const
+    );
+    const hits = new Map(sections.filter(([, found]) => found.length));
+    return { entries: entries.filter((e) => e.path.toLowerCase().includes(q) || hits.has(e.path)), hits };
   });
 
   async function onkeydown(e: KeyboardEvent) {
@@ -113,6 +130,7 @@
       type="search"
       bind:this={search}
       bind:value={query}
+      oninput={loadTitles}
       placeholder="{t.search} (/)"
       aria-label={t.search}
       autocomplete="off"
@@ -120,8 +138,11 @@
     <!-- following a link closes the panel on narrow screens; the links themselves handle the keyboard -->
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
     <nav aria-label={t.nav} onclick={() => (open = false)}>
-      {#if matches.length}
-        <EntryList entries={matches} {current} />
+      {#if matches.entries.length}
+        <!-- re-created when a search starts or ends, so every folder is open while searching -->
+        {#key !!query.trim()}
+          <EntryList entries={matches.entries} hits={matches.hits} {current} />
+        {/key}
       {:else}
         <p>{t.noMatches}</p>
       {/if}

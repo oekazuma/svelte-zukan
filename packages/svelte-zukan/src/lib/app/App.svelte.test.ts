@@ -403,6 +403,19 @@ describe('App', () => {
     await expect.element(nav.getByText('No matches')).toBeInTheDocument();
   });
 
+  it('the search also finds section titles and links to them', async () => {
+    const { props } = setup('');
+    props.catalog[0].meta = () =>
+      Promise.resolve({ default: { sections: [{ title: 'Dismissible', code: '' }], doc: null } });
+    const screen = await render(App, { props });
+    const nav = screen.getByRole('navigation', { name: 'Components' });
+    await screen.getByRole('searchbox', { name: 'Search' }).fill('dismiss');
+    await expect
+      .element(nav.getByRole('link', { name: 'Dismissible' }))
+      .toHaveAttribute('href', '#/ui/Card?section=Dismissible');
+    await expect.element(nav.getByRole('link', { name: 'Card' })).toBeInTheDocument();
+  });
+
   it('/ focuses the search', async () => {
     const { props } = setup('');
     const screen = await render(App, { props });
