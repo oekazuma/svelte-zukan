@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick, type Component, type Snippet } from 'svelte';
+  import { readTheme, writeTheme, type Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
   import Detail from './Detail.svelte';
   import { parseHash } from './hash.js';
@@ -32,6 +33,13 @@
   };
 
   let hash = $state(remembered() ?? location.hash);
+
+  // one theme for the catalog UI and every preview; it starts from the system's and is remembered once chosen
+  let theme = $state<Theme>(readTheme() ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  function toggleTheme() {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    writeTheme(theme);
+  }
 
   const t = $derived(messages[locale]);
   const route = $derived(parseHash(hash));
@@ -68,13 +76,13 @@
     <p>{t.notFound}</p>
   {/if}
 {:else}
-  <div class="zukan">
-    <Sidebar entries={catalog} current={entry?.path} {logo} {title} {t} />
+  <div class="zukan" data-theme={theme}>
+    <Sidebar entries={catalog} current={entry?.path} {logo} {title} {theme} ontoggletheme={toggleTheme} {t} />
     <main>
       {#if route.view === 'list'}
         <List entries={catalog} {searched} {t} />
       {:else if entry}
-        <Detail {entry} section={route.view === 'detail' ? route.section : null} {t} />
+        <Detail {entry} section={route.view === 'detail' ? route.section : null} {theme} {t} />
       {:else}
         <h1>{t.notFound}</h1>
       {/if}
@@ -88,9 +96,13 @@
     margin: 0;
   }
 
-  /* the catalog UI follows the system theme; the preview page (no .zukan) is left to the app's own CSS */
-  :global(html:has(> body > .zukan)) {
-    color-scheme: light dark;
+  /* the catalog UI follows its theme switch; the preview page (no .zukan) gets the theme from its frame */
+  :global(html:has(> body > .zukan[data-theme='light'])) {
+    color-scheme: light;
+  }
+
+  :global(html:has(> body > .zukan[data-theme='dark'])) {
+    color-scheme: dark;
   }
 
   /* internal theme; the catalog page loads no app CSS, so these are not meant to be overridden */
@@ -113,15 +125,13 @@
     font-family: var(--_font);
   }
 
-  @media (prefers-color-scheme: dark) {
-    .zukan {
-      --_bg: #0d1117;
-      --_text: #f0f6fc;
-      --_muted: #9198a1;
-      --_border: #3d444d;
-      --_accent: #4493f8;
-      --_code-bg: #151b23;
-    }
+  .zukan[data-theme='dark'] {
+    --_bg: #0d1117;
+    --_text: #f0f6fc;
+    --_muted: #9198a1;
+    --_border: #3d444d;
+    --_accent: #4493f8;
+    --_code-bg: #151b23;
   }
 
   main {

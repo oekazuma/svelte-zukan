@@ -2,4 +2,4 @@
 'svelte-zukan': minor
 ---
 
-feat: the preview background and each preview's width are remembered across reloads, and a preview opened in its own tab uses the chosen background.
+feat: each preview's width is remembered across reloads, and a preview opened in its own tab uses the catalog's theme.
