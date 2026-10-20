@@ -58,6 +58,11 @@
       "description": "Actions run in release.yml with publishing rights; a pinned SHA only helps if someone reads the bump.",
       "matchManagers": ["github-actions"],
       "automerge": false
+    },
+    {
+      "description": "vite-plugin-inspect 12.1 depends on @vitejs/devtools-kit ^0.7, so @vitejs/devtools 0.8 installs a second vite and SvelteKit's runner check fails (vite_ssr_environment_not_runnable). Allow 0.8 once vite-plugin-inspect moves to devtools-kit 0.8.",
+      "matchPackageNames": ["@vitejs/devtools"],
+      "allowedVersions": "<0.8.0"
     }
   ]
 }
