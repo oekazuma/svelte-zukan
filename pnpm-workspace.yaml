@@ -22,7 +22,7 @@ catalog:
   '@sveltejs/package': ^2.5.8
   '@sveltejs/vite-plugin-svelte': ^7.3.1
   '@types/node': ^24.19.2
-  '@vitejs/devtools': ^0.8.0
+  '@vitejs/devtools': ^0.7.6
   '@vitest/browser-playwright': ^4.1.12
   blume: ^2.2.3
   eslint: ^10.13.0
