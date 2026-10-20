@@ -11,8 +11,9 @@ beforeEach(() => {
   sessionStorage.clear();
 });
 
-function frameStyle(container: HTMLElement) {
-  return container.querySelector('iframe')!.parentElement!.style;
+/** the iframe's rendered width: the grip sits beside it, so this is the width the preview gets */
+function iframeWidth(container: HTMLElement) {
+  return Math.round(container.querySelector('iframe')!.getBoundingClientRect().width);
 }
 
 describe('PreviewFrame', () => {
@@ -20,7 +21,7 @@ describe('PreviewFrame', () => {
     const screen = await render(PreviewFrame, { props });
     screen.container.style.width = '1000px';
     await screen.getByRole('button', { name: 'Tablet (768px)', exact: true }).click();
-    expect(frameStyle(screen.container).width).toBe('768px');
+    await expect.poll(() => iframeWidth(screen.container)).toBe(768);
     await expect.element(screen.getByText('768px', { exact: true })).toBeInTheDocument();
   });
 
@@ -38,19 +39,21 @@ describe('PreviewFrame', () => {
 
   it('full width preset', async () => {
     const screen = await render(PreviewFrame, { props });
+    screen.container.style.width = '1000px';
     await screen.getByRole('button', { name: 'Mobile (375px)', exact: true }).click();
-    expect(frameStyle(screen.container).width).toBe('375px');
+    await expect.poll(() => iframeWidth(screen.container)).toBe(375);
     await screen.getByRole('button', { name: 'Full width', exact: true }).click();
-    expect(frameStyle(screen.container).width).toBe('100%');
+    // the stage minus the 14px grip
+    await expect.poll(() => iframeWidth(screen.container)).toBe(986);
   });
 
   it('reports the effective width when the stage is narrower than the preset', async () => {
     const screen = await render(PreviewFrame, { props });
     screen.container.style.width = '600px';
     await screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }).click();
-    expect(frameStyle(screen.container).width).toBe('1280px');
-    await expect.element(screen.getByText('600px', { exact: true })).toBeInTheDocument();
-    await expect.element(screen.getByRole('separator')).toHaveAttribute('aria-valuenow', '600');
+    await expect.poll(() => iframeWidth(screen.container)).toBe(586);
+    await expect.element(screen.getByText('586px', { exact: true })).toBeInTheDocument();
+    await expect.element(screen.getByRole('separator')).toHaveAttribute('aria-valuenow', '586');
     await expect
       .element(screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }))
       .toHaveAttribute('aria-pressed', 'true');
@@ -76,14 +79,14 @@ describe('PreviewFrame resizing', () => {
     const screen = await render(PreviewFrame, { props });
     screen.container.style.width = '1000px';
     const handle = screen.getByRole('separator');
-    await expect.element(handle).toHaveAttribute('aria-valuenow', '1000');
+    await expect.element(handle).toHaveAttribute('aria-valuenow', '986');
     handle.element().focus();
     await userEvent.keyboard('{ArrowLeft}');
-    await expect.element(handle).toHaveAttribute('aria-valuenow', '990');
+    await expect.element(handle).toHaveAttribute('aria-valuenow', '976');
     await userEvent.keyboard('{Home}');
     await expect.element(handle).toHaveAttribute('aria-valuenow', '200');
     await userEvent.keyboard('{End}');
-    await expect.element(handle).toHaveAttribute('aria-valuenow', '1000');
+    await expect.element(handle).toHaveAttribute('aria-valuenow', '986');
   });
 
   it('drag resize', async () => {
@@ -97,13 +100,13 @@ describe('PreviewFrame resizing', () => {
 
     send('pointerdown', 100, 2);
     send('pointermove', 150);
-    expect(frameStyle(screen.container).width).toBe('375px');
+    await expect.poll(() => iframeWidth(screen.container)).toBe(375);
 
     send('pointerdown', 100);
     await expect.poll(() => getComputedStyle(iframe).pointerEvents).toBe('none');
     send('pointermove', 150);
     send('pointerup', 150);
-    await expect.poll(() => frameStyle(screen.container).width).toBe('425px');
+    await expect.poll(() => iframeWidth(screen.container)).toBe(425);
     expect(getComputedStyle(iframe).pointerEvents).not.toBe('none');
   });
 
@@ -117,7 +120,7 @@ describe('PreviewFrame resizing', () => {
     send('pointerdown', 100);
     send('pointermove', 150.4);
     send('pointerup', 150.4);
-    await expect.poll(() => frameStyle(screen.container).width).toBe('425px');
+    await expect.poll(() => iframeWidth(screen.container)).toBe(425);
     await expect.element(screen.getByText('425px', { exact: true })).toBeInTheDocument();
   });
 
@@ -125,11 +128,12 @@ describe('PreviewFrame resizing', () => {
     const screen = await render(PreviewFrame, { props });
     screen.container.style.width = '150px';
     const handle = screen.getByRole('separator');
-    await expect.element(handle).toHaveAttribute('aria-valuemin', '150');
-    await expect.element(handle).toHaveAttribute('aria-valuenow', '150');
+    // the stage minus the 14px grip
+    await expect.element(handle).toHaveAttribute('aria-valuemin', '136');
+    await expect.element(handle).toHaveAttribute('aria-valuenow', '136');
     handle.element().focus();
     await userEvent.keyboard('{Home}');
-    await expect.element(handle).toHaveAttribute('aria-valuenow', '150');
+    await expect.element(handle).toHaveAttribute('aria-valuenow', '136');
   });
 
   it('height follows the preview', async () => {
@@ -286,6 +290,7 @@ describe('PreviewFrame storage', () => {
   it('starts from a stored width', async () => {
     sessionStorage.setItem('svelte-zukan:width:about:blank', '768');
     const screen = await render(PreviewFrame, { props });
-    expect(frameStyle(screen.container).width).toBe('768px');
+    screen.container.style.width = '1000px';
+    await expect.poll(() => iframeWidth(screen.container)).toBe(768);
   });
 });

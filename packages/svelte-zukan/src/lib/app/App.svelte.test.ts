@@ -138,6 +138,16 @@ describe('App', () => {
     await expect.element(screen.getByRole('heading', { level: 1, name: 'Not found' })).toBeInTheDocument();
   });
 
+  it('the list shows each group with a count and links to every entry', async () => {
+    const { props } = setup('');
+    props.catalog.push({ group: 'ui', name: 'Button', dir: 'forms', path: 'ui/forms/Button', load, meta });
+    const screen = await render(App, { props });
+    const main = screen.getByRole('main');
+    await expect.element(main.getByRole('heading', { level: 2, name: 'ui 2' })).toBeInTheDocument();
+    await expect.element(main.getByRole('link', { name: /Button/ })).toHaveAttribute('href', '#/ui/forms/Button');
+    await expect.element(main.getByRole('link', { name: /Card/ })).toHaveAttribute('href', '#/ui/Card');
+  });
+
   it('an empty catalog lists the searched places', async () => {
     const { props } = setup('');
     props.catalog = [];

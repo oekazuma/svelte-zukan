@@ -42,14 +42,17 @@
       <!-- a hash route of this catalog, not a SvelteKit route -->
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
       <h2 use:reveal={section === s.title}><a href={formatHash('detail', entry.path, s.title)}>{s.title}</a></h2>
-      <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
-      <PreviewFrame
-        src={location.pathname + formatHash('preview', entry.path, s.title)}
-        title={s.title}
-        {theme}
-        labels={t}
-      />
-      <CodeBlock code={s.code} labels={t} />
+      <!-- one card: the preview with its code under it -->
+      <div class="example">
+        <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
+        <PreviewFrame
+          src={location.pathname + formatHash('preview', entry.path, s.title)}
+          title={s.title}
+          {theme}
+          labels={t}
+        />
+        <CodeBlock code={s.code} labels={t} />
+      </div>
     {/each}
   {:catch error}
     <p>{t.loadFailed} {error instanceof Error ? error.message : String(error)}</p>
@@ -73,8 +76,24 @@
   }
 
   h2 {
-    margin: 24px 0 8px;
+    margin: 32px 0 10px;
     font-size: 18px;
+  }
+
+  .example {
+    overflow: hidden;
+    border: 1px solid var(--_border);
+    border-radius: 10px;
+  }
+
+  /* class selectors, so these win over the components' own borders whatever the CSS order */
+  .example > :global(:is(.preview, .code-block)) {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .example > :global(.code-block) {
+    border-top: 1px solid var(--_border);
   }
 
   h2 a {
@@ -87,8 +106,67 @@
     text-decoration: underline;
   }
 
+  /* the rendered .md: plain HTML, so its elements are styled from here */
   .doc {
-    line-height: 1.6;
+    max-width: 72ch;
+    line-height: 1.7;
+  }
+
+  .doc :global(:is(p, ul, ol, pre, table, blockquote)) {
+    margin: 0 0 12px;
+  }
+
+  .doc :global(:is(ul, ol)) {
+    padding-left: 1.4em;
+  }
+
+  .doc :global(li + li) {
+    margin-top: 4px;
+  }
+
+  .doc :global(:is(h1, h2, h3, h4)) {
+    margin: 24px 0 8px;
+    font-size: 16px;
+  }
+
+  .doc :global(a) {
+    color: var(--_accent);
+  }
+
+  .doc :global(code) {
+    padding: 0.1em 0.3em;
+    border-radius: 4px;
+    background: var(--_code-bg);
+    font-family: var(--_mono);
+    font-size: 0.875em;
+  }
+
+  .doc :global(pre) {
+    padding: 12px 14px;
+    overflow-x: auto;
+    border-radius: 8px;
+    background: var(--_code-bg);
+  }
+
+  .doc :global(pre code) {
+    padding: 0;
+    background: none;
+  }
+
+  .doc :global(blockquote) {
+    padding-left: 12px;
+    border-left: 3px solid var(--_border);
+    color: var(--_muted);
+  }
+
+  .doc :global(table) {
+    border-collapse: collapse;
+  }
+
+  .doc :global(:is(th, td)) {
+    padding: 6px 10px;
+    border: 1px solid var(--_border);
+    text-align: left;
   }
 
   .empty {

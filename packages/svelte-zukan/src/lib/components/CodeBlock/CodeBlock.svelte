@@ -1,5 +1,6 @@
 <script lang="ts">
   import { messages, type Messages } from '../../app/i18n.js';
+  import { highlight } from './tokenize.js';
 
   let {
     code,
@@ -22,13 +23,19 @@
   }
 
   $effect(() => () => clearTimeout(timer));
+
+  const parts = $derived(highlight(code));
 </script>
 
 <!-- the button sits on the summary row but outside <summary>, which must not contain interactive content -->
 <div class="code-block">
   <details>
     <summary>{labels.code}</summary>
-    <pre><code>{code}</code></pre>
+    <!-- the copy button copies `code` itself, not these parts -->
+    <pre><code
+        >{#each parts as part, i (i)}{#if part.kind}<span class={part.kind}>{part.text}</span
+            >{:else}{part.text}{/if}{/each}</code
+      ></pre>
   </details>
   <button type="button" onclick={copy} aria-live="polite">
     {status === 'copied' ? labels.copied : status === 'failed' ? labels.copyFailed : labels.copy}
@@ -65,6 +72,33 @@
     font-size: 12px;
     line-height: 20px;
     cursor: pointer;
+  }
+
+  /* the catalog's theme defines the palette; outside it (the component's own catalog file) the code stays plain */
+  .comment {
+    color: var(--_syntax-comment, inherit);
+    font-style: italic;
+  }
+
+  .string {
+    color: var(--_syntax-string, inherit);
+  }
+
+  .tag {
+    color: var(--_syntax-tag, inherit);
+  }
+
+  .attr {
+    color: var(--_syntax-attr, inherit);
+  }
+
+  .keyword,
+  .op {
+    color: var(--_syntax-keyword, inherit);
+  }
+
+  .block {
+    color: var(--_syntax-block, inherit);
   }
 
   pre {

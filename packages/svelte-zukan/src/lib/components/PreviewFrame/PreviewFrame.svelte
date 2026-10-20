@@ -36,6 +36,8 @@
   const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'];
   const MIN_WIDTH = 200;
   const MIN_HEIGHT = 80;
+  /** the resize grip sits beside the iframe, so the iframe is exactly the chosen width */
+  const HANDLE = 14;
   const KEY_STEP = 10;
 
   let {
@@ -65,12 +67,14 @@
   let doc = $state.raw<Document>();
 
   // a stage narrower than MIN_WIDTH lowers the minimum, so aria-valuenow never goes below aria-valuemin
-  const min = $derived(Math.min(MIN_WIDTH, stageWidth));
+  // the widest the iframe can be: the stage minus the grip
+  const max = $derived(Math.max(0, stageWidth - HANDLE));
+  const min = $derived(Math.min(MIN_WIDTH, max));
   // the frame is capped by max-width and min-width in CSS, so report the effective width
-  const current = $derived(clamp(width ?? stageWidth));
+  const current = $derived(clamp(width ?? max));
 
   function clamp(value: number) {
-    return Math.min(stageWidth, Math.max(min, value));
+    return Math.min(max, Math.max(min, value));
   }
 
   function onpointerdown(e: PointerEvent) {
@@ -83,7 +87,7 @@
     }
     dragging = true;
     startX = e.clientX;
-    startWidth = handle.parentElement!.getBoundingClientRect().width;
+    startWidth = handle.parentElement!.getBoundingClientRect().width - HANDLE;
   }
 
   function onpointermove(e: PointerEvent) {
@@ -201,7 +205,7 @@
     </a>
   </div>
   <div class="stage" bind:clientWidth={stageWidth}>
-    <div class="frame" style:width={width === null ? '100%' : `${width}px`}>
+    <div class="frame" style:width={width === null ? '100%' : `${width + HANDLE}px`} style:--handle="{HANDLE}px">
       <!-- the iframe's color-scheme is what `prefers-color-scheme` reports inside it -->
       <iframe
         {src}
@@ -219,12 +223,12 @@
       ></iframe>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <div
-        class="handle"
+        class={['handle', { dragging }]}
         role="separator"
         aria-orientation="vertical"
         aria-label={labels.previewWidth}
         aria-valuemin={stageWidth ? min : undefined}
-        aria-valuemax={stageWidth || undefined}
+        aria-valuemax={stageWidth ? max : undefined}
         aria-valuenow={stageWidth ? Math.round(current) : undefined}
         tabindex="0"
         {onpointerdown}
@@ -332,8 +336,10 @@
 
   .frame {
     position: relative;
-    min-width: min(200px, 100%);
+    box-sizing: border-box;
+    min-width: min(calc(200px + var(--handle)), 100%);
     max-width: 100%;
+    padding-right: var(--handle);
     background: var(--_bg);
   }
 
@@ -347,19 +353,46 @@
     pointer-events: none;
   }
 
+  /* a grip on the frame's edge rather than a full-height bar, which reads as a scrollbar */
   .handle {
     position: absolute;
     top: 0;
     right: 0;
     bottom: 0;
-    width: 8px;
+    width: var(--handle);
     cursor: ew-resize;
     touch-action: none;
-    background: var(--_border);
+    border-left: 1px solid var(--_border);
+    background: var(--_code-bg);
   }
 
-  .handle:hover,
+  /* two short lines, the usual sign of a splitter */
+  .handle::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 6px;
+    height: 24px;
+    max-height: calc(100% - 12px);
+    background: linear-gradient(90deg, currentColor 0 2px, transparent 2px 4px, currentColor 4px 6px);
+    color: var(--_muted);
+    opacity: 0.6;
+    transform: translate(-50%, -50%);
+    transition:
+      opacity 0.15s,
+      color 0.15s;
+  }
+
+  .handle:hover::after,
+  .handle:focus-visible::after,
+  .handle.dragging::after {
+    color: var(--_accent);
+    opacity: 1;
+  }
+
   .handle:focus-visible {
-    background: var(--_accent);
+    outline: 2px solid var(--_accent);
+    outline-offset: -2px;
   }
 </style>

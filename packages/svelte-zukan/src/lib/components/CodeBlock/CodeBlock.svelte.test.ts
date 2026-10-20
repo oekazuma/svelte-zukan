@@ -40,4 +40,14 @@ describe('CodeBlock', () => {
     await expect.element(screen.getByText('Source')).toBeInTheDocument();
     await expect.element(screen.getByRole('button', { name: 'Copy code' })).toBeInTheDocument();
   });
+
+  it('colors the code without changing its text', async () => {
+    const code = '<p class="x">{#if a}b{/if}</p>';
+    const screen = await render(CodeBlock, { props: { code } });
+    const el = screen.container.querySelector('code')!;
+    expect(el.textContent).toBe(code);
+    expect([...el.querySelectorAll('span')].map((s) => `${s.className.split(' ')[0]}:${s.textContent}`)).toContain(
+      'tag:<p'
+    );
+  });
 });
