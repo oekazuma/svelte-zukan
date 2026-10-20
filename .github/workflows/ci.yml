@@ -131,3 +131,26 @@ jobs:
         run: pnpm --filter svelte-zukan build
       - name: Check that the catalog was written
         run: test -f packages/svelte-zukan/zukan-dist/index.html
+
+  # the published engines.node floor, on a user-style install of the packed library;
+  # every other job runs the dev toolchain on devEngines.runtime instead
+  floor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Node.js and dependencies
+        uses: $/.github/workflows/setup-node
+      - name: Pack the library
+        run: |
+          pnpm run package
+          cd packages/svelte-zukan && npm pack --pack-destination "$RUNNER_TEMP" --ignore-scripts
+      - name: Get the Node floor from engines.node
+        id: floor
+        run: echo "node=$(jq -r '.engines.node' packages/svelte-zukan/package.json | sed 's/^>=//')" >> "$GITHUB_OUTPUT"
+      - name: Setup Node.js at the floor
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ steps.floor.outputs.node }}
+      - name: Run the floor smoke
+        run: node scripts/floor-smoke.mjs "$RUNNER_TEMP"/svelte-zukan-*.tgz
