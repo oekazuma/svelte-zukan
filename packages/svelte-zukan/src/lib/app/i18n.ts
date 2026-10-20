@@ -17,6 +17,7 @@ export type Messages = {
   light: string;
   dark: string;
   openInNewTab: string;
+  noSections: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -38,7 +39,8 @@ export const messages: Record<'en' | 'ja', Messages> = {
     background: 'Preview background',
     light: 'Light',
     dark: 'Dark',
-    openInNewTab: 'Open in new tab'
+    openInNewTab: 'Open in new tab',
+    noSections: 'This file has no <Section>, so there is nothing to preview.'
   },
   ja: {
     nav: 'コンポーネント',
@@ -58,6 +60,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     background: 'プレビューの背景',
     light: 'ライト',
     dark: 'ダーク',
-    openInNewTab: '新しいタブで開く'
+    openInNewTab: '新しいタブで開く',
+    noSections: 'このファイルには <Section> がないため、プレビューするものがありません。'
   }
 };

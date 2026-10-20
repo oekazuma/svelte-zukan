@@ -15,9 +15,10 @@
       "automerge": true
     },
     {
-      "description": "marked ships as a runtime dependency of the published package, so its updates reach every consumer — keep them manually reviewed.",
+      "description": "marked ships as a runtime dependency of the published package, so its updates reach every consumer — keep them manually reviewed. In-range updates touch only the lockfile, so the published range does not narrow.",
       "groupName": "dependencies",
       "matchDepTypes": ["dependencies"],
+      "rangeStrategy": "update-lockfile",
       "automerge": false
     },
     {
@@ -52,6 +53,11 @@
       "matchUpdateTypes": ["lockFileMaintenance"],
       "minimumReleaseAgeBehaviour": "timestamp-optional",
       "automerge": true
+    },
+    {
+      "description": "Actions run in release.yml with publishing rights; a pinned SHA only helps if someone reads the bump.",
+      "matchManagers": ["github-actions"],
+      "automerge": false
     }
   ]
 }

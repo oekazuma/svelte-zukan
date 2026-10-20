@@ -23,7 +23,10 @@ function setup(hash: string) {
   const wrapper = vi.fn(() => Promise.resolve({ default: Wrapper }));
   const catalog = [{ group: 'ui', name: 'Card', dir: '', path: 'ui/Card', load, meta }];
   const searched = [{ group: 'ui', dirs: ['src', '../lib'] }];
-  return { wrapper, props: { catalog, logo: null, wrapper, title: 'zukan', locale: 'en' as 'en' | 'ja', searched } };
+  return {
+    wrapper,
+    props: { catalog, logo: null as string | null, wrapper, title: 'zukan', locale: 'en' as 'en' | 'ja', searched }
+  };
 }
 
 beforeEach(async () => {
@@ -59,6 +62,28 @@ describe('App', () => {
     await expect.element(screen.getByText('one')).not.toBeInTheDocument();
     expect(wrapper).toHaveBeenCalledOnce();
     expect(screen.container.querySelector('nav')).toBeNull();
+  });
+
+  it('a preview page applies the stored background', async () => {
+    localStorage.setItem('svelte-zukan:background', 'dark');
+    try {
+      const { props } = setup('#/preview/ui/Card?section=Two');
+      const screen = await render(App, { props });
+      await expect.element(screen.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+      expect(document.documentElement.style.colorScheme).toBe('dark');
+    } finally {
+      localStorage.removeItem('svelte-zukan:background');
+      document.documentElement.style.colorScheme = '';
+      document.documentElement.style.backgroundColor = '';
+    }
+  });
+
+  it('shows the logo image with the title as its alt text', async () => {
+    const { props } = setup('');
+    props.logo = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E';
+    props.title = 'My UI';
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('img', { name: 'My UI' })).toBeInTheDocument();
   });
 
   it('an unknown ID is not found', async () => {
@@ -102,6 +127,89 @@ describe('App', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it('a file without sections says so', async () => {
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    await expect
+      .element(screen.getByText('This file has no <Section>, so there is nothing to preview.'))
+      .toBeInTheDocument();
+  });
+
+  it('a file with sections shows no such message', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = () =>
+      Promise.resolve({ default: { sections: [{ title: 'One', code: '<p>one</p>' }], doc: null } });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 2, name: 'One' })).toBeInTheDocument();
+    await expect.element(screen.getByText(/has no <Section>/)).not.toBeInTheDocument();
+  });
+
+  const twoSections = () =>
+    Promise.resolve({
+      default: {
+        sections: [
+          { title: 'One', code: '<p>1</p>' },
+          { title: 'Two', code: '<p>2</p>' }
+        ],
+        doc: null
+      }
+    });
+
+  it('each section heading links to itself', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = twoSections;
+    const screen = await render(App, { props });
+    await expect
+      .element(screen.getByRole('heading', { level: 2, name: 'Two' }).getByRole('link'))
+      .toHaveAttribute('href', '#/ui/Card?section=Two');
+  });
+
+  it('a detail URL with ?section scrolls that section into view', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card?section=Two');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      expect(spy.mock.contexts.map((el) => (el as Element).textContent)).toEqual(['Two']);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('changing only the section scrolls without remounting the page', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      const one = screen.getByRole('heading', { level: 2, name: 'One' });
+      await expect.element(one).toBeInTheDocument();
+      const node = one.element();
+      expect(spy).not.toHaveBeenCalled();
+      await setHash('#/ui/Card?section=One');
+      await expect.poll(() => spy.mock.calls.length).toBe(1);
+      expect(spy.mock.contexts[0]).toBe(node);
+      expect(one.element()).toBe(node);
+      expect(document.title).toBe('Card | zukan');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('an unknown section shows the page without scrolling', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card?section=Nope');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('follows hashchange', async () => {
     const { props } = setup('');
     const screen = await render(App, { props });
@@ -126,6 +234,28 @@ describe('App', () => {
     await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
     await setHash('#usage');
     await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+  });
+
+  it.each(['#details', '#'])('a reload after %s in a preview shows the preview again', async (hash) => {
+    const { props } = setup('#/preview/ui/Card?section=Two');
+    const first = await render(App, { props });
+    await expect.element(first.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+    // the app must be mounted while the hash changes, as on a real page
+    await setHash(hash);
+    await first.unmount();
+    // a reload mounts the app again with the same URL and history entry
+    const again = await render(App, { props });
+    await expect.element(again.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+  });
+
+  it('a reload after an in-page anchor in a doc shows the detail page again', async () => {
+    const { props } = setup('#/ui/Card');
+    const first = await render(App, { props });
+    await expect.element(first.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    await setHash('#usage');
+    await first.unmount();
+    const again = await render(App, { props });
+    await expect.element(again.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
   });
 
   it('an empty hash still shows the list', async () => {
@@ -188,6 +318,31 @@ describe('App', () => {
     await screen.rerender({ catalog: [...props.catalog] });
     await expect.element(nav.getByRole('list', { name: 'ui' })).toBeInTheDocument();
     await expect.element(nav.getByRole('list', { name: 'examples' })).toHaveTextContent('Demo');
+  });
+
+  it('on a narrow screen the menu closes when the logo link or Back navigates', async () => {
+    await page.viewport(400, 800);
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    await menu.click();
+    await expect.element(menu).toHaveAttribute('aria-expanded', 'true');
+    await screen.getByRole('link', { name: 'zukan' }).click();
+    await expect.element(menu).toHaveAttribute('aria-expanded', 'false');
+    await menu.click();
+    await expect.element(menu).toHaveAttribute('aria-expanded', 'true');
+    history.back();
+    await expect.element(menu).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('the preview URL is the page path plus the preview hash', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = () =>
+      Promise.resolve({ default: { sections: [{ title: 'One', code: '<p>one</p>' }], doc: null } });
+    const screen = await render(App, { props });
+    const src = `${location.pathname}#/preview/ui/Card?section=One`;
+    await expect.element(screen.getByTitle('One')).toHaveAttribute('src', src);
+    await expect.element(screen.getByRole('link', { name: 'Open in new tab' })).toHaveAttribute('href', src);
   });
 
   it('on a narrow screen the menu button shows the navigation', async () => {
