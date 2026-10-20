@@ -1,5 +1,11 @@
 # svelte-zukan
 
+## 0.4.1
+
+### Patch Changes
+
+- 8202345: fix: keep `light-dark()` in the static catalog's CSS, so components that use it follow the catalog's theme button instead of the system setting.
+
 ## 0.4.0
 
 ### Minor Changes
