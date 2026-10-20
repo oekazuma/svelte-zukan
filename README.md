@@ -16,7 +16,7 @@
 ## Links
 
 - [Documentation](https://oekazuma.github.io/svelte-zukan/) (Support for English and Japanese)
-- [Demo](https://oekazuma.github.io/svelte-zukan/demo/)
+- [Demo](https://oekazuma.github.io/svelte-zukan/demo/) ([日本語](https://oekazuma.github.io/svelte-zukan/demo/ja/))
 - [Contribution Guide](CONTRIBUTING.md)
 
 ## License

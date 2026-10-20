@@ -37,7 +37,6 @@ export function tokenize(code: string): Token[] {
   return tokens;
 }
 
-/** the code split into plain and coloured parts, covering every character once */
 export function highlight(code: string): { text: string; kind: Kind | null }[] {
   const parts: { text: string; kind: Kind | null }[] = [];
   let at = 0;

@@ -583,7 +583,6 @@ describe('build', () => {
     await reject('gen', { outDir: `${root}/gen/kit` });
     const ok = await bootBuild(root, { build: { outDir: '.svelte-kit' } }, { plugins: kitPlugins({ outDir: 'gen' }) });
     expect(ok.added).toBeDefined();
-    // the real plugin
     const real = (outDir: string) =>
       bootBuild(root, { build: { outDir } }, { plugins: [sveltekit({ outDir: 'gen' })] });
     await expect(real('gen/zukan')).rejects.toThrow(/must not overlap SvelteKit's kit\.outDir/);
@@ -656,6 +655,7 @@ describe('build', () => {
         ssr: 'src/entry-server.ts',
         lib: { entry: 'src/index.ts' },
         cssCodeSplit: false,
+        cssTarget: 'chrome107',
         rolldownOptions: { input: { main: 'index.html', nested: 'nested/index.html', zukan: ENTRY } }
       }
     });
@@ -666,6 +666,7 @@ describe('build', () => {
       lib: false,
       emptyOutDir: false,
       cssCodeSplit: true,
+      cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
       rolldownOptions: { input: { zukan: ENTRY } }
     });
     const client = inherited();

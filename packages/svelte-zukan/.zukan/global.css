@@ -1,4 +1,3 @@
-/* the app's global CSS: design tokens shared by the example components */
 :root {
   /* the catalog's theme switch sets color-scheme inline; a preview opened alone follows the system */
   color-scheme: light dark;
@@ -40,7 +39,6 @@ body {
   line-height: 1.5;
 }
 
-/* layout helpers for the catalog files */
 .demo-row {
   display: flex;
   flex-wrap: wrap;

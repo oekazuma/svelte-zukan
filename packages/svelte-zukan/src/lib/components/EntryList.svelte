@@ -16,7 +16,6 @@
   type Folder = { name: string; count: number; items: (Folder | Entry)[] };
   const isFolder = (item: Folder | Entry): item is Folder => 'items' in item;
 
-  /** the entries of a group as folders of their `dir`, in the catalog's order */
   function tree(items: Entry[]): Folder {
     const root: Folder = { name: '', count: 0, items: [] };
     for (const entry of items) {
@@ -74,7 +73,6 @@
   </ul>
 {/snippet}
 
-<!-- group names are shown only when there is more than one group -->
 {#each groups as [group, items], i (group)}
   {#if groups.size > 1}
     <!-- the list is named by the group alone, not by its count -->
@@ -117,7 +115,6 @@
     font-family: var(--_font);
   }
 
-  /* nested folders are indented with a guide line */
   details ul {
     margin-left: 14px;
     padding-left: 6px;

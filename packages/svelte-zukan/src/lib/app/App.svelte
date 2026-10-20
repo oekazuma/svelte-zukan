@@ -34,7 +34,6 @@
 
   let hash = $state(remembered() ?? location.hash);
 
-  // one theme for the catalog UI and every preview; it starts from the system's and is remembered once chosen
   let theme = $state<Theme>(readTheme() ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   function toggleTheme() {
     theme = theme === 'dark' ? 'light' : 'dark';
@@ -44,7 +43,6 @@
   const t = $derived(messages[locale]);
   const route = $derived(parseHash(hash));
   const entry = $derived(route.view === 'list' ? undefined : catalog.find((e) => e.path === route.path));
-  // the sidebar's order
   const index = $derived(entry ? catalog.indexOf(entry) : -1);
   const previous = $derived(index > 0 ? catalog[index - 1] : undefined);
   const next = $derived(index === -1 ? (route.view === 'list' ? catalog[0] : undefined) : catalog[index + 1]);

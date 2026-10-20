@@ -80,7 +80,6 @@ export function listCatalog(groups: CatalogGroup[], suffix: string): CatalogItem
         const file = normalizePath(join(dir, found));
         const segments = normalizePath(found).slice(0, -ext.length).split('/');
         const name = segments[segments.length - 1];
-        // `Button/Button` is written as `Button`
         if (segments.length > 1 && segments[segments.length - 2] === name) segments.pop();
         const rel = segments.join('/');
         const path = `${group}/${rel}`;
