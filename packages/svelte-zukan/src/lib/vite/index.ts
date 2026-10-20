@@ -154,7 +154,14 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       // the environment starts from the app's top-level `build`; mutated, since a returned value would be merged into it
       // `emptyOutDir: false` also because Kit sets it for the whole build; buildApp removes only the catalog's own files
       // `cssCodeSplit`: index.html is written without Vite's HTML transform, which is the only thing that links merged CSS
-      Object.assign(config.build, { ssr: false, lib: false, emptyOutDir: false, cssCodeSplit: true });
+      // `cssTarget`: lowered `light-dark()` follows prefers-color-scheme, not the theme the catalog sets on each preview
+      Object.assign(config.build, {
+        ssr: false,
+        lib: false,
+        emptyOutDir: false,
+        cssCodeSplit: true,
+        cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5']
+      });
       config.build.rolldownOptions = { ...config.build.rolldownOptions, input: { zukan: ENTRY } };
     },
     buildApp: {

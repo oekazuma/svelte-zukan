@@ -141,6 +141,9 @@ test('plain vite build', { timeout: 120_000 }, async () => {
   expect(existsSync(join(dir, 'zukan-dist/index.html'))).toBe(true);
   expect(missing(dir, ['vite-svelte/lib/Counter'])).toEqual([]);
   expect(withLocalPaths(dir)).toEqual([]);
+  // the preview's theme switches `color-scheme`, which only an unlowered `light-dark()` follows
+  const css = globSync('zukan-dist/_zukan/*.css', { cwd: dir }).map((f) => readFileSync(join(dir, f), 'utf8'));
+  expect(css.join('\n')).toContain('light-dark(#000');
 
   // `vite preview` serves the static catalog too
   const server = await preview({

@@ -15,6 +15,7 @@ The catalog is written to `zukan-dist/`, separately from the app build. You can 
 
 - Output paths are relative, so the catalog works under any subpath (for example, `/docs/zukan/`). No server-side rewrites are needed
 - When `build` is enabled, `vite build` runs in Vite's builder mode (Environment API), and all environments are built in one run
+- The catalog's CSS targets browsers with `light-dark()` (Chrome and Edge 123, Firefox 120, Safari 17.5), whatever `build.cssTarget` the app sets, so `light-dark()` in your components follows the catalog's theme button
 - `vite preview` serves the exported catalog at `/__zukan/` (under `base` when it is set), so you can check it before you deploy it
 - `vite build --watch` does not write the catalog. It prints a warning and skips it
 - The output directory must not be Vite's root or contain it, and must not overlap the app's `build.outDir` (`dist` by default) or SvelteKit's `outDir` (`.svelte-kit`). Each of these is a build error
