@@ -18,5 +18,5 @@ export default defineConfig({
           }
         ]
   },
-  plugins: [svelte(), zukan({ build: true })]
+  plugins: [zukan({ build: true }), svelte()]
 });

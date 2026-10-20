@@ -1,17 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { normalizePath, searchForWorkspaceRoot } from 'vite';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as api from './index.js';
 import { zukan } from './index.js';
-import { detectSvelteKit } from './kit.js';
-import { createMatchers } from './matchers.js';
 import { extendFsAllow, libDir, resolveOptions } from './options.js';
-import { ENTRY, generateCatalogModule, generateEntryModule } from './virtual.js';
+import { ENTRY, META, metaId } from './virtual.js';
 
 // hooks are called with hand-made fakes, so the plugin is typed loosely
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,39 +20,19 @@ let dir: string;
 let zukanFile: string;
 let docFile: string;
 
+/** every temp dir of this file lives here, so one afterAll removes them all */
+let tmpRoot: string;
+
 beforeAll(async () => {
-  dir = await mkdtemp(path.join(tmpdir(), 'zukan-'));
+  tmpRoot = realpathSync(await mkdtemp(path.join(tmpdir(), 'zukan-')));
+  dir = tmpRoot;
   zukanFile = path.join(dir, 'Foo.zukan.svelte');
   docFile = path.join(dir, 'Foo.zukan.md');
   await writeFile(zukanFile, source);
   await writeFile(docFile, '# Foo');
 });
 
-describe('createMatchers', () => {
-  it('follows the suffix', () => {
-    const { isCatalogFile, isDocFile } = createMatchers('catalog');
-    expect(isCatalogFile('/a/Foo.catalog.svelte')).toBe(true);
-    expect(isCatalogFile('/a/Foo.zukan.svelte')).toBe(false);
-    expect(isDocFile('/a/Foo.catalog.md')).toBe(true);
-    expect(isDocFile('/a/Foo.zukan.md')).toBe(false);
-    expect(isDocFile('/a/Document.md')).toBe(false);
-  });
-
-  it('maps a catalog file to its doc file', () => {
-    const { docFileOf } = createMatchers('zukan');
-    expect(docFileOf('/a/Foo.zukan.svelte')).toBe('/a/Foo.zukan.md');
-  });
-
-  it('is case-sensitive, using the suffix verbatim', () => {
-    const { isCatalogFile } = createMatchers('zukan');
-    expect(isCatalogFile('/a/Foo.ZUKAN.svelte')).toBe(false);
-  });
-
-  it.each(['a.b', '', 'a b', 'a|b'])('rejects invalid suffix %j', (suffix) => {
-    expect(() => createMatchers(suffix)).toThrow(/suffix/);
-    expect(() => zukan({ suffix })).toThrow(/suffix/);
-  });
-});
+afterAll(() => rmSync(tmpRoot, { recursive: true, force: true }));
 
 describe('hotUpdate', () => {
   const metaMod = { id: '\0virtual:svelte-zukan/meta/app%2FA' };
@@ -116,7 +94,7 @@ describe('hotUpdate', () => {
 
 // a temporary app: <tmp>/app/src/A.zukan.svelte, <tmp>/outside/B.zukan.svelte
 const makeApp = async () => {
-  const tmp = realpathSync(await mkdtemp(path.join(tmpdir(), 'zukan-app-')));
+  const tmp = await mkdtemp(path.join(tmpRoot, 'app-'));
   const root = normalizePath(path.join(tmp, 'app'));
   const outside = normalizePath(path.join(tmp, 'outside'));
   mkdirSync(path.join(root, 'src'), { recursive: true });
@@ -150,8 +128,8 @@ const bootBuild = async (root: string, options: Parameters<typeof zukan>[0] = {}
   return { p, added, config };
 };
 
-const fakeServer = (root: string, base = '/') => ({
-  config: { root, base, logger: { info: vi.fn() } },
+const fakeServer = (root: string, base = '/', headers?: Record<string, string | string[]>) => ({
+  config: { root, base, logger: { info: vi.fn() }, server: { headers }, preview: { headers } },
   middlewares: { use: vi.fn() },
   watcher: { add: vi.fn() },
   transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
@@ -160,52 +138,6 @@ const fakeServer = (root: string, base = '/') => ({
 });
 
 const bundled = (file: string) => normalizePath(fileURLToPath(new URL(`../app/${file}`, import.meta.url)));
-
-describe('generateCatalogModule', () => {
-  it('lists items with lazy imports', () => {
-    const code = generateCatalogModule([
-      { group: '@acme/ui', name: 'Card', dir: 'lib', path: '@acme/ui/lib/Card', file: '/abs/Card.zukan.svelte' }
-    ]);
-    expect(code).toContain('import("/abs/Card.zukan.svelte")');
-    expect(code).toContain('"path":"@acme/ui/lib/Card"');
-    expect(code).toContain('export const catalog');
-  });
-});
-
-describe('generateEntryModule', () => {
-  const base = { appFile: '/lib/app/App.svelte', title: 'zukan', locale: 'en' as const, searched: [] };
-
-  it('imports the logo as a URL and the wrapper lazily', () => {
-    const code = generateEntryModule({ ...base, logo: '/x/logo.svg', wrapper: '/x/Wrapper.svelte' });
-    expect(code).toContain('import("/lib/app/App.svelte")');
-    expect(code).toContain('import("virtual:svelte-zukan/catalog")');
-    expect(code).toContain('import logo from "/x/logo.svg?url"');
-    expect(code).toContain('wrapper: () => import("/x/Wrapper.svelte")');
-  });
-
-  it('listens for zukan:reload before loading the app and the catalog', () => {
-    const code = generateEntryModule({ ...base, logo: null, wrapper: null });
-    const listen = code.indexOf("import.meta.hot.on('zukan:reload'");
-    expect(listen).toBeGreaterThan(-1);
-    expect(code).toContain('window === window.top');
-    expect(listen).toBeLessThan(code.indexOf('import("virtual:svelte-zukan/catalog")'));
-    expect(listen).toBeLessThan(code.indexOf('import("/lib/app/App.svelte")'));
-    expect(code).not.toMatch(/^import .* from "(virtual:svelte-zukan\/catalog|\/lib\/app\/App\.svelte)"/m);
-  });
-
-  it('passes null without a logo or a wrapper', () => {
-    const code = generateEntryModule({ ...base, logo: null, wrapper: null });
-    expect(code).not.toContain('?url');
-    expect(code).toContain('logo: null');
-    expect(code).toContain('wrapper: null');
-  });
-
-  it('passes the searched places', () => {
-    const searched = [{ group: 'ui', dirs: ['src', '../outside'] }];
-    const code = generateEntryModule({ ...base, logo: null, wrapper: null, searched });
-    expect(code).toContain('searched: [{"group":"ui","dirs":["src","../outside"]}]');
-  });
-});
 
 describe('resolveOptions', () => {
   it('fills in defaults', async () => {
@@ -265,7 +197,7 @@ describe('extendFsAllow', () => {
     expect(config.server?.fs?.allow).toEqual(['/x', outside, libDir]);
   });
 
-  it('adds the dirs of a wrapper and a logo outside the root', async () => {
+  it('adds the dir of a wrapper and the logo file outside the root', async () => {
     const { root, outside } = await makeApp();
     const assets = normalizePath(path.join(outside, 'assets'));
     mkdirSync(assets);
@@ -273,7 +205,7 @@ describe('extendFsAllow', () => {
     await writeFile(path.join(assets, 'logo.svg'), '');
     const ws = searchForWorkspaceRoot(root);
     const { config } = boot(root, { wrapper: '../outside/W.svelte', logo: '../outside/assets/logo.svg' });
-    expect(config.server?.fs?.allow).toEqual([ws, libDir, outside, assets]);
+    expect(config.server?.fs?.allow).toEqual([ws, libDir, outside, `${assets}/logo.svg`]);
     // inside the root, nothing is added for them
     expect(boot(root, { wrapper: 'Wrapper.svelte', logo: 'logo.png' }).config.server?.fs?.allow).toEqual([ws, libDir]);
   });
@@ -308,20 +240,20 @@ describe('virtual modules', () => {
 });
 
 describe('metadata modules', () => {
-  const meta = (path: string) => `\0virtual:svelte-zukan/meta/${path}`;
+  const meta = (path: string) => '\0' + metaId(path);
 
   it('resolves the metadata of an entry and lists it in the catalog', async () => {
     const { root } = await makeApp();
     const { p } = boot(root);
-    expect(p.resolveId('virtual:svelte-zukan/meta/app%2FA')).toBe(meta('app%2FA'));
-    expect(p.load('\0virtual:svelte-zukan/catalog')).toContain('import("virtual:svelte-zukan/meta/app%2FA")');
+    expect(p.resolveId(metaId('app/A'))).toBe(meta('app/A'));
+    expect(p.load('\0virtual:svelte-zukan/catalog')).toContain(`import("${metaId('app/A')}")`);
   });
 
   it('exports the sections and no absolute path', async () => {
     const { tmp, root } = await makeApp();
     const { p } = boot(root);
     const addWatchFile = vi.fn();
-    const code = p.load.call({ addWatchFile }, meta('app%2FA'));
+    const code = p.load.call({ addWatchFile }, meta('app/A'));
     expect(code).toContain('"title":"Foo"');
     expect(code).toContain('"doc":null');
     expect(code).not.toContain(tmp);
@@ -333,7 +265,7 @@ describe('metadata modules', () => {
     await writeFile(path.join(root, 'src/A.zukan.md'), '# A');
     const { p } = boot(root);
     const addWatchFile = vi.fn();
-    expect(p.load.call({ addWatchFile }, meta('app%2FA'))).toContain('<h1>A</h1>');
+    expect(p.load.call({ addWatchFile }, meta('app/A'))).toContain('<h1>A</h1>');
     expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/A.zukan.md`);
   });
 
@@ -343,25 +275,61 @@ describe('metadata modules', () => {
     await writeFile(path.join(root, 'src/B.catalog.md'), '# B');
     const { p } = boot(root, { suffix: 'catalog' });
     const addWatchFile = vi.fn();
-    expect(p.load.call({ addWatchFile }, meta('app%2FB'))).toContain('<h1>B</h1>');
+    expect(p.load.call({ addWatchFile }, meta('app/B'))).toContain('<h1>B</h1>');
     expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/B.catalog.md`);
   });
 
   it('throws for an unknown ID', async () => {
     const { root } = await makeApp();
     const { p } = boot(root);
-    expect(() => p.load.call({ addWatchFile: vi.fn() }, meta('app%2FNope'))).toThrow(/no catalog file/);
+    expect(() => p.load.call({ addWatchFile: vi.fn() }, meta('app/Nope'))).toThrow(/no catalog file/);
   });
 
-  it.each(['app%2FMy%20Button', 'app%2FMy Button'])('finds an ID with a space (%s)', async (id) => {
+  it.each(['My Button', '100%', 'theme.css', 'ボタン'])('finds the file %s', async (name) => {
     const { root } = await makeApp();
-    await writeFile(path.join(root, 'src/My Button.zukan.svelte'), '<Section title="B"><p>b</p></Section>');
+    await writeFile(path.join(root, `src/${name}.zukan.svelte`), '<Section title="B"><p>b</p></Section>');
     const { p } = boot(root);
-    expect(p.load.call({ addWatchFile: vi.fn() }, meta(id))).toContain('"title":"B"');
+    expect(p.load.call({ addWatchFile: vi.fn() }, meta(`app/${name}`))).toContain('"title":"B"');
+  });
+
+  it('rejects an ID that is not hex', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    expect(() => p.load.call({ addWatchFile: vi.fn() }, '\0' + META + 'zz')).toThrow(/no catalog file/);
+  });
+
+  it('finds a file created after the first load, without an HMR event', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    p.load.call({ addWatchFile: vi.fn() }, meta('app/A'));
+    await writeFile(path.join(root, 'src/C.zukan.svelte'), '<Section title="C"><p>c</p></Section>');
+    expect(p.load.call({ addWatchFile: vi.fn() }, meta('app/C'))).toContain('"title":"C"');
+  });
+
+  it('does not serve a file deleted with an HMR event', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    p.load.call({ addWatchFile: vi.fn() }, meta('app/A'));
+    rmSync(path.join(root, 'src/A.zukan.svelte'));
+    const ctx = {
+      environment: {
+        config: { consumer: 'client' },
+        hot: { send: vi.fn() },
+        moduleGraph: { getModuleById: vi.fn(), idToModuleMap: new Map(), invalidateModule: vi.fn() }
+      }
+    };
+    p.hotUpdate.call(ctx, { type: 'delete', file: `${root}/src/A.zukan.svelte`, modules: [], timestamp: 1 });
+    expect(() => p.load.call({ addWatchFile: vi.fn() }, meta('app/A'))).toThrow(/no catalog file/);
   });
 });
 
-type Res = { status?: string | number; body?: string; type?: string; location?: string };
+type Res = {
+  status?: string | number;
+  body?: string;
+  type?: string;
+  location?: string;
+  headers?: Record<string, unknown>;
+};
 const request = (mw: (...a: unknown[]) => void, url: string) =>
   new Promise<Res>((resolve) => {
     const out: Res = {};
@@ -369,7 +337,8 @@ const request = (mw: (...a: unknown[]) => void, url: string) =>
       statusCode: 200,
       setHeader: (k: string, v: string) => {
         if (k.toLowerCase() === 'content-type') out.type = v;
-        if (k.toLowerCase() === 'location') out.location = v;
+        else if (k.toLowerCase() === 'location') out.location = v;
+        else out.headers = { ...out.headers, [k.toLowerCase()]: v };
       },
       end(body?: string | Buffer) {
         resolve({ ...out, ...(this.statusCode !== 200 && { status: this.statusCode }), body: body?.toString() });
@@ -395,6 +364,15 @@ describe('configureServer', () => {
     // the query is dropped
     for (const [url] of server.transformIndexHtml.mock.calls) expect(url).toBe('/__zukan/');
     for (const url of ['/', '/__zukanx', '/__zukan/x']) expect(await request(mw, url)).toEqual({ status: 'next' });
+  });
+
+  it('sends the configured server.headers', async () => {
+    const { root } = await makeApp();
+    const server = fakeServer(root, '/', { 'cross-origin-embedder-policy': 'require-corp', 'x-test': ['a', 'b'] });
+    boot(root).p.configureServer(server);
+    const res = await request(server.middlewares.use.mock.calls[0][0], '/__zukan/');
+    expect(res.type).toMatch(/^text\/html/);
+    expect(res.headers).toEqual({ 'cross-origin-embedder-policy': 'require-corp', 'x-test': ['a', 'b'] });
   });
 
   it('follows base', async () => {
@@ -442,12 +420,16 @@ describe('configureServer', () => {
 });
 
 describe('configurePreviewServer', () => {
-  const setup = async (base = '/', options: Parameters<typeof zukan>[0] = { build: true }) => {
+  const setup = async (
+    base = '/',
+    options: Parameters<typeof zukan>[0] = { build: true },
+    headers?: Record<string, string>
+  ) => {
     const { root } = await makeApp();
     mkdirSync(path.join(root, 'zukan-dist/_zukan'), { recursive: true });
     await writeFile(path.join(root, 'zukan-dist/index.html'), '<html>catalog</html>');
     await writeFile(path.join(root, 'zukan-dist/_zukan/zukan-abc.js'), 'export {}');
-    const server = fakeServer(root, base);
+    const server = fakeServer(root, base, headers);
     boot(root, options).p.configurePreviewServer(server);
     return { server, mw: server.middlewares.use.mock.calls[0]?.[0] };
   };
@@ -458,6 +440,14 @@ describe('configurePreviewServer', () => {
     expect(html.body).toContain('catalog');
     expect(html.type).toMatch(/^text\/html/);
     expect((await request(mw, '/__zukan/_zukan/zukan-abc.js')).type).toMatch(/javascript/);
+  });
+
+  it('sends the configured preview.headers', async () => {
+    const { mw } = await setup('/', { build: true }, { 'x-frame-options': 'DENY' });
+    expect((await request(mw, '/__zukan/')).headers).toEqual({ 'x-frame-options': 'DENY' });
+    const js = await request(mw, '/__zukan/_zukan/zukan-abc.js');
+    expect(js.type).toMatch(/javascript/);
+    expect(js.headers).toEqual({ 'x-frame-options': 'DENY' });
   });
 
   it('redirects /__zukan to /__zukan/', async () => {
@@ -542,15 +532,6 @@ describe('hotUpdate of the catalog list', () => {
     expect(run('create', `${root}/src-other/New.zukan.svelte`)).toBeUndefined();
     expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
     expect(ctx.environment.hot.send).not.toHaveBeenCalled();
-  });
-});
-
-describe('detectSvelteKit', () => {
-  it('finds sveltekit() in nested arrays and promises', async () => {
-    const setup = { name: 'vite-plugin-sveltekit-setup', api: { options: {} } };
-    expect(await detectSvelteKit([{ name: 'vite-plugin-sveltekit-guard' }, Promise.resolve([setup])])).toBe(setup);
-    expect(await detectSvelteKit([[{ name: 'vite-plugin-svelte' }], null, false])).toBeUndefined();
-    expect(await detectSvelteKit([])).toBeUndefined();
   });
 });
 

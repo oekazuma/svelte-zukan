@@ -1,5 +1,6 @@
 <script lang="ts">
   import { setContext, type Component, type Snippet } from 'svelte';
+  import { BACKGROUNDS, readBackground } from '../components/PreviewFrame/storage.js';
   import { PREVIEW_SECTION_KEY } from '../context.js';
   import type { Entry } from '../types.js';
   import type { Messages } from './i18n.js';
@@ -19,6 +20,13 @@
   // the parent keys this component on the hash, so reading the initial value is enough
   // svelte-ignore state_referenced_locally
   if (section !== null) setContext(PREVIEW_SECTION_KEY, section);
+
+  // a preview opened in its own tab has no catalog page to set it; inside the catalog, the frame sets the same value
+  const stored = readBackground();
+  if (stored) {
+    document.documentElement.style.colorScheme = stored;
+    document.documentElement.style.backgroundColor = BACKGROUNDS[stored];
+  }
 </script>
 
 <!-- the wrapper is imported only here, so its global CSS never reaches the catalog UI -->

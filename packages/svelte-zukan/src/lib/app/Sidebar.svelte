@@ -34,7 +34,7 @@
   }
 </script>
 
-<svelte:window {onkeydown} />
+<svelte:window {onkeydown} onhashchange={() => (open = false)} />
 
 <div class="sidebar">
   <div class="header">

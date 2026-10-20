@@ -1,9 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { page, userEvent } from 'vitest/browser';
 import PreviewFrame from './PreviewFrame.svelte';
 
 const props = { src: 'about:blank', title: 'preview' };
+
+// widths and the background are remembered in storage; no test may start from another test's choice
+beforeEach(() => {
+  localStorage.clear();
+  sessionStorage.clear();
+});
 
 function frameStyle(container: HTMLElement) {
   return container.querySelector('iframe')!.parentElement!.style;
@@ -116,21 +122,70 @@ describe('PreviewFrame resizing', () => {
     const target = doc.createElement('div');
     target.setAttribute('data-zukan-preview', '');
     target.style.height = '300px';
+    doc.body.style.margin = '0';
     doc.body.append(target);
     await expect.poll(() => iframe.style.height).toBe('300px');
   });
 
+  it('height includes the body padding and margin of the preview page', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.style.margin = '8px';
+    doc.body.style.padding = '16px';
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    target.style.height = '300px';
+    doc.body.append(target);
+    await expect.poll(() => iframe.style.height).toBe('348px');
+    const scroller = doc.scrollingElement!;
+    expect(scroller.scrollHeight).toBeLessThanOrEqual(scroller.clientHeight);
+  });
+
+  it('height includes a horizontal scrollbar', async () => {
+    const screen = await render(PreviewFrame, { props });
+    screen.container.style.width = '400px';
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    target.style.cssText = 'height: 300px; width: 2000px';
+    doc.body.append(target);
+    const scroller = doc.scrollingElement!;
+    await expect.poll(() => scroller.scrollHeight <= scroller.clientHeight).toBe(true);
+  });
+
+  it('content with min-height: 100vh does not keep growing', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    target.style.minHeight = '100vh';
+    doc.body.append(target);
+    await new Promise((r) => setTimeout(r, 500));
+    const first = parseFloat(iframe.style.height);
+    await new Promise((r) => setTimeout(r, 500));
+    expect(parseFloat(iframe.style.height)).toBe(first);
+  });
+
   it('shows no width before the stage is measured', async () => {
     const hidden = document.body.appendChild(document.createElement('div'));
-    hidden.style.display = 'none';
-    const screen = await render(PreviewFrame, { props, target: hidden });
-    const handle = screen.getByRole('separator', { includeHidden: true }).element();
-    expect(hidden.querySelector('.width')!.textContent).toBe('');
-    for (const name of ['aria-valuenow', 'aria-valuemin', 'aria-valuemax'])
-      expect(handle.hasAttribute(name)).toBe(false);
-    hidden.style.display = '';
-    await expect.poll(() => handle.getAttribute('aria-valuenow')).not.toBeNull();
-    hidden.remove();
+    try {
+      hidden.style.display = 'none';
+      const screen = await render(PreviewFrame, { props, target: hidden });
+      const handle = screen.getByRole('separator', { includeHidden: true }).element();
+      expect(hidden.querySelector('.width')!.textContent).toBe('');
+      for (const name of ['aria-valuenow', 'aria-valuemin', 'aria-valuemax'])
+        expect(handle.hasAttribute(name)).toBe(false);
+      hidden.style.display = '';
+      await expect.poll(() => handle.getAttribute('aria-valuenow')).not.toBeNull();
+    } finally {
+      hidden.remove();
+    }
   });
 
   it('labels come from props', async () => {
@@ -158,24 +213,27 @@ describe('PreviewFrame resizing', () => {
 describe('PreviewFrame toolbar', () => {
   it('the background switch applies to every preview on the page', async () => {
     const targets = [0, 1].map(() => document.body.appendChild(document.createElement('div')));
-    for (const target of targets) await render(PreviewFrame, { props, target });
-    const [first, second] = targets.map((t) => page.elementLocator(t));
-    const iframes = targets.map((t) => t.querySelector('iframe')!);
-    for (const iframe of iframes) await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    try {
+      for (const target of targets) await render(PreviewFrame, { props, target });
+      const [first, second] = targets.map((t) => page.elementLocator(t));
+      const iframes = targets.map((t) => t.querySelector('iframe')!);
+      for (const iframe of iframes) await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
 
-    await first.getByRole('button', { name: 'Dark', exact: true }).click();
-    for (const iframe of iframes) {
-      await expect.poll(() => iframe.contentDocument!.documentElement.style.colorScheme).toBe('dark');
-      expect(iframe.style.colorScheme).toBe('dark');
-      expect(iframe.contentDocument!.documentElement.style.backgroundColor).toBe('rgb(13, 17, 23)');
+      await first.getByRole('button', { name: 'Dark', exact: true }).click();
+      for (const iframe of iframes) {
+        await expect.poll(() => iframe.contentDocument!.documentElement.style.colorScheme).toBe('dark');
+        expect(iframe.style.colorScheme).toBe('dark');
+        expect(iframe.contentDocument!.documentElement.style.backgroundColor).toBe('rgb(13, 17, 23)');
+      }
+      await expect
+        .element(second.getByRole('button', { name: 'Dark', exact: true }))
+        .toHaveAttribute('aria-pressed', 'true');
+
+      await second.getByRole('button', { name: 'Light', exact: true }).click();
+      await expect.poll(() => iframes[0].contentDocument!.documentElement.style.colorScheme).toBe('light');
+    } finally {
+      for (const target of targets) target.remove();
     }
-    await expect
-      .element(second.getByRole('button', { name: 'Dark', exact: true }))
-      .toHaveAttribute('aria-pressed', 'true');
-
-    await second.getByRole('button', { name: 'Light', exact: true }).click();
-    await expect.poll(() => iframes[0].contentDocument!.documentElement.style.colorScheme).toBe('light');
-    for (const target of targets) target.remove();
   });
 
   it('links to the preview in a new tab', async () => {
@@ -188,5 +246,46 @@ describe('PreviewFrame toolbar', () => {
   it('loads the iframe lazily', async () => {
     const screen = await render(PreviewFrame, { props });
     expect(screen.container.querySelector('iframe')!.getAttribute('loading')).toBe('lazy');
+  });
+});
+
+describe('PreviewFrame storage', () => {
+  it('remembers the background in localStorage', async () => {
+    const screen = await render(PreviewFrame, { props });
+    await screen.getByRole('button', { name: 'Dark', exact: true }).click();
+    expect(localStorage.getItem('svelte-zukan:background')).toBe('dark');
+    await screen.getByRole('button', { name: 'Light', exact: true }).click();
+    expect(localStorage.getItem('svelte-zukan:background')).toBe('light');
+  });
+
+  it('remembers the width per preview in sessionStorage', async () => {
+    const screen = await render(PreviewFrame, { props });
+    await screen.getByRole('button', { name: '375', exact: true }).click();
+    await expect.poll(() => sessionStorage.getItem('svelte-zukan:width:about:blank')).toBe('375');
+    await screen.getByRole('button', { name: '100%', exact: true }).click();
+    await expect.poll(() => sessionStorage.getItem('svelte-zukan:width:about:blank')).toBeNull();
+  });
+
+  it('starts from a stored width', async () => {
+    sessionStorage.setItem('svelte-zukan:width:about:blank', '768');
+    const screen = await render(PreviewFrame, { props });
+    expect(frameStyle(screen.container).width).toBe('768px');
+  });
+
+  it('still switches the background when storage throws', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    try {
+      await screen.getByRole('button', { name: 'Dark', exact: true }).click();
+      await expect
+        .element(screen.getByRole('button', { name: 'Dark', exact: true }))
+        .toHaveAttribute('aria-pressed', 'true');
+    } finally {
+      spy.mockRestore();
+      // the background is shared by every frame in the file
+      await screen.getByRole('button', { name: 'Light', exact: true }).click();
+    }
   });
 });

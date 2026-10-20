@@ -6,6 +6,12 @@ on:
       - main
 
 permissions: {}
+
+# two pushes in a row would race on the Version Packages branch or on publishing
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     permissions:
@@ -15,6 +21,7 @@ jobs:
       actions: write # to start CI on the Version Packages branch
     name: Release
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout Repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -1,9 +1,8 @@
 <script lang="ts" module>
-  type Background = 'light' | 'dark';
+  import { BACKGROUNDS, readBackground, readWidth, writeBackground, writeWidth, type Background } from './storage.js';
 
   // shared by every preview on the page, so one click switches them all
-  let background = $state<Background>('light');
-  const BACKGROUNDS: Record<Background, string> = { light: '#fff', dark: '#0d1117' };
+  let background = $state<Background>(readBackground() ?? 'light');
 </script>
 
 <script lang="ts">
@@ -24,8 +23,9 @@
     labels?: Pick<Messages, 'previewWidth' | 'fullWidth' | 'background' | 'light' | 'dark' | 'openInNewTab'>;
   } = $props();
 
-  // null = 100%
-  let width = $state<number | null>(null);
+  // null = 100%; the frame is recreated per entry, so `src` is read once
+  // svelte-ignore state_referenced_locally
+  let width = $state<number | null>(readWidth(src));
   // 0 until measured
   let stageWidth = $state(0);
   let height = $state(MIN_HEIGHT);
@@ -82,7 +82,18 @@
         target = found;
         observer!.observe(found);
       }
-      height = Math.max(MIN_HEIGHT, found.getBoundingClientRect().height);
+      const win = doc.defaultView!;
+      const body = win.getComputedStyle(doc.body);
+      // the app's CSS (loaded by the wrapper) may pad the body; a horizontal scrollbar takes height too
+      const bottom = found.getBoundingClientRect().bottom + win.scrollY;
+      const spacing = parseFloat(body.paddingBottom) + parseFloat(body.marginBottom);
+      // scrollingElement: in quirks mode (an about:blank test page) documentElement.clientHeight is the content height
+      const viewport = (doc.scrollingElement ?? doc.documentElement).clientHeight;
+      const scrollbar = win.innerHeight - viewport;
+      const own = found.getBoundingClientRect().height;
+      // ponytail: content as tall as the viewport (`100vh`) would grow with every added pixel, so it gets its own height
+      // and may keep an inner scrollbar; a growth limit would be the upgrade if that matters
+      height = Math.max(MIN_HEIGHT, Math.abs(own - viewport) < 1 ? own : Math.ceil(bottom + spacing + scrollbar));
     });
     observer.observe(doc.body);
   }
@@ -93,6 +104,8 @@
     doc.documentElement.style.colorScheme = background;
     doc.documentElement.style.backgroundColor = BACKGROUNDS[background];
   });
+
+  $effect(() => writeWidth(src, width));
 
   $effect(() => () => observer?.disconnect());
 </script>
@@ -109,7 +122,14 @@
     <span class="width" aria-hidden="true">{stageWidth ? `${current}px` : ''}</span>
     <div class="group" role="group" aria-label={labels.background}>
       {#each ['light', 'dark'] as const as value (value)}
-        <button type="button" aria-pressed={background === value} onclick={() => (background = value)}>
+        <button
+          type="button"
+          aria-pressed={background === value}
+          onclick={() => {
+            background = value;
+            writeBackground(value);
+          }}
+        >
           {labels[value]}
         </button>
       {/each}

@@ -20,7 +20,7 @@ pnpm install
 
 ```bash
 pnpm run lint                      # Prettier + ESLint
-pnpm run package                   # svelte-kit sync && svelte-package && publint (the example app, check and the build tests use the built package)
+pnpm run package                   # svelte-kit sync && svelte-package && publint (the example app, check and dev.test.ts use the built package)
 pnpm run check                     # svelte-kit sync && svelte-check
 pnpm --filter example build        # the example app, built against the packaged library
 pnpm --filter docs build           # the documentation site

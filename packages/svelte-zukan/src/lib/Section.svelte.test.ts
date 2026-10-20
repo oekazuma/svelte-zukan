@@ -27,4 +27,9 @@ describe('Section', () => {
     });
     await expect.element(screen.getByText('content')).not.toBeInTheDocument();
   });
+
+  it('renders nothing and does not throw without children', async () => {
+    const screen = await render(Section, { props: { title: 'A' } });
+    expect(screen.container.textContent).toBe('');
+  });
 });
