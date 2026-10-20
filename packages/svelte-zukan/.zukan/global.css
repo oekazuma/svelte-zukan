@@ -1,4 +1,102 @@
+/* the app's global CSS: design tokens shared by the example components */
+:root {
+  /* the preview background switch sets color-scheme inline; a preview opened alone follows the system */
+  color-scheme: light dark;
+
+  --ex-font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ex-radius: 10px;
+  --ex-radius-sm: 6px;
+
+  --ex-text: light-dark(#1c1a29, #ecebf5);
+  --ex-muted: light-dark(#6b6880, #a29fb8);
+  --ex-surface: light-dark(#ffffff, #1f1d2b);
+  --ex-surface-2: light-dark(#f4f3fa, #282636);
+  --ex-border: light-dark(#e4e2ef, #363347);
+
+  --ex-accent: light-dark(#6d4aff, #9d86ff);
+  --ex-accent-strong: light-dark(#5a36f0, #b4a2ff);
+  --ex-accent-soft: light-dark(#efebff, #2c2650);
+  --ex-on-accent: light-dark(#ffffff, #14112a);
+
+  --ex-success: light-dark(#14915f, #3ecf8e);
+  --ex-success-soft: light-dark(#e3f6ee, #173327);
+  --ex-warning: light-dark(#b76e00, #f5b544);
+  --ex-warning-soft: light-dark(#fdf1dc, #3a2e14);
+  --ex-danger: light-dark(#d93a4a, #ff6b7a);
+  --ex-danger-soft: light-dark(#fde7ea, #3d1d23);
+  --ex-info: light-dark(#1f74d6, #5aa9ff);
+  --ex-info-soft: light-dark(#e5f0fd, #162c45);
+
+  --ex-shadow-sm: 0 1px 2px light-dark(rgb(28 26 41 / 0.08), rgb(0 0 0 / 0.4));
+  --ex-shadow: 0 8px 24px -8px light-dark(rgb(28 26 41 / 0.18), rgb(0 0 0 / 0.55));
+}
+
 body {
-  /* follows the preview background switch, which sets color-scheme on the preview page */
-  background: light-dark(#fffbe6, #2b2614);
+  padding: 24px;
+  background: light-dark(#faf9ff, #15131d);
+  color: var(--ex-text);
+  font-family: var(--ex-font);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* layout helpers for the catalog files */
+.demo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.demo-stack {
+  display: grid;
+  gap: 16px;
+  max-width: 560px;
+}
+
+.demo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.demo-narrow {
+  max-width: 360px;
+}
+
+.demo-note {
+  margin: 0;
+  color: var(--ex-muted);
+  font-size: 14px;
+}
+
+.demo-price {
+  color: var(--ex-text);
+  font-size: 1.1rem;
+}
+
+.demo-spacer {
+  flex: 1;
+}
+
+.demo-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.demo-icons figure {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 14px 4px;
+  border: 1px solid var(--ex-border);
+  border-radius: var(--ex-radius);
+  background: var(--ex-surface);
+}
+
+.demo-icons figcaption {
+  color: var(--ex-muted);
+  font-size: 12px;
 }
