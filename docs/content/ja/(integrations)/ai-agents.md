@@ -1,7 +1,7 @@
 ---
 title: AI エージェント
 sidebar:
-  order: 7
+  order: 4
 ---
 
 AI のコーディングエージェントはブラウザーを使わずにカタログファイルを書いて確かめられます。そのために svelte-zukan は、テキストで読めるドキュメント、データとしてのカタログ（ブラウザーでは WebMCP のツールとしても）、これらの使い方を書いたスキルを用意しています。
@@ -15,16 +15,16 @@ AI のコーディングエージェントはブラウザーを使わずにカ�
 
 dev サーバーは `/__zukan/catalog.json` を返します。`build: true` で `vite build` すると、同じデータを `index.html` の隣の `catalog.json` に書き出します。中のパスは Vite の root からの相対パスです。
 
-| フィールド                | 中身                                                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `components[].id`         | [カタログ ID](/ja/guides/catalog-ids)                                                                        |
-| `components[].file`       | カタログファイル                                                                                             |
-| `components[].component`  | `Button.zukan.svelte` の隣にある `Button.svelte`。なければ `null`                                            |
-| `components[].doc`        | `.md` ファイルの Markdown。なければ `null`                                                                   |
-| `components[].props`      | [Props の一覧](/ja/guides/catalog-files#props-の一覧)。名前、型、既定値、必須か、bind できるか、説明（HTML） |
-| `components[].sections[]` | セクションごとの `title`、コード表示と同じ `code`、プレビューのページのハッシュ `preview`                    |
-| `components[].error`      | カタログファイルをコンパイルできないときの理由。このとき `sections` は空です                                 |
-| `uncataloged[]`           | 探索するディレクトリにある `.svelte` ファイルのうち、隣にカタログファイルがないもの                          |
+| フィールド                | 中身                                                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `components[].id`         | [カタログ ID](/ja/catalog-ids)                                                                        |
+| `components[].file`       | カタログファイル                                                                                      |
+| `components[].component`  | `Button.zukan.svelte` の隣にある `Button.svelte`。なければ `null`                                     |
+| `components[].doc`        | `.md` ファイルの Markdown。なければ `null`                                                            |
+| `components[].props`      | [Props の一覧](/ja/catalog-files#props-の一覧)。名前、型、既定値、必須か、bind できるか、説明（HTML） |
+| `components[].sections[]` | セクションごとの `title`、コード表示と同じ `code`、プレビューのページのハッシュ `preview`             |
+| `components[].error`      | カタログファイルをコンパイルできないときの理由。このとき `sections` は空です                          |
+| `uncataloged[]`           | 探索するディレクトリにある `.svelte` ファイルのうち、隣にカタログファイルがないもの                   |
 
 `preview` はカタログのページのハッシュです。`/__zukan/#/preview/ui/Button?section=Primary` はそのセクションだけを表示するので、スクリーンショットに向いています。`&theme=dark` を付けるとダークテーマになります。このページはウィンドウいっぱいに広がるので、スマートフォンやタブレットの幅で見るときはウィンドウの幅を変えます。
 

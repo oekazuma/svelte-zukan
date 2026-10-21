@@ -27,7 +27,7 @@ npm install -D svelte-zukan
 
 - [ドキュメント](https://oekazuma.github.io/svelte-zukan/ja/)
 - [デモ](https://oekazuma.github.io/svelte-zukan/demo/ja/)
-- [AI エージェントと使う](https://oekazuma.github.io/svelte-zukan/ja/guides/ai-agents/)
+- [AI エージェントと使う](https://oekazuma.github.io/svelte-zukan/ja/ai-agents/)
 - [コントリビューションガイド](CONTRIBUTING.md)（英語）
 
 > svelte-zukan は Svelte の公式プロジェクトではありません。Svelte チームとの提携や承認もありません。ロゴの S の図形は Svelte のロゴに由来します。

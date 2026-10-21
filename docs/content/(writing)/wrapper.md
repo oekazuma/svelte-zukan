@@ -1,7 +1,7 @@
 ---
 title: Wrapping previews
 sidebar:
-  order: 4
+  order: 2
 ---
 
 The `wrapper` option wraps the inside of each preview iframe. This is where you put providers and global CSS, like Storybook's `.storybook/preview.js`.

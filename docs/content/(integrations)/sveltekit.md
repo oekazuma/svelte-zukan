@@ -1,7 +1,7 @@
 ---
 title: SvelteKit runtime APIs
 sidebar:
-  order: 6
+  order: 1
 ---
 
 svelte-zukan does not replace or mock SvelteKit's runtime APIs such as `$app/state` and `$app/navigation`. Inside the catalog, SvelteKit's runtime code runs in its default state:

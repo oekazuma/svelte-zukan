@@ -1,0 +1,40 @@
+---
+title: Browsing the catalog
+sidebar:
+  order: 1
+---
+
+The catalog opens at `/__zukan/` on your dev server (`<base>__zukan/` when you set a `base`). This page covers the top page, finding a component, the theme and the keyboard shortcuts. Each preview has [its own toolbar](/previews), with the [accessibility panel](/accessibility) among its tools.
+
+## Top page
+
+Each component is a card with a small preview of its first section, its name and directory, and the first paragraph of its [`.md` file](/catalog-files#markdown-description). A component without sections shows its initial instead of a preview. Click a card to open its detail page.
+
+Below the cards, a folded list shows the `.svelte` files in the scanned directories that have no catalog file next to them yet, so you can see what is left to catalog. SvelteKit's route files (`+page.svelte`), test components and `src/routes/` are left out.
+
+## Finding a component
+
+- The sidebar lists the components by group and by directory. Folders open and close, and the arrow keys move through the list
+- Type in the search box to filter by ID and by section title. Matching section titles are listed under each component and link straight to that section
+- On a detail page with several sections, a table of contents sits beside the content when the window is wide enough, with a link to the props table. Links to the previous and next components are at the bottom
+- On the dev server, the detail page has buttons under its title that open the catalog file and the component in your editor. They use Vite's own open-in-editor endpoint, so the `LAUNCH_EDITOR` environment variable picks the editor. A static build has no such buttons
+- On a narrow screen, the component list folds under the menu button
+
+## Theme
+
+The theme button at the top of the sidebar switches the catalog and every preview between light and dark. It starts from your system's setting, and your choice is remembered in this browser. Each preview gets the theme as its `color-scheme`, so `light-dark()` and `prefers-color-scheme` in your components follow it.
+
+## Keyboard shortcuts
+
+| Key                         | Action                                        |
+| --------------------------- | --------------------------------------------- |
+| <kbd>/</kbd>                | Jump to the search box                        |
+| <kbd>J</kbd> / <kbd>K</kbd> | Next / previous component                     |
+| <kbd>T</kbd>                | Switch between light and dark                 |
+| <kbd>F</kbd>                | Expand the preview in view, or leave it       |
+| <kbd>Esc</kbd>              | Leave the expanded preview                    |
+| <kbd>↑</kbd> <kbd>↓</kbd>   | Move through the component list               |
+| <kbd>←</kbd> <kbd>→</kbd>   | Close and open a folder in the component list |
+| <kbd>?</kbd>                | Show the shortcuts                            |
+
+The shortcuts do nothing while you type in the search box or another field.

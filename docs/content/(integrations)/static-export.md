@@ -1,7 +1,7 @@
 ---
 title: Static export
 sidebar:
-  order: 5
+  order: 3
 ---
 
 With `build: true`, `vite build` also writes the catalog as static files.

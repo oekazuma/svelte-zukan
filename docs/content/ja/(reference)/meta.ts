@@ -1,6 +1,6 @@
 import { defineMeta } from 'blume';
 
 export default defineMeta({
-  title: 'Guides',
-  order: 20
+  title: 'リファレンス',
+  order: 50
 });

@@ -1,7 +1,7 @@
 ---
 title: プレビューを囲む
 sidebar:
-  order: 4
+  order: 2
 ---
 
 `wrapper` オプションはプレビューの iframe の中だけを囲みます。Provider やグローバル CSS を入れる場所で、Storybook の `.storybook/preview.js` に当たります。

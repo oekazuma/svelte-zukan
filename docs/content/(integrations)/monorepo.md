@@ -1,7 +1,7 @@
 ---
 title: Monorepos
 sidebar:
-  order: 3
+  order: 2
 ---
 
 Without the `groups` option, svelte-zukan finds catalog files on its own, in this order:

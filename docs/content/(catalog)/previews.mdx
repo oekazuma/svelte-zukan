@@ -1,0 +1,43 @@
+---
+title: Preview toolbar
+sidebar:
+  order: 2
+---
+
+Each section previews in its own frame, with a toolbar above it.
+
+<img
+  className="shot-light"
+  src="/screenshots/responsive-light.webp"
+  alt="A card previewed at 375px, centered on a dotted background, with the props table below it"
+  width="1280"
+  height="900"
+/>
+<img
+  className="shot-dark"
+  src="/screenshots/responsive-dark.webp"
+  alt="A card previewed at 375px, centered on a dotted background, with the props table below it"
+  width="1280"
+  height="900"
+/>
+
+## Width
+
+- The presets are a phone (375px), a tablet (768px), a laptop (1024px), a desktop (1280px) and the full width. You can also drag the grip on the right edge, or type a width in pixels into the number next to the presets
+- A width narrower than the page is centered on a dotted background, so the device's edges stay visible on a wide screen
+- A width wider than the page, such as the desktop preset on a laptop, is laid out at its real width and scaled down to fit. The scale is shown next to the width
+- Widths are remembered in this browser tab across reloads, so a preview keeps its width while you edit
+
+## Other buttons
+
+| Button          | What it does                                                                                                   |
+| --------------- | -------------------------------------------------------------------------------------------------------------- |
+| Background      | Switches the preview's background between the theme's color, a checkerboard (to see transparency) and a grid   |
+| Accessibility   | Opens the [accessibility panel](/accessibility)                                                                |
+| Measure         | On hover, shows the element's size and draws its margin, border and padding in the colors of browser dev tools |
+| Outline         | Outlines every element of the preview                                                                          |
+| Expand          | Fills the window with the preview. <kbd>Esc</kbd> or a click outside leaves                                    |
+| Copy link       | Copies a link to this section at its current width and theme                                                   |
+| Open in new tab | Opens the preview alone, in the catalog's theme                                                                |
+
+A copied link opens the section with its width and theme. The theme applies to that tab only, so it does not replace the theme you chose. You can also write such a link by hand: add `width` and `theme` after `section`, as in `#/ui/Card?section=Basic&width=375&theme=dark`.

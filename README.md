@@ -27,7 +27,7 @@ Add `zukan()` before `sveltekit()` (or `svelte()`) in `vite.config.ts`, put `But
 
 - [Documentation](https://oekazuma.github.io/svelte-zukan/)
 - [Demo](https://oekazuma.github.io/svelte-zukan/demo/)
-- [Using it with AI agents](https://oekazuma.github.io/svelte-zukan/guides/ai-agents/)
+- [Using it with AI agents](https://oekazuma.github.io/svelte-zukan/ai-agents/)
 - [Contribution Guide](CONTRIBUTING.md)
 
 > svelte-zukan is not an official Svelte project (not affiliated with or endorsed by the Svelte team). The S shape in the logo is derived from the Svelte logo.

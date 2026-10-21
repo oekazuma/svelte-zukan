@@ -1,7 +1,7 @@
 ---
 title: AI agents
 sidebar:
-  order: 7
+  order: 4
 ---
 
 An AI coding agent can write catalog files and check them without a browser. svelte-zukan gives it these docs as text, the catalog as data (also as WebMCP tools in the browser), and a skill that says how to work with them.
@@ -15,16 +15,16 @@ An AI coding agent can write catalog files and check them without a browser. sve
 
 The dev server serves `/__zukan/catalog.json`, and `vite build` with `build: true` writes the same data to `catalog.json` next to `index.html`. Paths in it are relative to Vite's root.
 
-| Field                     | What it holds                                                                                                     |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `components[].id`         | The [catalog ID](/guides/catalog-ids)                                                                             |
-| `components[].file`       | The catalog file                                                                                                  |
-| `components[].component`  | `Button.svelte` next to `Button.zukan.svelte`, or `null`                                                          |
-| `components[].doc`        | The `.md` file as Markdown, or `null`                                                                             |
-| `components[].props`      | The [props table](/guides/catalog-files#props-table): name, type, default, required, bindable, description (HTML) |
-| `components[].sections[]` | Each section's `title`, its `code` as the code view shows it, and `preview`, the hash of its preview page         |
-| `components[].error`      | Why the catalog file does not compile, when it does not; its `sections` are then empty                            |
-| `uncataloged[]`           | `.svelte` files in the scanned directories with no catalog file next to them                                      |
+| Field                     | What it holds                                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `components[].id`         | The [catalog ID](/catalog-ids)                                                                             |
+| `components[].file`       | The catalog file                                                                                           |
+| `components[].component`  | `Button.svelte` next to `Button.zukan.svelte`, or `null`                                                   |
+| `components[].doc`        | The `.md` file as Markdown, or `null`                                                                      |
+| `components[].props`      | The [props table](/catalog-files#props-table): name, type, default, required, bindable, description (HTML) |
+| `components[].sections[]` | Each section's `title`, its `code` as the code view shows it, and `preview`, the hash of its preview page  |
+| `components[].error`      | Why the catalog file does not compile, when it does not; its `sections` are then empty                     |
+| `uncataloged[]`           | `.svelte` files in the scanned directories with no catalog file next to them                               |
 
 `preview` is a hash on the catalog page: `/__zukan/#/preview/ui/Button?section=Primary` shows only that section, so it is a good page for a screenshot. Add `&theme=dark` for the dark theme. The page fills the window, so set the window's width for a phone or tablet layout.
 

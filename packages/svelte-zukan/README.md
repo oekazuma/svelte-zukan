@@ -44,5 +44,5 @@ Start the dev server and open `/__zukan/`.
 
 - [Documentation](https://oekazuma.github.io/svelte-zukan/) ([日本語](https://oekazuma.github.io/svelte-zukan/ja/))
 - [Demo](https://oekazuma.github.io/svelte-zukan/demo/)
-- [Using it with AI agents](https://oekazuma.github.io/svelte-zukan/guides/ai-agents/)
+- [Using it with AI agents](https://oekazuma.github.io/svelte-zukan/ai-agents/)
 - [Repository](https://github.com/oekazuma/svelte-zukan)
