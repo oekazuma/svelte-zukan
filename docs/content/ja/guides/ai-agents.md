@@ -43,7 +43,15 @@ WebMCP に対応していないブラウザーではツールは使われず、�
 
 ## スキル
 
-パッケージには [Agent Skills](https://agentskills.io) を読むエージェント向けのスキル `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md` が入っています。カタログに載せるものの探し方、カタログファイルの書き方、書いたものの確かめ方をまとめたものです。エージェントがスキルを探す場所にフォルダーごとコピーして使います。Claude Code なら `.claude/skills/svelte-zukan/` です。
+svelte-zukan には、Claude Code、Cursor、Codex など [Agent Skills](https://agentskills.io) を読むエージェント向けのスキルがあります。カタログに載せるものの探し方、カタログファイルの書き方、書いたものの確かめ方をまとめたものです。[skills CLI](https://github.com/vercel-labs/skills) でインストールします。
+
+```sh
+npx skills add oekazuma/svelte-zukan
+```
+
+CLI がどのエージェントに入れるかを尋ね、プロジェクト内のそれぞれのスキルのディレクトリに置きます。エージェントは `-a` で選べます（例: `-a claude-code`）。`-g` を付けると、すべてのプロジェクトで使えるように入ります。
+
+npm のパッケージにも同じスキルが `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md` に入っていて、インストールしたバージョンに合っています。このフォルダーを自分でエージェントのスキルのディレクトリにコピーして使うこともできます。
 
 ```sh
 mkdir -p .claude/skills && cp -r node_modules/svelte-zukan/skills/svelte-zukan .claude/skills/

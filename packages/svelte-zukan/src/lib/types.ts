@@ -30,6 +30,8 @@ export type CatalogItem = { group: string; name: string; dir: string; path: stri
 
 /** an item of the virtual catalog module (`file` is left out so absolute paths stay out of the build) */
 export type Entry = Omit<CatalogItem, 'file'> & {
+  /** absolute paths, on the dev server only */
+  edit?: { file: string; component: string | null };
   load: () => Promise<ZukanModule>;
   meta: () => Promise<{ default: ZukanMeta }>;
 };

@@ -186,6 +186,32 @@ describe('App', () => {
     await expect.element(screen.getByText('src/lib/Lone.svelte')).toBeVisible();
   });
 
+  it('on the dev server, the detail page opens the catalog file and the component in the editor', async () => {
+    const { props } = setup('#/ui/Card');
+    Object.assign(props.catalog[0], {
+      edit: { file: '/repo/src/Card.zukan.svelte', component: '/repo/src/Card.svelte' }
+    });
+    const fetchSpy = vi.spyOn(window, 'fetch').mockResolvedValue(new Response(''));
+    try {
+      const screen = await render(App, { props });
+      const group = screen.getByRole('group', { name: 'Open in editor' });
+      await group.getByRole('button', { name: 'Card.svelte' }).click();
+      expect(fetchSpy).toHaveBeenCalledWith(
+        `${location.pathname.replace(/__zukan\/.*$/, '')}__open-in-editor?file=${encodeURIComponent('/repo/src/Card.svelte')}`
+      );
+      await expect.element(group.getByRole('button', { name: 'Card.zukan.svelte' })).toBeInTheDocument();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('without the files (a static build) there is nothing to open', async () => {
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Open in editor' }).query()).toBeNull();
+  });
+
   const three = () => {
     const { props } = setup('#/ui/Card');
     props.catalog.unshift({ group: 'ui', name: 'Alert', dir: '', path: 'ui/Alert', load, meta });

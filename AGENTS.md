@@ -47,7 +47,7 @@ pnpm --filter build-tests test
 The public surface is intentionally small:
 
 - `svelte-zukan` (`src/lib/index.ts`) — only `<Section title="...">`, used inside catalog files. In a preview it renders its children only when its `title` matches the section in the preview URL (read from a Svelte context, `src/lib/context.ts`); outside the catalog it always renders.
-- `svelte-zukan/vite` (`src/lib/vite/index.ts`) — the `zukan()` Vite plugin (`name: 'vite-plugin-svelte-zukan'`, `enforce: 'pre'`). Options: `suffix`, `groups`, `wrapper`, `logo`, `title`, `locale`, `build` (validated in `options.ts`; `suffix` in `matchers.ts`, group names and `groups` directories in `discover.ts`). Keep the option set small; `docs/content/options.md` documents each one.
+- `svelte-zukan/vite` (`src/lib/vite/index.ts`) — the `zukan()` Vite plugin (`name: 'vite-plugin-svelte-zukan'`, `enforce: 'pre'`). Options: `suffix`, `groups`, `wrapper`, `logo`, `title`, `locale`, `build` (validated in `options.ts`; `suffix` in `matchers.ts`, group names and `groups` directories in `discover.ts`). Keep the option set small; `docs/content/options.md` documents each one. CONTRIBUTING.md ("What belongs in svelte-zukan") lists the rules a new feature is checked against.
 
 How the plugin works:
 
@@ -113,5 +113,6 @@ Do **not** bump versions or edit `CHANGELOG.md` manually. `pnpm-workspace.yaml` 
 - `.gitignore`: `build`, `dist`, `zukan-dist` and `.svelte-kit` are ignored in every directory, with `!/tests/build/` re-including the build tests package itself. Keep that negation if you touch those lines.
 - Language: everything is in English. Commit messages and PR descriptions use Conventional Commits prefixes (`feat:`, `fix:`, `chore:`, `docs:`), and changesets are in English. The only Japanese kept on purpose is the Japanese docs (`docs/content/ja/`), the `ja` dictionary in `src/lib/app/i18n.ts`, and the tests that cover Japanese / non-ASCII handling.
 - Svelte 5 only: use runes (`$props`, `$state`, `$derived`, `$effect`) — do not introduce Svelte 4 reactive `$:` syntax. The supported ranges live in `peerDependencies` (`svelte`, `vite`) of `packages/svelte-zukan/package.json`.
+- The agent skill lives at `packages/svelte-zukan/skills/svelte-zukan/SKILL.md` and ships in the package (`files`; CI's pack check requires it). `npx skills add oekazuma/svelte-zukan` finds it by searching the repository, because there is no root `skills/` directory: keep it the only `SKILL.md` in the repository, or every other one is offered too.
 - `marked` and `axe-core` are the runtime dependencies. Keep them in `dependencies`; Renovate does not auto-merge their updates because they reach every consumer. The catalog's client never imports `axe-core`: the plugin serves `axe.min.js` as a string (`virtual:svelte-zukan/axe`) and a preview injects it into its own page on the first check, so no CommonJS module goes through the user's dependency prebundling.
 - No new dependencies for small things: file listing uses Node's `fs.globSync` (Node 22.17+), and the UI has its own two-language dictionary instead of an i18n library.

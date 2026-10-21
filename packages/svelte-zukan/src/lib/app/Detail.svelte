@@ -58,6 +58,11 @@
     else expandedTitle = active ?? headings[0] ?? null;
   }
 
+  /** Vite's own endpoint, the one its error overlay uses; it is under the app's `base` like the catalog */
+  function openInEditor(file: string) {
+    fetch(`${location.pathname.replace(/__zukan\/.*$/, '')}__open-in-editor?file=${encodeURIComponent(file)}`);
+  }
+
   // the detail page is not remounted when only the section changes, so the action also runs on update
   function reveal(node: HTMLElement, active: boolean) {
     if (active) node.scrollIntoView();
@@ -81,6 +86,17 @@
   {#if entry.dir}<span class="dir">{entry.dir}</span>{/if}
   <Badge label={entry.group} />
 </h1>
+
+{#if entry.edit}
+  <div class="edit" role="group" aria-labelledby="zukan-edit">
+    <span id="zukan-edit">{t.openInEditor}</span>
+    {#each [entry.edit.file, entry.edit.component] as file (file)}
+      {#if file}
+        <button type="button" onclick={() => openInEditor(file)}>{file.slice(file.lastIndexOf('/') + 1)}</button>
+      {/if}
+    {/each}
+  </div>
+{/if}
 
 <!-- recreate everything on navigation so no PreviewFrame keeps the previous entry's width or height -->
 {#key entry.path}
@@ -211,8 +227,33 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    margin: 0 0 16px;
+    margin: 0 0 8px;
     font-size: 24px;
+  }
+
+  .edit {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 16px;
+    color: var(--_muted);
+    font-size: 13px;
+  }
+
+  .edit button {
+    padding: 2px 8px;
+    border: 1px solid var(--_border);
+    border-radius: 6px;
+    background: var(--_bg);
+    color: var(--_text);
+    font-family: var(--_mono);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .edit button:hover {
+    border-color: var(--_accent);
   }
 
   .dir {

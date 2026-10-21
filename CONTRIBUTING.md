@@ -2,6 +2,18 @@
 
 Hi! We are really excited that you are interested in contributing to svelte-zukan. Before submitting your contribution, please make sure to take a moment and read through the following guide:
 
+## What belongs in svelte-zukan
+
+svelte-zukan is a component catalog and nothing else. Its users pick it because it is small, needs no setup beyond one line, and has little to keep up to date. Before proposing a feature, check it against these:
+
+- **It helps someone look at, check, or document a component.** Previews, widths, themes, the code view, the props table, accessibility checks and the data for agents do. Props controls, an event log, interaction or visual tests, and an addon system do not; those are what Storybook is for
+- **It works without configuration.** A new `zukan()` option is the last resort, not the first: the option set is small on purpose (`suffix`, `groups`, `wrapper`, `logo`, `title`, `locale`, `build`)
+- **It adds no dependency for something a few lines can do.** A runtime dependency reaches every user's install and every user's upgrade
+- **Catalog files stay plain Svelte.** No story format, no special syntax beyond `<Section>`, nothing an agent or a person has to learn first
+- **It works the same in plain Vite and in SvelteKit**, on the app's own dev server, without mocking the app's runtime
+
+If a feature needs one of these broken, open an issue to talk it through first.
+
 ## Project Set Up
 
 It requires [pnpm](https://pnpm.io/). The pnpm version is pinned via `packageManager` in the root `package.json`, and pnpm downloads the Node.js version pinned via `devEngines.runtime`, so `pnpm install` sets up both.

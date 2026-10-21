@@ -13,12 +13,14 @@ export const pathOfMeta = (hex: string) =>
 
 export function generateCatalogModule(
   items: CatalogItem[],
-  uncataloged: { group: string; file: string }[] = []
+  uncataloged: { group: string; file: string }[] = [],
+  /** the files to open in an editor, by absolute path: on the dev server only */
+  edit?: (file: string) => { file: string; component: string | null }
 ): string {
   // `file` is left out so that absolute paths do not end up in the static build
   const entries = items.map(
     ({ file, ...item }) =>
-      `  { ...${JSON.stringify(item)}, load: () => import(${JSON.stringify(file)}), meta: () => import(${JSON.stringify(metaId(item.path))}) }`
+      `  { ...${JSON.stringify({ ...item, ...(edit && { edit: edit(file) }) })}, load: () => import(${JSON.stringify(file)}), meta: () => import(${JSON.stringify(metaId(item.path))}) }`
   );
   return (
     `export const catalog = [\n${entries.join(',\n')}\n];\n` +

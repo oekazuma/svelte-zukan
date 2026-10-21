@@ -79,6 +79,7 @@ export type Messages = {
   measure: string;
   uncataloged: string;
   uncatalogedHint: string;
+  openInEditor: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -163,7 +164,8 @@ export const messages: Record<'en' | 'ja', Messages> = {
     measure: 'Measure elements on hover',
     uncataloged: 'Components without a catalog file',
     uncatalogedHint:
-      'These .svelte files have no catalog file next to them. Add one to show a component in the catalog.'
+      'These .svelte files have no catalog file next to them. Add one to show a component in the catalog.',
+    openInEditor: 'Open in editor'
   },
   ja: {
     nav: 'コンポーネント',
@@ -246,6 +248,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     measure: 'カーソルを当てた要素を計測',
     uncataloged: 'カタログファイルがないコンポーネント',
     uncatalogedHint:
-      '次の .svelte ファイルには、隣にカタログファイルがありません。カタログファイルを置くと、カタログに加わります。'
+      '次の .svelte ファイルには、隣にカタログファイルがありません。カタログファイルを置くと、カタログに加わります。',
+    openInEditor: 'エディターで開く'
   }
 };
