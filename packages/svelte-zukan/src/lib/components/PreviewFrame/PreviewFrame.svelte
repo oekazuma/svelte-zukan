@@ -1,6 +1,7 @@
 <script lang="ts">
   import { messages, type Messages } from '../../app/i18n.js';
   import A11yPanel from './A11yPanel.svelte';
+  import { startMeasure } from './measure.js';
   import {
     BACKGROUND_MODES,
     BACKGROUNDS,
@@ -67,6 +68,7 @@
     return `html{background:${base} ${image} 0 0/16px 16px !important}body{background:transparent !important}`;
   };
   const A11Y_ICON = ['M12 4.5a1.5 1.5 0 1 0 0-.01', 'M5 8.5l7 1.5 7-1.5', 'M12 10v4.5', 'M8.5 20l3.5-5.5 3.5 5.5'];
+  const MEASURE_ICON = ['M3 8h18v8H3z', 'M7 8v3', 'M11 8v4', 'M15 8v3', 'M19 8v4'];
   const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'];
   const MIN_WIDTH = 200;
   /** a typed width above the stage is drawn at its real width and scaled down, up to a 4K screen */
@@ -141,6 +143,7 @@
       | 'visionHintTritanopia'
       | 'visionHintAchromatopsia'
       | 'scaledToFit'
+      | 'measure'
       | 'impactCritical'
       | 'impactSerious'
       | 'impactModerate'
@@ -157,6 +160,7 @@
   let height = $state(MIN_HEIGHT);
   let dragging = $state(false);
   let outlined = $state(false);
+  let measuring = $state(false);
   let background = $state<Background>(readBackground());
   // until the first height is measured, a skeleton covers the frame (lazy frames load only when scrolled to)
   let ready = $state(false);
@@ -284,6 +288,10 @@
   let a11yOpen = $state(false);
   let iframe: HTMLIFrameElement | undefined = $state();
 
+  $effect(() => {
+    if (doc && measuring) return startMeasure(doc);
+  });
+
   function toggleExpanded() {
     expanded = !expanded;
     // the button moves with the toolbar; keep the focus on it
@@ -405,6 +413,16 @@
           {@render icon(A11Y_ICON)}
         </button>
       {/if}
+      <button
+        type="button"
+        class="icon"
+        aria-label={labels.measure}
+        title={labels.measure}
+        aria-pressed={measuring}
+        onclick={() => (measuring = !measuring)}
+      >
+        {@render icon(MEASURE_ICON)}
+      </button>
       <button
         type="button"
         class="icon"
