@@ -69,6 +69,8 @@
   const A11Y_ICON = ['M12 4.5a1.5 1.5 0 1 0 0-.01', 'M5 8.5l7 1.5 7-1.5', 'M12 10v4.5', 'M8.5 20l3.5-5.5 3.5 5.5'];
   const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'];
   const MIN_WIDTH = 200;
+  /** a typed width above the stage is drawn at its real width and scaled down, up to a 4K screen */
+  const MAX_WIDTH = 3840;
   const MIN_HEIGHT = 80;
   /** the resize grip sits beside the iframe, so the iframe is exactly the chosen width */
   const HANDLE = 14;
@@ -138,6 +140,7 @@
       | 'visionHintDeuteranopia'
       | 'visionHintTritanopia'
       | 'visionHintAchromatopsia'
+      | 'scaledToFit'
       | 'impactCritical'
       | 'impactSerious'
       | 'impactModerate'
@@ -167,8 +170,9 @@
   // a stage narrower than MIN_WIDTH lowers the minimum, so aria-valuenow never goes below aria-valuemin
   const max = $derived(Math.max(0, stageWidth - HANDLE));
   const min = $derived(Math.min(MIN_WIDTH, max));
-  // the frame is capped by max-width and min-width in CSS, so report the effective width
-  const current = $derived(clamp(width ?? max));
+  // the width the preview is laid out at; wider than the stage, it is scaled down to fit
+  const current = $derived(width === null ? max : Math.min(MAX_WIDTH, Math.max(min, width)));
+  const scale = $derived(max > 0 && current > max ? max / current : 1);
   /** narrower than the stage: centered on a patterned stage, so the device's edges are visible */
   const sized = $derived(width !== null && stageWidth > 0 && current < max);
 
@@ -273,7 +277,7 @@
 
   function setWidthFrom(input: HTMLInputElement) {
     const value = Math.round(Number(input.value));
-    if (input.value !== '' && value > 0) width = clamp(value);
+    if (input.value !== '' && value > 0) width = Math.min(MAX_WIDTH, Math.max(min, value));
     input.value = String(Math.round(current));
   }
 
@@ -369,7 +373,7 @@
         type="number"
         inputmode="numeric"
         min={stageWidth ? min : undefined}
-        max={stageWidth ? max : undefined}
+        max={MAX_WIDTH}
         aria-label={labels.widthInPixels}
         value={stageWidth ? Math.round(current) : ''}
         onchange={(e) => setWidthFrom(e.currentTarget)}
@@ -380,6 +384,9 @@
           }
         }}
       /><span class="unit" aria-hidden="true">px</span>
+      {#if scale < 1}
+        <span class="zoom" title={labels.scaledToFit}>{Math.round(scale * 100)}%</span>
+      {/if}
     </label>
     <div class="group">
       <button type="button" class="icon" aria-label={backgroundName} title={backgroundName} onclick={nextBackground}>
@@ -437,7 +444,7 @@
   <div class={['stage', { sized }]} bind:clientWidth={stageWidth}>
     <div
       class={['frame', { dragging }]}
-      style:width={width === null ? '100%' : `${width + HANDLE}px`}
+      style:width={width === null || scale < 1 ? '100%' : `${current + HANDLE}px`}
       style:--handle="{HANDLE}px"
       aria-busy={!ready}
     >
@@ -447,21 +454,28 @@
         </div>
       {/if}
       <!-- the iframe's color-scheme is what `prefers-color-scheme` reports inside it -->
-      <iframe
-        bind:this={iframe}
-        {src}
-        {title}
-        loading="lazy"
-        onload={(e) => {
-          const loaded = (e.currentTarget as HTMLIFrameElement).contentDocument;
-          if (!loaded?.body) return;
-          doc = loaded;
-          observe(loaded);
-        }}
-        class:dragging
-        style:height="{height}px"
-        style:color-scheme={theme}
-      ></iframe>
+      <div
+        class={['viewport', { scaled: scale < 1 }]}
+        style:height={scale < 1 ? `${Math.ceil(height * scale)}px` : null}
+      >
+        <iframe
+          bind:this={iframe}
+          {src}
+          {title}
+          loading="lazy"
+          onload={(e) => {
+            const loaded = (e.currentTarget as HTMLIFrameElement).contentDocument;
+            if (!loaded?.body) return;
+            doc = loaded;
+            observe(loaded);
+          }}
+          class:dragging
+          style:height="{height}px"
+          style:width={scale < 1 ? `${current}px` : null}
+          style:scale={scale < 1 ? scale : null}
+          style:color-scheme={theme}
+        ></iframe>
+      </div>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <div
         class={['handle', { dragging }]}
@@ -469,7 +483,7 @@
         aria-orientation="vertical"
         aria-label={labels.previewWidth}
         aria-valuemin={stageWidth ? min : undefined}
-        aria-valuemax={stageWidth ? max : undefined}
+        aria-valuemax={stageWidth ? Math.max(max, Math.round(current)) : undefined}
         aria-valuenow={stageWidth ? Math.round(current) : undefined}
         tabindex="0"
         {onpointerdown}
@@ -725,6 +739,22 @@
     display: block;
     width: 100%;
     border: 0;
+  }
+
+  .viewport.scaled {
+    overflow: hidden;
+  }
+
+  .scaled iframe {
+    transform-origin: 0 0;
+  }
+
+  .zoom {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--_accent) 14%, var(--_bg));
+    font-size: 12px;
   }
 
   iframe.dragging {
