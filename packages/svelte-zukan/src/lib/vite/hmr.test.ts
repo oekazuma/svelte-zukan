@@ -191,3 +191,20 @@ it(
     expect(await list()).toContain('"file":"src/Lone.svelte"');
   }
 );
+
+it('changing an imported props type updates the metadata', { timeout: 25_000 }, async () => {
+  await server.close();
+  const types = join(tmp, 'app/src/types.ts');
+  writeFileSync(types, 'export type Props = { a: number };\n');
+  writeFileSync(
+    join(tmp, 'app/src/A.svelte'),
+    '<script lang="ts">\n  import type { Props } from \'./types\';\n  let { a }: Props = $props();\n</script>\n<p>{a}</p>'
+  );
+  await start();
+  expect(await meta('app/A')).toContain('"name":"a","type":"number"');
+  send.mockClear();
+  writeFileSync(types, 'export type Props = { a: number; /** new */ b?: string };\n');
+  await waitForReload();
+  expect(fullReloads()).toBe(0);
+  expect(await meta('app/A')).toContain('"name":"b","type":"string"');
+});

@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { normalizePath } from 'vite';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { extractProps } from './props.js';
 
 const ts = (script: string, rest = '') => `<script lang="ts">\n${script}\n</script>\n${rest}`;
@@ -28,6 +32,7 @@ describe('extractProps', () => {
     );
     expect(found).toEqual({
       typeName: null,
+      files: [],
       props: [
         {
           name: 'label',
@@ -83,6 +88,7 @@ describe('extractProps', () => {
     );
     expect(found).toEqual({
       typeName: 'ButtonProps',
+      files: [],
       props: [
         { name: 'variant', type: null, default: "'primary'", required: false, bindable: false, description: null },
         { name: 'disabled', type: null, default: null, required: false, bindable: false, description: null }
@@ -115,5 +121,72 @@ describe('extractProps', () => {
       type: 'number',
       description: 'one\ntwo'
     });
+  });
+});
+
+describe('extractProps with imported types', () => {
+  let tmp: string;
+  beforeEach(() => {
+    tmp = normalizePath(realpathSync(mkdtempSync(join(tmpdir(), 'zukan-props-'))));
+  });
+  afterEach(() => rmSync(tmp, { recursive: true, force: true }));
+  const write = (rel: string, content: string) => {
+    mkdirSync(dirname(join(tmp, rel)), { recursive: true });
+    writeFileSync(join(tmp, rel), content);
+    return `${tmp}/${rel}`;
+  };
+  const component = (script: string) => write('lib/Button.svelte', ts(script));
+  const read = (file: string) => extractProps(readFileSync(file, 'utf8'), file);
+
+  it('follows a type imported from a relative .ts file, under an alias, with its JSDoc', () => {
+    const types = write(
+      'lib/types.ts',
+      "import type { Base } from './base';\nexport interface ButtonProps extends Base {\n  /** the look */\n  variant?: 'primary' | 'ghost';\n}\n"
+    );
+    const base = write('lib/base.ts', 'export type Base = { id: string };\n');
+    const file = component(
+      "  import type { ButtonProps as P } from './types.js';\n  let { variant = 'primary', id }: P = $props();"
+    );
+    const found = read(file)!;
+    expect(found.props.map((p) => [p.name, p.type, p.default, p.required, p.description])).toEqual([
+      ['variant', "'primary' | 'ghost'", "'primary'", false, 'the look'],
+      ['id', 'string', null, true, null]
+    ]);
+    expect(found.typeName).toBeNull();
+    expect(found.files.sort()).toEqual([base, types].sort());
+  });
+
+  it("reads another component's <script module> and an index.ts", () => {
+    write('lib/Field.svelte', '<script module lang="ts">\n  export type FieldProps = { label: string };\n</script>\n');
+    write('lib/shared/index.ts', 'export type Extra = { hint?: string };\n');
+    const file = component(
+      "  import type { FieldProps } from './Field.svelte';\n  import type { Extra } from './shared';\n  let { label, hint }: FieldProps & Extra = $props();"
+    );
+    expect(read(file)!.props.map((p) => [p.name, p.type])).toEqual([
+      ['label', 'string'],
+      ['hint', 'string']
+    ]);
+  });
+
+  it('names what it can not read: a package type, a missing file, a broken file', () => {
+    write('lib/broken.ts', 'export type Broken = {');
+    const file = component(
+      "  import type { HTMLButtonAttributes } from 'svelte/elements';\n  import type { Gone } from './gone';\n  import type { Broken } from './broken';\n  let { a }: HTMLButtonAttributes & Gone & Broken = $props();"
+    );
+    const found = read(file)!;
+    expect(found.typeName).toBe('HTMLButtonAttributes');
+    expect(found.props.map((p) => p.name)).toEqual(['a']);
+    expect(found.files).toEqual([]);
+  });
+
+  it('stops at types that refer to each other', () => {
+    write('lib/a.ts', "import type { B } from './b';\nexport type A = B & { a: number };\n");
+    write('lib/b.ts', "import type { A } from './a';\nexport type B = A & { b: number };\n");
+    const file = component("  import type { A } from './a';\n  let { a, b }: A = $props();");
+    expect(
+      read(file)!
+        .props.map((p) => p.name)
+        .sort()
+    ).toEqual(['a', 'b']);
   });
 });

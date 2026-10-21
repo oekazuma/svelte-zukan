@@ -53,6 +53,17 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   const { isCatalogFile, isDocFile, docFileOf, componentFileOf } = createMatchers(options.suffix ?? 'zukan');
   /** component file → its props as last served, to tell a props change from any other edit */
   const servedProps = new Map<string, string>();
+  /** a file a component's props type is imported from → the components that read it */
+  const propsDeps = new Map<string, Set<string>>();
+  const readProps = (component: string) => {
+    const found = extractProps(readFileSync(component, 'utf-8'), component);
+    servedProps.set(component, JSON.stringify(found));
+    for (const dep of found?.files ?? []) {
+      if (!propsDeps.has(dep)) propsDeps.set(dep, new Set());
+      propsDeps.get(dep)!.add(component);
+    }
+    return found;
+  };
   let root = '';
   let groups: CatalogGroup[] = [];
   let resolved: ReturnType<typeof resolveOptions>;
@@ -255,8 +266,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         let found = null;
         if (existsSync(component)) {
           this.addWatchFile(component);
-          found = extractProps(readFileSync(component, 'utf-8'), component);
-          servedProps.set(normalizePath(component), JSON.stringify(found));
+          found = readProps(normalizePath(component));
+          for (const dep of found?.files ?? []) this.addWatchFile(dep);
         }
         const meta = { sections, doc, props: found?.props ?? null, propsType: found?.typeName ?? null };
         return `export default ${JSON.stringify(meta)};\n`;
@@ -383,11 +394,13 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         moduleGraph.invalidateModule(list, new Set(), timestamp, true);
         this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
         return;
-      } else if (type === 'update' && servedProps.has(normalizePath(file))) {
+      } else if (type === 'update' && (servedProps.has(normalizePath(file)) || propsDeps.has(normalizePath(file)))) {
         // the component's own HMR updates the previews; only a change to its props changes the detail page
-        const props = JSON.stringify(extractProps(readFileSync(file, 'utf-8'), file));
-        if (props === servedProps.get(normalizePath(file)) || this.environment.config.consumer !== 'client') return;
-        servedProps.set(normalizePath(file), props);
+        if (this.environment.config.consumer !== 'client') return;
+        const changed = file.endsWith('.svelte') && servedProps.has(normalizePath(file)) ? [normalizePath(file)] : [];
+        const affected = new Set([...changed, ...(propsDeps.get(normalizePath(file)) ?? [])]);
+        const before = [...affected].map((c) => servedProps.get(c));
+        if ([...affected].every((c, i) => JSON.stringify(readProps(c)) === before[i])) return;
         for (const mod of metas()) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
         this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
         return;
