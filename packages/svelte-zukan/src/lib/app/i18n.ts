@@ -43,6 +43,11 @@ export type Messages = {
   bindable: string;
   propsType: string;
   copyLink: string;
+  background: string;
+  backgroundTheme: string;
+  backgroundChecker: string;
+  backgroundGrid: string;
+  widthInPixels: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -90,7 +95,12 @@ export const messages: Record<'en' | 'ja', Messages> = {
     required: 'required',
     bindable: 'bindable',
     propsType: 'Typed by',
-    copyLink: 'Copy link to this view'
+    copyLink: 'Copy link to this view',
+    background: 'Background',
+    backgroundTheme: 'Theme',
+    backgroundChecker: 'Checkerboard',
+    backgroundGrid: 'Grid',
+    widthInPixels: 'Width in pixels'
   },
   ja: {
     nav: 'コンポーネント',
@@ -136,6 +146,11 @@ export const messages: Record<'en' | 'ja', Messages> = {
     required: '必須',
     bindable: 'bind 可',
     propsType: '型の定義',
-    copyLink: 'この表示へのリンクをコピー'
+    copyLink: 'この表示へのリンクをコピー',
+    background: '背景',
+    backgroundTheme: 'テーマの色',
+    backgroundChecker: '市松模様',
+    backgroundGrid: 'グリッド',
+    widthInPixels: '幅（px）'
   }
 };

@@ -22,7 +22,39 @@ describe('PreviewFrame', () => {
     screen.container.style.width = '1000px';
     await screen.getByRole('button', { name: 'Tablet (768px)', exact: true }).click();
     await expect.poll(() => iframeWidth(screen.container)).toBe(768);
-    await expect.element(screen.getByText('768px', { exact: true })).toBeInTheDocument();
+    await expect.element(screen.getByRole('spinbutton', { name: 'Width in pixels' })).toHaveValue(768);
+  });
+
+  it('a typed width is applied, clamped, and Escape restores the shown one', async () => {
+    const screen = await render(PreviewFrame, { props });
+    screen.container.style.width = '1000px';
+    const input = screen.getByRole('spinbutton', { name: 'Width in pixels' });
+    // the stage is measured after the resize; a width typed before that would be clamped to the old one
+    await expect.element(input).toHaveValue(1000 - 14);
+    await userEvent.fill(input, '420');
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => iframeWidth(screen.container)).toBe(420);
+    await userEvent.fill(input, '5000');
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => iframeWidth(screen.container)).toBe(1000 - 14);
+    await expect.element(input).toHaveValue(1000 - 14);
+    await userEvent.fill(input, '300');
+    await userEvent.keyboard('{Escape}');
+    await expect.element(input).toHaveValue(1000 - 14);
+    expect(iframeWidth(screen.container)).toBe(1000 - 14);
+  });
+
+  it('the background button cycles theme, checkerboard and grid, and is remembered', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const frame = () => screen.container.querySelector('iframe')!.contentDocument!;
+    await expect.poll(() => frame().readyState).toBe('complete');
+    await screen.getByRole('button', { name: 'Background: Theme' }).click();
+    await expect.poll(() => frame().head.textContent).toContain('conic-gradient');
+    await screen.getByRole('button', { name: 'Background: Checkerboard' }).click();
+    await expect.poll(() => frame().head.textContent).toContain('linear-gradient');
+    expect(sessionStorage.getItem('svelte-zukan:background')).toBe('grid');
+    await screen.getByRole('button', { name: 'Background: Grid' }).click();
+    await expect.poll(() => frame().head.textContent).not.toContain('gradient');
   });
 
   it('width presets are a labelled group and the readout is not a live region', async () => {
@@ -52,7 +84,7 @@ describe('PreviewFrame', () => {
     screen.container.style.width = '600px';
     await screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }).click();
     await expect.poll(() => iframeWidth(screen.container)).toBe(586);
-    await expect.element(screen.getByText('586px', { exact: true })).toBeInTheDocument();
+    await expect.element(screen.getByRole('spinbutton', { name: 'Width in pixels' })).toHaveValue(586);
     await expect.element(screen.getByRole('separator')).toHaveAttribute('aria-valuenow', '586');
     await expect
       .element(screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }))
@@ -121,7 +153,7 @@ describe('PreviewFrame resizing', () => {
     send('pointermove', 150.4);
     send('pointerup', 150.4);
     await expect.poll(() => iframeWidth(screen.container)).toBe(425);
-    await expect.element(screen.getByText('425px', { exact: true })).toBeInTheDocument();
+    await expect.element(screen.getByRole('spinbutton', { name: 'Width in pixels' })).toHaveValue(425);
   });
 
   it('aria-valuemin follows a narrow stage', async () => {
@@ -215,7 +247,7 @@ describe('PreviewFrame resizing', () => {
       hidden.style.display = 'none';
       const screen = await render(PreviewFrame, { props, target: hidden });
       const handle = screen.getByRole('separator', { includeHidden: true }).element();
-      expect(hidden.querySelector('.width')!.textContent).toBe('');
+      expect(hidden.querySelector<HTMLInputElement>('.width input')!.value).toBe('');
       for (const name of ['aria-valuenow', 'aria-valuemin', 'aria-valuemax'])
         expect(handle.hasAttribute(name)).toBe(false);
       hidden.style.display = '';
@@ -272,7 +304,12 @@ describe('PreviewFrame resizing', () => {
           loading: 'Wait',
           copyLink: 'Share',
           copied: 'Done',
-          copyFailed: 'Nope'
+          copyFailed: 'Nope',
+          background: 'Backdrop',
+          backgroundTheme: 'Plain',
+          backgroundChecker: 'Checks',
+          backgroundGrid: 'Lines',
+          widthInPixels: 'Pixels'
         }
       }
     });
