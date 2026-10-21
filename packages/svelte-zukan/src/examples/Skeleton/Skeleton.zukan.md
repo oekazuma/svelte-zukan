@@ -1,0 +1,1 @@
+A placeholder in the shape of content that is still loading. It is hidden from screen readers; announce the loading state elsewhere (for example with `aria-busy` on the container). The shimmer stops when the system asks for reduced motion.
