@@ -35,14 +35,14 @@ describe('PreviewFrame', () => {
     await userEvent.fill(input, '420');
     await userEvent.keyboard('{Enter}');
     await expect.poll(() => iframeWidth(screen.container)).toBe(420);
+    // above the stage it is laid out at that width (up to 3840) and scaled down to the stage
     await userEvent.fill(input, '5000');
     await userEvent.keyboard('{Enter}');
+    await expect.element(input).toHaveValue(3840);
     await expect.poll(() => iframeWidth(screen.container)).toBe(1000 - 14);
-    await expect.element(input).toHaveValue(1000 - 14);
     await userEvent.fill(input, '300');
     await userEvent.keyboard('{Escape}');
-    await expect.element(input).toHaveValue(1000 - 14);
-    expect(iframeWidth(screen.container)).toBe(1000 - 14);
+    await expect.element(input).toHaveValue(3840);
   });
 
   it('the background button cycles theme, checkerboard and grid, and is remembered', async () => {
@@ -80,13 +80,21 @@ describe('PreviewFrame', () => {
     await expect.poll(() => iframeWidth(screen.container)).toBe(986);
   });
 
-  it('reports the effective width when the stage is narrower than the preset', async () => {
+  it('lays out a preset wider than the stage at its width and scales it to fit', async () => {
     const screen = await render(PreviewFrame, { props });
     screen.container.style.width = '600px';
     await screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }).click();
+    const iframe = screen.container.querySelector('iframe')!;
+    // laid out at 1280px, shown at the 586px the stage has
+    await expect.poll(() => iframe.offsetWidth).toBe(1280);
     await expect.poll(() => iframeWidth(screen.container)).toBe(586);
-    await expect.element(screen.getByRole('spinbutton', { name: 'Width in pixels' })).toHaveValue(586);
-    await expect.element(screen.getByRole('separator')).toHaveAttribute('aria-valuenow', '586');
+    expect(iframe.contentWindow!.innerWidth).toBe(1280);
+    await expect.element(screen.getByRole('spinbutton', { name: 'Width in pixels' })).toHaveValue(1280);
+    await expect.element(screen.getByText('46%')).toBeInTheDocument();
+    await expect.element(screen.getByRole('separator')).toHaveAttribute('aria-valuenow', '1280');
+    // the visible box follows the scaled height
+    const viewport = iframe.parentElement!;
+    expect(Math.abs(viewport.getBoundingClientRect().height - iframe.getBoundingClientRect().height)).toBeLessThan(1.5);
     await expect
       .element(screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }))
       .toHaveAttribute('aria-pressed', 'true');
