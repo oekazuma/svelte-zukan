@@ -11,13 +11,19 @@ export const metaId = (path: string) => META + Buffer.from(path, 'utf8').toStrin
 export const pathOfMeta = (hex: string) =>
   /^(?:[0-9a-f]{2})*$/.test(hex) ? Buffer.from(hex, 'hex').toString('utf8') : null;
 
-export function generateCatalogModule(items: CatalogItem[]): string {
+export function generateCatalogModule(
+  items: CatalogItem[],
+  uncataloged: { group: string; file: string }[] = []
+): string {
   // `file` is left out so that absolute paths do not end up in the static build
   const entries = items.map(
     ({ file, ...item }) =>
       `  { ...${JSON.stringify(item)}, load: () => import(${JSON.stringify(file)}), meta: () => import(${JSON.stringify(metaId(item.path))}) }`
   );
-  return `export const catalog = [\n${entries.join(',\n')}\n];\n`;
+  return (
+    `export const catalog = [\n${entries.join(',\n')}\n];\n` +
+    `export const uncataloged = ${JSON.stringify(uncataloged)};\n`
+  );
 }
 
 export function generateEntryModule(opts: {
@@ -41,11 +47,12 @@ export function generateEntryModule(opts: {
     `  try { preview = window !== parent && parent.location.pathname === location.pathname; } catch {}`,
     `  if (!preview) location.reload();`,
     `});`,
-    `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)})]).then(([{ default: App }, { catalog }]) =>`,
+    `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)})]).then(([{ default: App }, { catalog, uncataloged }]) =>`,
     `  mount(App, {`,
     `    target: document.body,`,
     `    props: {`,
     `      catalog,`,
+    `      uncataloged,`,
     `      logo: ${opts.logo ? 'logo' : 'null'},`,
     `      wrapper: ${opts.wrapper ? `() => import(${s(opts.wrapper)})` : 'null'},`,
     `      title: ${s(opts.title)},`,

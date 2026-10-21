@@ -9,6 +9,10 @@ describe('generateCatalogModule', () => {
     expect(code).toContain('import("/abs/Card.zukan.svelte")');
     expect(code).toContain('"path":"@acme/ui/lib/Card"');
     expect(code).toContain('export const catalog');
+    expect(code).toContain('export const uncataloged = [];');
+    expect(generateCatalogModule([], [{ group: 'ui', file: 'src/lib/Card.svelte' }])).toContain(
+      'export const uncataloged = [{"group":"ui","file":"src/lib/Card.svelte"}];'
+    );
   });
 
   it('encodes the metadata ID so the dev server leaves it alone', () => {

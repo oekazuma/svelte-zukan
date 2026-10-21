@@ -16,6 +16,7 @@
     title,
     locale,
     searched,
+    uncataloged = [],
     axe
   }: {
     catalog: Entry[];
@@ -24,6 +25,8 @@
     title: string;
     locale: 'en' | 'ja';
     searched: { group: string; dirs: string[] }[];
+    /** `.svelte` files with no catalog file next to them, relative to the Vite root */
+    uncataloged?: { group: string; file: string }[];
     /** the source of axe-core, loaded on the first accessibility check */
     axe?: () => Promise<string>;
   } = $props();
@@ -132,7 +135,7 @@
     />
     <main>
       {#if route.view === 'list'}
-        <List entries={catalog} {searched} {theme} {t} />
+        <List entries={catalog} {searched} {uncataloged} {theme} {t} />
       {:else if entry}
         <Detail
           bind:this={detail}

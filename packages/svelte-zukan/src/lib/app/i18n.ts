@@ -77,6 +77,8 @@ export type Messages = {
   visionHintAchromatopsia: string;
   scaledToFit: string;
   measure: string;
+  uncataloged: string;
+  uncatalogedHint: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -158,7 +160,10 @@ export const messages: Record<'en' | 'ja', Messages> = {
     visionHintTritanopia: 'Blue is hard to tell apart',
     visionHintAchromatopsia: 'No colors, only lightness',
     scaledToFit: 'Wider than the page: laid out at this width and scaled down to fit',
-    measure: 'Measure elements on hover'
+    measure: 'Measure elements on hover',
+    uncataloged: 'Components without a catalog file',
+    uncatalogedHint:
+      'These .svelte files have no catalog file next to them. Add one to show a component in the catalog.'
   },
   ja: {
     nav: 'コンポーネント',
@@ -238,6 +243,9 @@ export const messages: Record<'en' | 'ja', Messages> = {
     visionHintTritanopia: '青が見分けにくい',
     visionHintAchromatopsia: '色がなく、明るさだけで見える',
     scaledToFit: 'ページより広いので、この幅で描画して縮小表示しています',
-    measure: 'カーソルを当てた要素を計測'
+    measure: 'カーソルを当てた要素を計測',
+    uncataloged: 'カタログファイルがないコンポーネント',
+    uncatalogedHint:
+      '次の .svelte ファイルには、隣にカタログファイルがありません。カタログファイルを置くと、カタログに加わります。'
   }
 };

@@ -178,3 +178,16 @@ it(
     expect(await meta('app/A')).toContain('"name":"b"');
   }
 );
+
+it(
+  'a new component without a catalog file updates the list, and Vite still handles the file',
+  { timeout: 15_000 },
+  async () => {
+    expect(await list()).toContain('export const uncataloged = []');
+    send.mockClear();
+    writeFileSync(join(tmp, 'app/src/Lone.svelte'), '<p>lone</p>');
+    await waitForReload();
+    expect(fullReloads()).toBe(0);
+    expect(await list()).toContain('"file":"src/Lone.svelte"');
+  }
+);

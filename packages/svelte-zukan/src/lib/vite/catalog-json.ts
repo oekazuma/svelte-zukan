@@ -29,12 +29,15 @@ export type CatalogJson = {
     /** why the catalog file could not be read; its sections are then empty */
     error?: string;
   }[];
+  /** `.svelte` files in the scanned directories with no catalog file next to them */
+  uncataloged: { group: string; file: string }[];
 };
 
 export function catalogJson(opts: {
   root: string;
   title: string;
   items: CatalogItem[];
+  uncataloged: { group: string; file: string }[];
   docFileOf: (file: string) => string;
   componentFileOf: (file: string) => string;
 }): CatalogJson {
@@ -70,6 +73,7 @@ export function catalogJson(opts: {
         sections,
         ...(error !== undefined && { error })
       };
-    })
+    }),
+    uncataloged: opts.uncataloged.map((u) => ({ group: u.group, file: rel(u.file) }))
   };
 }

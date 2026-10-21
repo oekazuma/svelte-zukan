@@ -10,6 +10,8 @@ The catalog opens at `/__zukan/` on your dev server (`<base>__zukan/` when you s
 
 Each component is a card with a small preview of its first section, its name and directory, and the first paragraph of its [`.md` file](/guides/catalog-files#markdown-description). A component without sections shows its initial instead of a preview. Click a card to open its detail page.
 
+Below the cards, a folded list shows the `.svelte` files in the scanned directories that have no catalog file next to them yet, so you can see what is left to catalog. SvelteKit's route files (`+page.svelte`), test components and `src/routes/` are left out.
+
 ## Finding a component
 
 - The sidebar lists the components by group and by directory. Folders open and close, and the arrow keys move through the list
