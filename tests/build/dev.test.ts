@@ -42,3 +42,17 @@ test('a preview of the prebundled package renders only its section', { timeout: 
   await expect.poll(() => page.locator('button', { hasText: 'count:' }).count(), { timeout: 30_000 }).toBe(1);
   expect(await page.getByText('second section').count()).toBe(0);
 });
+
+test('the accessibility check runs the real axe-core in a preview', { timeout: 60_000 }, async () => {
+  const url = server!.resolvedUrls!.local[0];
+  const page = await browser!.newPage();
+  await page.goto(`${url}__zukan/#/vite-svelte/lib/Counter`);
+  const check = page.getByRole('button', { name: 'Check accessibility' }).first();
+  await expect.poll(() => check.isEnabled(), { timeout: 30_000 }).toBe(true);
+  await check.click();
+  await expect
+    .poll(() => page.getByText(/^(No accessibility issues found|Accessibility issues \(\d+\))$/).count(), {
+      timeout: 30_000
+    })
+    .toBe(1);
+});

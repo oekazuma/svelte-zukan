@@ -14,6 +14,7 @@
     previous,
     next,
     theme,
+    axe,
     t
   }: {
     entry: Entry;
@@ -22,6 +23,7 @@
     previous?: Entry;
     next?: Entry;
     theme: Theme;
+    axe?: () => Promise<string>;
     t: Messages;
   } = $props();
 
@@ -109,6 +111,7 @@
                 requestedWidth={section === s.title ? width : undefined}
                 bind:expanded={() => expandedTitle === s.title, (v) => (expandedTitle = v ? s.title : null)}
                 title={s.title}
+                {axe}
                 {theme}
                 labels={t}
               />

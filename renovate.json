@@ -15,7 +15,7 @@
       "automerge": true
     },
     {
-      "description": "marked ships as a runtime dependency of the published package, so its updates reach every consumer — keep them manually reviewed. In-range updates touch only the lockfile, so the published range does not narrow.",
+      "description": "marked and axe-core ship as runtime dependencies of the published package, so their updates reach every consumer — keep them manually reviewed. In-range updates touch only the lockfile, so the published range does not narrow.",
       "groupName": "dependencies",
       "matchDepTypes": ["dependencies"],
       "rangeStrategy": "update-lockfile",
