@@ -43,6 +43,17 @@
     tritanopia: '0.95 0.05 0 0 0 0 0.433 0.567 0 0 0 0.475 0.525 0 0 0 0 0 1 0',
     achromatopsia: '0.299 0.587 0.114 0 0 0.299 0.587 0.114 0 0 0.299 0.587 0.114 0 0 0 0 0 1 0'
   } as const;
+  const VISIONS = Object.keys(VISION_FILTERS) as Vision[];
+  const VISION_HINTS = {
+    none: null,
+    blurred: 'visionHintBlurred',
+    protanopia: 'visionHintProtanopia',
+    deuteranopia: 'visionHintDeuteranopia',
+    tritanopia: 'visionHintTritanopia',
+    achromatopsia: 'visionHintAchromatopsia'
+  } as const;
+  const RERUN_ICON = ['M20 11a8 8 0 1 0-2.3 5.7', 'M20 4v7h-7'];
+  const CLOSE_ICON = ['M6 6l12 12', 'M18 6L6 18'];
   const VISION_LABELS = {
     none: 'visionNone',
     blurred: 'visionBlurred',
@@ -84,6 +95,11 @@
       | 'visionDeuteranopia'
       | 'visionTritanopia'
       | 'visionAchromatopsia'
+      | 'visionHintBlurred'
+      | 'visionHintProtanopia'
+      | 'visionHintDeuteranopia'
+      | 'visionHintTritanopia'
+      | 'visionHintAchromatopsia'
       | 'close'
     >;
     onclose: () => void;
@@ -94,8 +110,29 @@
   >({ status: 'running' });
   let highlight = $state(true);
   let selected = $state<string | null>(null);
+  /** under the pointer or the focus in the list; it is emphasized like the selected one */
+  let hovered = $state<string | null>(null);
   let vision = $state<Vision>('none');
-  const selectId = $props.id();
+  const uid = $props.id();
+
+  /** a radio group: arrow keys, Home and End move the choice, and the focus with it */
+  function moveVision(e: KeyboardEvent) {
+    const i = VISIONS.indexOf(vision);
+    const next =
+      e.key === 'ArrowRight' || e.key === 'ArrowDown'
+        ? (i + 1) % VISIONS.length
+        : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+          ? (i - 1 + VISIONS.length) % VISIONS.length
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? VISIONS.length - 1
+              : -1;
+    if (next === -1) return;
+    e.preventDefault();
+    vision = VISIONS[next];
+    ((e.currentTarget as HTMLElement).parentElement!.children[next + 1] as HTMLElement).focus();
+  }
 
   async function check() {
     result = { status: 'running' };
@@ -148,7 +185,7 @@
     const rules = result.violations.flatMap((v) =>
       v.targets.map(
         (t) =>
-          `${t}{outline:${t === selected ? 4 : 2}px solid ${IMPACT_COLORS[v.impact ?? 'minor']} !important;outline-offset:2px !important}`
+          `${t}{outline:${t === selected || t === hovered ? 4 : 2}px solid ${IMPACT_COLORS[v.impact ?? 'minor']} !important;outline-offset:2px !important}`
       )
     );
     const style = doc.createElement('style');
@@ -177,9 +214,33 @@
   });
 </script>
 
+{#snippet icon(paths: readonly string[])}
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    {#each paths as d (d)}<path {d} />{/each}
+  </svg>
+{/snippet}
+
 <div class="a11y">
+  <!-- the swatches below show each simulation with the same filters as the preview -->
+  <svg class="defs" aria-hidden="true">
+    {#each VISIONS as v (v)}
+      {#if VISION_FILTERS[v]}
+        <filter id="{uid}-{v}"><feColorMatrix type="matrix" values={VISION_FILTERS[v]} /></filter>
+      {/if}
+    {/each}
+  </svg>
   <div class="head">
-    <p aria-live="polite">
+    <p class="status" aria-live="polite">
       {#if result.status === 'running'}
         {labels.a11yChecking}
       {:else if result.status === 'failed'}
@@ -190,19 +251,41 @@
         {labels.a11yIssues} ({result.violations.length})
       {/if}
     </p>
-    {#if result.status === 'done' && result.violations.length}
-      <label><input type="checkbox" bind:checked={highlight} /> {labels.a11yHighlight}</label>
-    {/if}
-    <label for="{selectId}-vision">{labels.vision}</label>
-    <select id="{selectId}-vision" bind:value={vision}>
-      {#each Object.keys(VISION_FILTERS) as Vision[] as v (v)}
-        <option value={v}>{labels[VISION_LABELS[v]]}</option>
-      {/each}
-    </select>
-    <button type="button" disabled={result.status === 'running'} onclick={check}>{labels.a11yRerun}</button>
-    <button type="button" onclick={onclose}>{labels.close}</button>
+    <button type="button" class="action" disabled={result.status === 'running'} onclick={check}>
+      {@render icon(RERUN_ICON)}{labels.a11yRerun}
+    </button>
+    <button type="button" class="close" aria-label={labels.close} title={labels.close} onclick={onclose}>
+      {@render icon(CLOSE_ICON)}
+    </button>
+  </div>
+  <div class="vision" role="radiogroup" aria-labelledby="{uid}-vision">
+    <span class="caption" id="{uid}-vision">{labels.vision}</span>
+    {#each VISIONS as v (v)}
+      {@const hint = VISION_HINTS[v]}
+      <button
+        type="button"
+        role="radio"
+        class="chip"
+        aria-checked={vision === v}
+        tabindex={vision === v ? 0 : -1}
+        title={hint ? labels[hint] : undefined}
+        onclick={() => (vision = v)}
+        onkeydown={moveVision}
+      >
+        <span
+          class="swatch"
+          aria-hidden="true"
+          style:filter={VISION_FILTERS[v] ? `url(#${uid}-${v})` : v === 'blurred' ? 'blur(1.5px)' : undefined}
+        ></span>
+        {labels[VISION_LABELS[v]]}
+      </button>
+    {/each}
   </div>
   {#if result.status === 'done' && result.violations.length}
+    <label class="toggle">
+      <input type="checkbox" role="switch" bind:checked={highlight} />
+      {labels.a11yHighlight}
+    </label>
     <ul>
       {#each result.violations as v (v.id)}
         <li>
@@ -218,7 +301,11 @@
                   class="target"
                   aria-pressed={selected === target}
                   style:--impact={IMPACT_COLORS[v.impact ?? 'minor']}
-                  onclick={() => select(target)}><code>{target}</code></button
+                  onclick={() => select(target)}
+                  onpointerenter={() => (hovered = target)}
+                  onpointerleave={() => (hovered = null)}
+                  onfocus={() => (hovered = target)}
+                  onblur={() => (hovered = null)}><code>{target}</code></button
                 >
               </li>
             {/each}
@@ -230,6 +317,10 @@
 </div>
 
 <style>
+  .close {
+    padding: 3px 6px;
+  }
+
   .a11y {
     border-top: 1px solid var(--_border);
     padding: 10px 14px;
@@ -243,24 +334,87 @@
     gap: 8px;
   }
 
-  .head p {
+  .status {
     margin: 0 auto 0 0;
     font-weight: 600;
+  }
+
+  .defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+  }
+
+  .vision {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .caption {
+    margin-right: 4px;
+    color: var(--_muted);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 4px;
+    border: 1px solid var(--_border);
+    border-radius: 999px;
+    background: var(--_bg);
+    color: var(--_text);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .chip:hover {
+    background: var(--_code-bg);
+  }
+
+  .chip[aria-checked='true'] {
+    border-color: var(--_accent);
+    background: color-mix(in srgb, var(--_accent) 12%, var(--_bg));
+    box-shadow: inset 0 0 0 1px var(--_accent);
+    font-weight: 600;
+  }
+
+  .chip:focus-visible,
+  .head button:focus-visible,
+  .target:focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: 1px;
+  }
+
+  /* four hues that the simulations tell apart differently */
+  .swatch {
+    width: 28px;
+    height: 16px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e53935 0 25%, #43a047 25% 50%, #1e88e5 50% 75%, #fdd835 75%);
+  }
+
+  .toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    color: var(--_muted);
+    cursor: pointer;
   }
 
   .passed {
     color: var(--_success);
   }
 
-  .head label {
+  .head button {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    color: var(--_muted);
-  }
-
-  .head :is(button, select) {
-    padding: 2px 10px;
+    gap: 6px;
+    padding: 3px 10px;
     border: 1px solid var(--_border);
     border-radius: 6px;
     background: var(--_bg);

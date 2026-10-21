@@ -323,12 +323,21 @@ describe('PreviewFrame resizing', () => {
     await screen.getByRole('button', { name: 'body' }).click();
     await expect.element(screen.getByRole('button', { name: 'body' })).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(head).toContain('body{outline:4px solid');
-    await screen.getByRole('checkbox', { name: 'Highlight issues' }).click();
+    await screen.getByRole('button', { name: 'body' }).click();
+    await screen.getByRole('button', { name: 'body' }).hover();
+    await expect.poll(head).toContain('body{outline:4px solid');
+    await screen.getByRole('switch', { name: 'Highlight issues' }).click();
     await expect.poll(head).not.toContain('outline');
-    await screen.getByRole('combobox', { name: 'Simulate vision' }).selectOptions('Deuteranopia (green-blind)');
+    const vision = screen.getByRole('radiogroup', { name: 'Simulate vision' });
+    await expect.element(vision.getByRole('radio', { name: 'Normal' })).toBeChecked();
+    await vision.getByRole('radio', { name: 'Deuteranopia' }).click();
+    await expect.element(vision.getByRole('radio', { name: 'Deuteranopia' })).toBeChecked();
     await expect.poll(head).toContain('url(#zukan-vision)');
     expect(frame.contentDocument!.querySelector('#zukan-vision feColorMatrix')).not.toBeNull();
-    await screen.getByRole('combobox', { name: 'Simulate vision' }).selectOptions('Blurred vision');
+    // a radio group: the arrow keys move the choice
+    await userEvent.keyboard('{ArrowLeft}{ArrowLeft}');
+    await expect.element(vision.getByRole('radio', { name: 'Blurred' })).toBeChecked();
+    expect(document.activeElement?.textContent?.trim()).toBe('Blurred');
     await expect.poll(head).toContain('blur(2px)');
     await screen.getByRole('button', { name: 'Close' }).click();
     await expect.poll(head).not.toContain('filter');
