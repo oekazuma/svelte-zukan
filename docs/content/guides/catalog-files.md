@@ -58,6 +58,26 @@ The detail page shows the contents of each section as code, with syntax colors, 
 A button for the main action on a page. Use one per screen.
 ```
 
+## Props table
+
+When `Button.svelte` sits next to `Button.zukan.svelte`, the detail page lists its props below the sections: each name, its type, its default, and its JSDoc comment (rendered as inline Markdown, up to the first `@` tag). Props marked `required` have no `?` and no default; props marked `bindable` default to `$bindable()`.
+
+```svelte
+<!-- src/lib/Button/Button.svelte -->
+<script lang="ts">
+  let {
+    variant = 'primary',
+    disabled = false
+  }: {
+    /** the look of the button: `primary` for the main action */
+    variant?: 'primary' | 'secondary';
+    disabled?: boolean;
+  } = $props();
+</script>
+```
+
+The props are read from the component's source, not by running it. The type can be written inline, or as a type alias or interface declared in the component (an interface's `extends` included). For a type imported from another file, the table shows its name and lists only the destructured props, without types. A component that does not parse, or that has no `$props()`, gets no table. Like the `.md` file, a JSDoc comment is inserted as HTML, so review it like code before you publish the catalog.
+
 ## Changing the suffix
 
 The `suffix` option changes the file names. `zukan({ suffix: 'catalog' })` uses `*.catalog.svelte` and `*.catalog.md`.
@@ -65,6 +85,6 @@ The `suffix` option changes the file names. `zukan({ suffix: 'catalog' })` uses 
 ## Watching and HMR
 
 - Creating, deleting, or editing a catalog file or a `.md` file reloads only the `/__zukan/` tab. Tabs of the app connected to the same dev server are not reloaded
-- Editing a component itself (such as `Button.svelte`) goes through normal HMR and is reflected in both the app and the catalog
+- Editing a component itself (such as `Button.svelte`) goes through normal HMR and is reflected in both the app and the catalog. If the edit changes its props, the `/__zukan/` tab also reloads to update the props table
 - Directories outside Vite's root, such as other packages in a monorepo, are also watched
 - When two catalog files end up with the same ID, Vite's error overlay appears in the terminal and in the app tabs connected to the dev server

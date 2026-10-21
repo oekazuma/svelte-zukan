@@ -34,6 +34,14 @@ export type Messages = {
   shortcutExpanded: string;
   shortcutHelp: string;
   close: string;
+  props: string;
+  propName: string;
+  propType: string;
+  propDefault: string;
+  propDescription: string;
+  required: string;
+  bindable: string;
+  propsType: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -72,7 +80,15 @@ export const messages: Record<'en' | 'ja', Messages> = {
     shortcutPrevious: 'Previous component',
     shortcutExpanded: 'Leave an expanded preview',
     shortcutHelp: 'Show these shortcuts',
-    close: 'Close'
+    close: 'Close',
+    props: 'Props',
+    propName: 'Name',
+    propType: 'Type',
+    propDefault: 'Default',
+    propDescription: 'Description',
+    required: 'required',
+    bindable: 'bindable',
+    propsType: 'Typed by'
   },
   ja: {
     nav: 'コンポーネント',
@@ -109,6 +125,14 @@ export const messages: Record<'en' | 'ja', Messages> = {
     shortcutPrevious: '前のコンポーネント',
     shortcutExpanded: '拡大表示を終える',
     shortcutHelp: 'このショートカット一覧を表示',
-    close: '閉じる'
+    close: '閉じる',
+    props: 'Props',
+    propName: '名前',
+    propType: '型',
+    propDefault: '既定値',
+    propDescription: '説明',
+    required: '必須',
+    bindable: 'bind 可',
+    propsType: '型の定義'
   }
 };

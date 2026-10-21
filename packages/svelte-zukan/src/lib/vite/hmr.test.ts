@@ -154,3 +154,27 @@ it('a group outside the root is watched', { timeout: 20_000 }, async () => {
   expect(await list()).toContain('P.zukan.svelte');
   expect(fullReloads()).toBe(0);
 });
+
+it(
+  'changing the props of the component updates the metadata; other edits leave it alone',
+  { timeout: 25_000 },
+  async () => {
+    // written before the server starts, so the edits below are changes, not creates
+    await server.close();
+    const component = join(tmp, 'app/src/A.svelte');
+    writeFileSync(component, '<script lang="ts">\n  let { a }: { a: number } = $props();\n</script>\n<p>{a}</p>');
+    await start();
+    expect(await meta('app/A')).toContain('"name":"a"');
+    send.mockClear();
+    writeFileSync(component, '<script lang="ts">\n  let { a }: { a: number } = $props();\n</script>\n<b>{a}</b>');
+    await new Promise((r) => setTimeout(r, 1000));
+    expect(reloaded()).toBe(false);
+    writeFileSync(
+      component,
+      '<script lang="ts">\n  let { a, b }: { a: number; b?: string } = $props();\n</script>\n<b>{a}</b>'
+    );
+    await waitForReload();
+    expect(fullReloads()).toBe(0);
+    expect(await meta('app/A')).toContain('"name":"b"');
+  }
+);

@@ -208,13 +208,18 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
  * Runs before vite-plugin-svelte preprocesses the file, so the contents of `<style>` (e.g. SCSS) are blanked out first.
  * Same length, newlines kept: offsets and line numbers still point into `source`.
  */
-function parseZukan(source: string, filename: string): Ast {
-  const blanked = source.replace(
-    /(<style(?=[\s/>])[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
-    (_, open: string, css: string, close: string) => open + css.replace(/[^\r\n]/g, ' ') + close
+export const parseSvelte = (source: string, filename: string): Ast =>
+  parse(
+    source.replace(
+      /(<style(?=[\s/>])[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
+      (_, open: string, css: string, close: string) => open + css.replace(/[^\r\n]/g, ' ') + close
+    ),
+    { modern: true, filename }
   );
+
+function parseZukan(source: string, filename: string): Ast {
   try {
-    return parse(blanked, { modern: true, filename });
+    return parseSvelte(source, filename);
   } catch (e) {
     throw new Error(
       `svelte-zukan: could not parse ${filename} (catalog files must be plain Svelte markup; preprocessor languages are only supported inside <style>): ${(e as Error).message}`,

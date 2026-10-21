@@ -252,6 +252,46 @@ describe('App', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it('a detail page lists the props of the component', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = () =>
+      Promise.resolve({
+        default: {
+          sections: [],
+          doc: null,
+          props: [
+            { name: 'title', type: 'string', default: null, required: true, bindable: false, description: null },
+            {
+              name: 'size',
+              type: "'sm' | 'md'",
+              default: "'md'",
+              required: false,
+              bindable: true,
+              description: 'The <code>size</code>'
+            }
+          ],
+          propsType: null
+        }
+      });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 2, name: 'Props' })).toBeInTheDocument();
+    const cells = [...document.querySelectorAll('.props :is(th, td)')];
+    expect(cells.map((c) => c.textContent!.replace(/\s+/g, ' ').trim())).toEqual([
+      'Name',
+      'Type',
+      'Default',
+      'Description',
+      'title required',
+      'string',
+      '',
+      '',
+      'size bindable',
+      "'sm' | 'md'",
+      "'md'",
+      'The size'
+    ]);
+  });
+
   it('a file without sections says so', async () => {
     const { props } = setup('#/ui/Card');
     const screen = await render(App, { props });
