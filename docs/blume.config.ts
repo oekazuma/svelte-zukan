@@ -17,6 +17,19 @@ export default defineConfig({
       { code: 'ja', label: '日本語' }
     ]
   },
+  // pages that used to live under guides/
+  redirects: ['', '/ja'].flatMap((locale) =>
+    [
+      'catalog-files',
+      'wrapper',
+      'catalog-ui',
+      'sveltekit',
+      'monorepo',
+      'static-export',
+      'ai-agents',
+      'catalog-ids'
+    ].map((page) => ({ from: `${locale}/guides/${page}`, to: `${locale}/${page}`, status: 301 as const }))
+  ),
   deployment: {
     site: 'https://oekazuma.github.io',
     base: '/svelte-zukan'

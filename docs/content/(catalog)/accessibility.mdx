@@ -1,0 +1,29 @@
+---
+title: Accessibility panel
+sidebar:
+  order: 3
+---
+
+The accessibility button runs [axe-core](https://github.com/dequelabs/axe-core) inside the preview and lists what it reports: the impact, a description, a link to learn more, and the elements involved.
+
+<img
+  className="shot-light"
+  src="/screenshots/a11y-light.webp"
+  alt="The accessibility panel under a preview, with the deuteranopia simulation applied to the cards"
+  width="1280"
+  height="860"
+/>
+<img
+  className="shot-dark"
+  src="/screenshots/a11y-dark.webp"
+  alt="The accessibility panel under a preview, with the deuteranopia simulation applied to the cards"
+  width="1280"
+  height="860"
+/>
+
+- The reported elements are outlined in the preview in the color of their impact. Hover or focus an element in the list to draw it thicker, or click it to keep it that way and scroll to it
+- The check runs again each time the preview reloads after an edit, while the panel is open
+- "Simulate vision" shows the preview as seen with blurred vision or a color vision deficiency (protanopia, deuteranopia, tritanopia, achromatopsia). Each chip shows a sample of its colors
+- With `locale: 'ja'`, axe-core's messages are in Japanese too
+
+axe-core is loaded only when a check runs. The rule about landmarks around all page content is off, since a component on its own has none.
