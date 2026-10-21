@@ -33,7 +33,7 @@
     <span class="sr-only">{name}</span>
   {/if}
   {#if status}
-    <span class={['status', status]} aria-label={status}></span>
+    <span class={['status', status]} role="img" aria-label={status}></span>
   {/if}
 </span>
 
