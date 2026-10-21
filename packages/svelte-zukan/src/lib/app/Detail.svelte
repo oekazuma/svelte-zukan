@@ -29,10 +29,12 @@
 
   // the section whose heading was last scrolled past the top third of the window
   let active = $state<string | null>(null);
+  /** the props heading in `active`; section titles are never empty, so it can not clash with one */
+  const PROPS = '';
   /** in page order: the headings mount in order */
   const headings: string[] = [];
   function track(node: HTMLElement, title: string) {
-    headings.push(title);
+    if (title !== PROPS) headings.push(title);
     const observer = new IntersectionObserver(
       ([e]) => {
         if (e.isIntersecting) active = title;
@@ -43,7 +45,7 @@
     return {
       destroy: () => {
         observer.disconnect();
-        headings.splice(headings.indexOf(title), 1);
+        if (title !== PROPS) headings.splice(headings.indexOf(title), 1);
       }
     };
   }
@@ -83,8 +85,10 @@
 <!-- recreate everything on navigation so no PreviewFrame keeps the previous entry's width or height -->
 {#key entry.path}
   {#await entry.meta() then { default: meta }}
+    {@const hasProps = !!(meta.props?.length || meta.propsType)}
+    {@const toc = meta.sections.length + (hasProps ? 1 : 0) > 1}
     <div class="page">
-      <div class={['layout', { toc: meta.sections.length > 1 }]}>
+      <div class={['layout', { toc }]}>
         <div class="content">
           {#if meta.doc}
             <!-- the HTML comes from the user's own .md file, rendered by the plugin -->
@@ -118,8 +122,8 @@
               <CodeBlock code={s.code} labels={t} />
             </div>
           {/each}
-          {#if meta.props?.length || meta.propsType}
-            <h2>{t.props}</h2>
+          {#if hasProps}
+            <h2 id="zukan-props" use:track={PROPS}>{t.props}</h2>
             {#if meta.propsType}
               <p class="props-type">{t.propsType} <code>{meta.propsType}</code></p>
             {/if}
@@ -170,7 +174,7 @@
             </nav>
           {/if}
         </div>
-        {#if meta.sections.length > 1}
+        {#if toc}
           <nav class="contents" aria-label={t.onThisPage}>
             <p>{t.onThisPage}</p>
             <ul>
@@ -185,6 +189,12 @@
                   <!-- eslint-enable svelte/no-navigation-without-resolve -->
                 </li>
               {/each}
+              {#if hasProps}
+                <li>
+                  <!-- a plain anchor: the app keeps its route on a hash that is not one of its own -->
+                  <a href="#zukan-props" aria-current={active === PROPS ? 'location' : undefined}>{t.props}</a>
+                </li>
+              {/if}
             </ul>
           </nav>
         {/if}
