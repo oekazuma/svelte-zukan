@@ -37,6 +37,11 @@
   const COLLAPSE_ICON = ['M9 4v5H4', 'M15 4v5h5', 'M9 20v-5H4', 'M15 20v-5h5'];
   /** in the preview page; `!important`, since the app's own CSS may set outlines */
   const OUTLINE_CSS = '*{outline:1px solid rgb(232 62 140 / 0.6) !important;outline-offset:-1px !important}';
+  const LINK_ICON = [
+    'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1',
+    'M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1'
+  ];
+  const CHECK_ICON = ['M5 12.5l4.5 4.5L19 7'];
   const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'];
   const MIN_WIDTH = 200;
   const MIN_HEIGHT = 80;
@@ -46,11 +51,20 @@
 
   let {
     src,
+    tabHref = src,
+    shareUrl,
+    requestedWidth,
     title,
     theme = 'light',
     labels = messages.en
   }: {
     src: string;
+    /** "open in new tab"; unlike `src`, it may carry the theme without reloading the frame */
+    tabHref?: string;
+    /** a link to this view at the given width, for the copy-link button */
+    shareUrl?: (width: number | null) => string;
+    /** a width from a shared link; it wins over the remembered one */
+    requestedWidth?: number;
     title: string;
     theme?: Theme;
     labels?: Pick<
@@ -62,6 +76,9 @@
       | 'desktop'
       | 'fullWidth'
       | 'openInNewTab'
+      | 'copyLink'
+      | 'copied'
+      | 'copyFailed'
       | 'outline'
       | 'expand'
       | 'collapse'
@@ -180,7 +197,25 @@
     queueMicrotask(() => expandButton?.focus());
   }
 
+  $effect(() => {
+    if (requestedWidth) width = requestedWidth;
+  });
+
   $effect(() => writeWidth(src, width));
+
+  let linkStatus = $state<'idle' | 'copied' | 'failed'>('idle');
+  let linkTimer: ReturnType<typeof setTimeout> | undefined;
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(shareUrl!(width));
+      linkStatus = 'copied';
+    } catch {
+      linkStatus = 'failed';
+    }
+    clearTimeout(linkTimer);
+    linkTimer = setTimeout(() => (linkStatus = 'idle'), 2000);
+  }
+  $effect(() => () => clearTimeout(linkTimer));
 
   $effect(() => () => observer?.disconnect());
 </script>
@@ -266,9 +301,17 @@
         {@render icon(expanded ? COLLAPSE_ICON : EXPAND_ICON)}
       </button>
     </div>
+    {#if shareUrl}
+      {@const name =
+        linkStatus === 'copied' ? labels.copied : linkStatus === 'failed' ? labels.copyFailed : labels.copyLink}
+      <button type="button" class="icon" aria-label={name} title={name} onclick={copyLink}>
+        {@render icon(linkStatus === 'copied' ? CHECK_ICON : LINK_ICON)}
+      </button>
+      <span class="sr-only" aria-live="polite">{linkStatus === 'idle' ? '' : name}</span>
+    {/if}
     <!-- the preview page of this catalog, not a SvelteKit route -->
     <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-    <a href={src} target="_blank" rel="noopener" aria-label={labels.openInNewTab} title={labels.openInNewTab}>
+    <a href={tabHref} target="_blank" rel="noopener" aria-label={labels.openInNewTab} title={labels.openInNewTab}>
       {@render icon(OPEN_ICON)}<span class="label">{labels.openInNewTab}</span>
     </a>
   </div>
@@ -320,6 +363,15 @@
 </div>
 
 <style>
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
   .preview {
     border: 1px solid var(--_border);
     border-radius: 6px;

@@ -42,6 +42,7 @@ export type Messages = {
   required: string;
   bindable: string;
   propsType: string;
+  copyLink: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -88,7 +89,8 @@ export const messages: Record<'en' | 'ja', Messages> = {
     propDescription: 'Description',
     required: 'required',
     bindable: 'bindable',
-    propsType: 'Typed by'
+    propsType: 'Typed by',
+    copyLink: 'Copy link to this view'
   },
   ja: {
     nav: 'コンポーネント',
@@ -133,6 +135,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     propDescription: '説明',
     required: '必須',
     bindable: 'bind 可',
-    propsType: '型の定義'
+    propsType: '型の定義',
+    copyLink: 'この表示へのリンクをコピー'
   }
 };

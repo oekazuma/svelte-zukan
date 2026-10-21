@@ -10,6 +10,7 @@
   let {
     entry,
     section = null,
+    width,
     previous,
     next,
     theme,
@@ -17,6 +18,7 @@
   }: {
     entry: Entry;
     section?: string | null;
+    width?: number;
     previous?: Entry;
     next?: Entry;
     theme: Theme;
@@ -84,6 +86,11 @@
               <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
               <PreviewFrame
                 src={location.pathname + formatHash('preview', entry.path, s.title)}
+                tabHref={location.pathname + formatHash('preview', entry.path, s.title, { theme })}
+                shareUrl={(w) =>
+                  location.href.split('#')[0] +
+                  formatHash('detail', entry.path, s.title, { width: w ?? undefined, theme })}
+                requestedWidth={section === s.title ? width : undefined}
                 title={s.title}
                 {theme}
                 labels={t}

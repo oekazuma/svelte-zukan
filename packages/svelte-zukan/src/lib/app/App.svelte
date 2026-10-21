@@ -3,7 +3,7 @@
   import { readTheme, writeTheme, type Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
   import Detail from './Detail.svelte';
-  import { formatHash, parseHash } from './hash.js';
+  import { formatHash, parseHash, type Route } from './hash.js';
   import { messages } from './i18n.js';
   import List from './List.svelte';
   import Preview from './Preview.svelte';
@@ -34,10 +34,19 @@
 
   let hash = $state(remembered() ?? location.hash);
 
-  let theme = $state<Theme>(readTheme() ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  let theme = $state<Theme>(
+    themeOf(parseHash(remembered() ?? location.hash)) ??
+      readTheme() ??
+      (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  );
   function toggleTheme() {
     theme = theme === 'dark' ? 'light' : 'dark';
     writeTheme(theme);
+  }
+
+  // a shared link's theme applies to this tab without replacing the one the viewer chose
+  function themeOf(route: Route) {
+    return route.view === 'list' ? undefined : route.theme;
   }
 
   const t = $derived(messages[locale]);
@@ -75,6 +84,7 @@
       return;
     }
     hash = next;
+    theme = themeOf(route) ?? theme;
     // the browser keeps the scroll position on a hash change; the previous page's position means nothing on the next
     if (route.view === 'list' || (route.view === 'detail' && route.section === null)) tick().then(() => scrollTo(0, 0));
   }
@@ -89,7 +99,7 @@
 {#if route.view === 'preview'}
   {#if entry}
     {#key hash}
-      <Preview {entry} section={route.section} {wrapper} {t} />
+      <Preview {entry} section={route.section} theme={route.theme} {wrapper} {t} />
     {/key}
   {:else}
     <p>{t.notFound}</p>
@@ -110,7 +120,15 @@
       {#if route.view === 'list'}
         <List entries={catalog} {searched} {t} />
       {:else if entry}
-        <Detail {entry} section={route.view === 'detail' ? route.section : null} {previous} {next} {theme} {t} />
+        <Detail
+          {entry}
+          section={route.view === 'detail' ? route.section : null}
+          width={route.view === 'detail' ? route.width : undefined}
+          {previous}
+          {next}
+          {theme}
+          {t}
+        />
       {:else}
         <h1>{t.notFound}</h1>
       {/if}

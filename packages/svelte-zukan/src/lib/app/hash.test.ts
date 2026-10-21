@@ -60,3 +60,18 @@ describe('parseHash / formatHash', () => {
     expect(parseHash('#/ui/100%')).toEqual({ view: 'detail', path: 'ui/100%', section: null });
   });
 });
+
+describe('shared view', () => {
+  it('round-trips a width and a theme', () => {
+    const hash = formatHash('detail', 'ui/Card', 'One', { width: 375, theme: 'dark' });
+    expect(hash).toBe('#/ui/Card?section=One&width=375&theme=dark');
+    expect(parseHash(hash)).toEqual({ view: 'detail', path: 'ui/Card', section: 'One', width: 375, theme: 'dark' });
+    expect(parseHash(formatHash('preview', 'ui/Card', 'One', { theme: 'light' }))).toMatchObject({ theme: 'light' });
+  });
+
+  it('ignores values it does not know', () => {
+    const route = parseHash('#/ui/Card?width=-3&theme=blue');
+    expect(route).toMatchObject({ width: undefined, theme: undefined });
+    expect(parseHash('#/ui/Card?width=12.5')).toMatchObject({ width: undefined });
+  });
+});
