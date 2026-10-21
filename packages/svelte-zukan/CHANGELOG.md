@@ -1,5 +1,13 @@
 # svelte-zukan
 
+## 0.7.0
+
+### Minor Changes
+
+- 4f29ec0: feat: the catalog's top page shows each component as a card with a thumbnail of its first section and the first paragraph of its `.md`.
+- b049a3e: feat: a measure button in the preview toolbar shows the size of the element under the pointer and draws its margin, border and padding, like the box model overlay of browser dev tools.
+- 739b37e: feat: a preview width wider than the page is laid out at that width and scaled down to fit, instead of being cut to the page's width. A typed width can go up to 3840px.
+
 ## 0.6.0
 
 ### Minor Changes
