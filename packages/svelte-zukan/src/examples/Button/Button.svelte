@@ -3,10 +3,12 @@
   import type { HTMLButtonAttributes } from 'svelte/elements';
 
   type Props = HTMLButtonAttributes & {
+    /** `primary` for the main action of a screen, `ghost` for low-emphasis actions, `danger` for destructive ones */
     variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
     size?: 'sm' | 'md' | 'lg';
-    /** shows a spinner and blocks clicks */
+    /** shows a spinner and blocks clicks until the work is done */
     loading?: boolean;
+    /** rendered before the label */
     icon?: Snippet;
   };
 

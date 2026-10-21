@@ -4,7 +4,15 @@
     label,
     description,
     disabled = false
-  }: { checked?: boolean; label: string; description?: string; disabled?: boolean } = $props();
+  }: {
+    /** bind it with `bind:checked` */
+    checked?: boolean;
+    /** the setting */
+    label: string;
+    /** a line about what the setting does */
+    description?: string;
+    disabled?: boolean;
+  } = $props();
 </script>
 
 <label class={['switch', { disabled }]}>

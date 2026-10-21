@@ -9,7 +9,7 @@
   }: {
     tone?: 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
     children: Snippet;
-    /** shows a remove button */
+    /** when set, the tag gets a remove button */
     onremove?: () => void;
   } = $props();
 </script>

@@ -9,14 +9,16 @@
     children,
     footer
   }: {
+    /** the heading of the card */
     title: string;
     /** small text above the title */
     eyebrow?: string;
     /** a CSS background for the cover area, such as a gradient or `url(...)` */
     cover?: string;
-    /** puts the cover beside the content once the card is wider than 520px */
+    /** puts the cover beside the content once the card is wider than 520px (a container query, so the card's own width counts, not the window's) */
     horizontal?: boolean;
     children?: Snippet;
+    /** prices, tags and buttons */
     footer?: Snippet;
   } = $props();
 </script>

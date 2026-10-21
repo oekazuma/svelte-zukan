@@ -11,11 +11,14 @@
     actions,
     ondismiss
   }: {
+    /** `danger` is announced right away (`role="alert"`); the others politely (`role="status"`) */
     tone?: Tone;
+    /** a short, bold first line */
     title?: string;
     children?: Snippet;
+    /** buttons under the message */
     actions?: Snippet;
-    /** shows a close button */
+    /** when set, a close button is shown */
     ondismiss?: () => void;
   } = $props();
 

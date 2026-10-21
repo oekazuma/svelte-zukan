@@ -5,7 +5,12 @@
   let {
     code,
     labels = messages.en
-  }: { code: string; labels?: Pick<Messages, 'code' | 'copy' | 'copied' | 'copyFailed'> } = $props();
+  }: {
+    /** the source to show and copy */
+    code: string;
+    /** UI strings; the catalog passes those of its `locale` */
+    labels?: Pick<Messages, 'code' | 'copy' | 'copied' | 'copyFailed'>;
+  } = $props();
 
   let status = $state<'idle' | 'copied' | 'failed'>('idle');
   let timer: ReturnType<typeof setTimeout> | undefined;

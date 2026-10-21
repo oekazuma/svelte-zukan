@@ -7,7 +7,13 @@
     items,
     selected = $bindable(items[0]?.id),
     variant = 'underline'
-  }: { items: Item[]; selected?: string; variant?: 'underline' | 'pills' } = $props();
+  }: {
+    /** `{ id, label, panel }`, with the panel as a snippet */
+    items: Item[];
+    /** the `id` of the open tab; bind it with `bind:selected` */
+    selected?: string;
+    variant?: 'underline' | 'pills';
+  } = $props();
 
   const uid = $props.id();
   const tabs: HTMLButtonElement[] = [];
