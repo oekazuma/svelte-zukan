@@ -244,6 +244,25 @@ describe('App', () => {
     await expect.poll(() => dialog.open).toBe(true);
   });
 
+  it('the table of contents links to the props', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = () =>
+      Promise.resolve({
+        default: {
+          sections: [{ title: 'One', code: '' }],
+          doc: null,
+          props: [{ name: 'a', type: 'string', default: null, required: true, bindable: false, description: null }],
+          propsType: null
+        }
+      });
+    const screen = await render(App, { props });
+    const toc = screen.getByRole('navigation', { name: 'On this page' });
+    await expect.element(toc.getByRole('link', { name: 'Props' })).toHaveAttribute('href', '#zukan-props');
+    await toc.getByRole('link', { name: 'Props' }).click();
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    expect(document.getElementById('zukan-props')!.getBoundingClientRect().top).toBeLessThan(innerHeight);
+  });
+
   it('a page with several sections has a table of contents', async () => {
     const { props } = setup('#/ui/Card');
     props.catalog[0].meta = () =>
