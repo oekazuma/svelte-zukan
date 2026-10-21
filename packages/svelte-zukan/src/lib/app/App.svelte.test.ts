@@ -188,10 +188,9 @@ describe('App', () => {
 
   it('on the dev server, the detail page opens the catalog file and the component in the editor', async () => {
     const { props } = setup('#/ui/Card');
-    props.catalog[0] = {
-      ...props.catalog[0],
+    Object.assign(props.catalog[0], {
       edit: { file: '/repo/src/Card.zukan.svelte', component: '/repo/src/Card.svelte' }
-    };
+    });
     const fetchSpy = vi.spyOn(window, 'fetch').mockResolvedValue(new Response(''));
     try {
       const screen = await render(App, { props });
