@@ -169,6 +169,8 @@
   const min = $derived(Math.min(MIN_WIDTH, max));
   // the frame is capped by max-width and min-width in CSS, so report the effective width
   const current = $derived(clamp(width ?? max));
+  /** narrower than the stage: centered on a patterned stage, so the device's edges are visible */
+  const sized = $derived(width !== null && stageWidth > 0 && current < max);
 
   function clamp(value: number) {
     return Math.min(max, Math.max(min, value));
@@ -184,12 +186,14 @@
     }
     dragging = true;
     startX = e.clientX;
-    startWidth = handle.parentElement!.getBoundingClientRect().width - HANDLE;
+    // the target width, not the measured one: a preset change may still be animating
+    startWidth = current;
   }
 
   function onpointermove(e: PointerEvent) {
     // whole pixels: the frame's own width can be fractional, and nobody reads 489.796875px
-    if (dragging) width = clamp(Math.round(startWidth + (e.clientX - startX)));
+    // the frame is centered, so its right edge moves half as far as its width changes
+    if (dragging) width = clamp(Math.round(startWidth + 2 * (e.clientX - startX)));
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -430,9 +434,9 @@
       {@render icon(OPEN_ICON)}<span class="label">{labels.openInNewTab}</span>
     </a>
   </div>
-  <div class="stage" bind:clientWidth={stageWidth}>
+  <div class={['stage', { sized }]} bind:clientWidth={stageWidth}>
     <div
-      class="frame"
+      class={['frame', { dragging }]}
       style:width={width === null ? '100%' : `${width + HANDLE}px`}
       style:--handle="{HANDLE}px"
       aria-busy={!ready}
@@ -676,6 +680,13 @@
 
   .stage {
     background: var(--_code-bg);
+    transition: padding 0.25s ease;
+  }
+
+  .stage.sized {
+    padding-block: 20px;
+    background-image: radial-gradient(color-mix(in srgb, var(--_muted) 45%, transparent) 1px, transparent 1.5px);
+    background-size: 14px 14px;
   }
 
   .frame {
@@ -683,8 +694,31 @@
     box-sizing: border-box;
     min-width: min(calc(200px + var(--handle)), 100%);
     max-width: 100%;
+    margin-inline: auto;
     padding-right: var(--handle);
     background: var(--_bg);
+    transition:
+      width 0.25s ease,
+      box-shadow 0.25s ease;
+  }
+
+  .sized .frame {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px var(--_border),
+      0 12px 32px -12px rgb(0 0 0 / 0.35);
+  }
+
+  .frame.dragging {
+    transition: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage,
+    .frame {
+      transition: none;
+    }
   }
 
   iframe {
