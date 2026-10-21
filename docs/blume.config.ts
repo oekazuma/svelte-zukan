@@ -9,6 +9,7 @@ export default defineConfig({
     text: ''
   },
   feedback: false,
+  navigation: { actions: [{ href: 'https://github.com/oekazuma/svelte-zukan', label: 'GitHub' }] },
   github: { owner: 'oekazuma', repo: 'svelte-zukan', dir: 'docs' },
   i18n: {
     defaultLocale: 'en',
