@@ -47,7 +47,7 @@ pnpm --filter build-tests test
 The public surface is intentionally small:
 
 - `svelte-zukan` (`src/lib/index.ts`) — only `<Section title="...">`, used inside catalog files. In a preview it renders its children only when its `title` matches the section in the preview URL (read from a Svelte context, `src/lib/context.ts`); outside the catalog it always renders.
-- `svelte-zukan/vite` (`src/lib/vite/index.ts`) — the `zukan()` Vite plugin (`name: 'vite-plugin-svelte-zukan'`, `enforce: 'pre'`). Options: `suffix`, `groups`, `wrapper`, `logo`, `title`, `locale`, `build` (validated in `options.ts`; `suffix` in `matchers.ts`, group names and `groups` directories in `discover.ts`). Keep the option set small; `docs/content/options.md` documents each one.
+- `svelte-zukan/vite` (`src/lib/vite/index.ts`) — the `zukan()` Vite plugin (`name: 'vite-plugin-svelte-zukan'`, `enforce: 'pre'`). Options: `suffix`, `groups`, `wrapper`, `logo`, `title`, `locale`, `build` (validated in `options.ts`; `suffix` in `matchers.ts`, group names and `groups` directories in `discover.ts`). Keep the option set small; `docs/content/options.md` documents each one. CONTRIBUTING.md ("What belongs in svelte-zukan") lists the rules a new feature is checked against.
 
 How the plugin works:
 
