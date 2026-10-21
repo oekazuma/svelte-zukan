@@ -331,6 +331,24 @@ describe('PreviewFrame resizing', () => {
     expect(screen.getByRole('button', { name: 'Check accessibility' }).query()).toBeNull();
   });
 
+  it('a narrow toolbar wraps instead of clipping its buttons', async () => {
+    const screen = await render(PreviewFrame, {
+      props: { ...props, axe: () => Promise.resolve(''), shareUrl: () => '' }
+    });
+    screen.container.style.width = '330px';
+    const toolbar = screen.container.querySelector<HTMLElement>('.toolbar')!;
+    await expect.poll(() => toolbar.getBoundingClientRect().width).toBeLessThanOrEqual(330);
+    expect(toolbar.scrollWidth).toBeLessThanOrEqual(toolbar.clientWidth);
+    const box = toolbar.getBoundingClientRect();
+    for (const el of toolbar.querySelectorAll('button, a')) {
+      const r = el.getBoundingClientRect();
+      expect(r.right).toBeLessThanOrEqual(box.right + 0.5);
+    }
+    const input = toolbar.querySelector('input')!.getBoundingClientRect();
+    const unit = toolbar.querySelector('.unit')!.getBoundingClientRect();
+    expect(Math.abs(unit.top - input.top)).toBeLessThan(input.height);
+  });
+
   it('labels come from props', async () => {
     const screen = await render(PreviewFrame, {
       props: {

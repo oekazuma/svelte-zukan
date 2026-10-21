@@ -715,8 +715,9 @@
   .toolbar {
     container-type: inline-size;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
+    gap: 4px 12px;
     padding: 6px 8px;
     border-bottom: 1px solid var(--_border);
     background: var(--_code-bg);
@@ -759,6 +760,7 @@
 
   .width {
     margin-left: auto;
+    white-space: nowrap;
     font-family: var(--_mono);
     font-size: 13px;
     font-variant-numeric: tabular-nums;
