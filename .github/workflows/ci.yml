@@ -48,8 +48,9 @@ jobs:
             // an array in npm 11, an object keyed by package name in npm 12
             const files = Object.values(require(process.argv[1]))[0].files.map((f) => f.path);
             const bad = files.filter((f) => /\.(test|spec)\.|\.zukan\.(svelte|md)$|\.zukan\.svelte\.d\.ts$/.test(f));
-            if (bad.length || !files.includes("dist/vite/index.js")) {
-              console.error(bad.length ? bad.join("\n") : "dist/vite/index.js is missing");
+            const missing = ["dist/vite/index.js", "skills/svelte-zukan/SKILL.md"].filter((f) => !files.includes(f));
+            if (bad.length || missing.length) {
+              console.error([...bad, ...missing.map((f) => `${f} is missing`)].join("\n"));
               process.exit(1);
             }
           ' "$RUNNER_TEMP/pack.json"
