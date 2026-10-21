@@ -1,5 +1,15 @@
 # svelte-zukan
 
+## 0.5.0
+
+### Minor Changes
+
+- 8df154e: feat: check a preview's accessibility with axe-core from its toolbar. axe-core is now a dependency; it is loaded only when a check runs.
+- 589094c: feat: keyboard shortcuts `T` (switch the theme) and `F` (expand the preview in view), and arrow keys in the component list.
+- aa80a32: feat: switch a preview's background between the theme's color, a checkerboard and a grid, and type a preview width in pixels.
+- cfabbea: feat: list the props of the component next to each catalog file (`Button.svelte` for `Button.zukan.svelte`) on its detail page, with types, defaults and JSDoc.
+- e1c69a7: feat: copy a link to a section at its current width and theme, and open "open in new tab" in the catalog's theme. Links can set `width` and `theme` after `section` in the hash.
+
 ## 0.4.1
 
 ### Patch Changes
