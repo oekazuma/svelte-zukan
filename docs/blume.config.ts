@@ -9,7 +9,14 @@ export default defineConfig({
     text: ''
   },
   feedback: false,
-  navigation: { actions: [{ href: 'https://github.com/oekazuma/svelte-zukan', label: 'GitHub' }] },
+  navigation: {
+    // an action's href cannot vary by locale, so theme.css shows the demo matching the page's language
+    actions: [
+      { href: 'https://oekazuma.github.io/svelte-zukan/demo/', label: 'Demo' },
+      { href: 'https://oekazuma.github.io/svelte-zukan/demo/ja/', label: 'デモ' },
+      { href: 'https://github.com/oekazuma/svelte-zukan', label: 'GitHub' }
+    ]
+  },
   github: { owner: 'oekazuma', repo: 'svelte-zukan', dir: 'docs' },
   i18n: {
     defaultLocale: 'en',
