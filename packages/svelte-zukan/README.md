@@ -2,10 +2,6 @@
 
 A component catalog for Svelte. Put a catalog file next to a component and you get a list, a live preview, and a code view.
 
-![A detail page of the catalog: the component's description, a live preview with its toolbar, and the table of contents](https://oekazuma.github.io/svelte-zukan/screenshots/detail-light.webp)
-
-For AI coding agents, the dev server serves the catalog as data at `/__zukan/catalog.json`, and there is a skill: install it with `npx skills add oekazuma/svelte-zukan`, or use `skills/svelte-zukan/SKILL.md` in this package. See [AI agents](https://oekazuma.github.io/svelte-zukan/guides/ai-agents/).
-
 ## Install
 
 ```sh
@@ -44,10 +40,9 @@ Put `Button.zukan.svelte` next to `Button.svelte`:
 
 Start the dev server and open `/__zukan/`.
 
-## Documentation
+## Links
 
-Catalog files, monorepos, static export, and every option: https://oekazuma.github.io/svelte-zukan/
-
-## Repository
-
-https://github.com/oekazuma/svelte-zukan
+- [Documentation](https://oekazuma.github.io/svelte-zukan/) ([日本語](https://oekazuma.github.io/svelte-zukan/ja/))
+- [Demo](https://oekazuma.github.io/svelte-zukan/demo/)
+- [Using it with AI agents](https://oekazuma.github.io/svelte-zukan/guides/ai-agents/)
+- [Repository](https://github.com/oekazuma/svelte-zukan)
