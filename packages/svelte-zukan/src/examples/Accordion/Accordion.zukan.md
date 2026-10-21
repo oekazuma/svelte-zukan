@@ -1,0 +1,1 @@
+A heading that shows or hides the content under it. It is a native `<details>` element, so it opens with the keyboard and the browser's find-in-page opens it too. Items with the same `name` form an exclusive group.
