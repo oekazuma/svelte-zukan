@@ -3,11 +3,15 @@
   import Icon, { type IconName } from '../../Icon/Icon.svelte';
 
   type Props = Omit<HTMLInputAttributes, 'value'> & {
+    /** always visible */
     label: string;
+    /** bind it with `bind:value` */
     value?: string;
+    /** a line under the field */
     hint?: string;
     /** replaces the hint and marks the field invalid */
     error?: string;
+    /** an icon shown inside the field */
     icon?: IconName;
   };
 

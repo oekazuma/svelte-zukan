@@ -21,7 +21,18 @@
 </script>
 
 <script lang="ts">
-  let { name, size = 18, label }: { name: IconName; size?: number; label?: string } = $props();
+  let {
+    name,
+    size = 18,
+    label
+  }: {
+    /** one of the names in the "All icons" section */
+    name: IconName;
+    /** width and height in pixels */
+    size?: number;
+    /** give one when the icon stands alone; without it the icon is hidden from screen readers */
+    label?: string;
+  } = $props();
 </script>
 
 <svg

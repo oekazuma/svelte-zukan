@@ -1,5 +1,10 @@
 <script lang="ts">
-  let { label }: { label: string } = $props();
+  let {
+    label
+  }: {
+    /** the text, such as a group name */
+    label: string;
+  } = $props();
 </script>
 
 <span class="badge">{label}</span>

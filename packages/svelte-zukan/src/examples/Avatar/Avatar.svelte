@@ -5,10 +5,12 @@
     size = 'md',
     status
   }: {
+    /** used for the initials, the color and the accessible name */
     name: string;
     /** an image URL; without one the initials are shown */
     src?: string;
     size?: 'sm' | 'md' | 'lg' | 'xl';
+    /** a dot on the edge of the avatar */
     status?: 'online' | 'away' | 'offline';
   } = $props();
 

@@ -8,6 +8,7 @@
     /** leave it out for an indeterminate bar */
     value?: number;
     max?: number;
+    /** shown above the bar and used as its accessible name */
     label: string;
     tone?: 'accent' | 'success' | 'warning' | 'danger';
   } = $props();
