@@ -1,25 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { Messages } from '../../app/i18n.js';
+  import { messageOf, runAxe, type Impact, type Violation } from './run-axe.js';
 
-  type Impact = 'critical' | 'serious' | 'moderate' | 'minor';
-  type Violation = { id: string; impact: Impact | null; help: string; helpUrl: string; targets: string[] };
-  type AxeWindow = Window & {
-    axe?: {
-      run(
-        context: Element,
-        options: object
-      ): Promise<{
-        violations: {
-          id: string;
-          impact?: Impact | null;
-          help: string;
-          helpUrl: string;
-          nodes: { target: unknown[] }[];
-        }[];
-      }>;
-    };
-  };
   type Vision = keyof typeof VISION_FILTERS;
 
   const IMPACT_LABELS = {
@@ -138,31 +121,9 @@
     result = { status: 'running' };
     selected = null;
     try {
-      const win = doc.defaultView as AxeWindow;
-      if (!win.axe) {
-        const script = doc.createElement('script');
-        script.textContent = await axe();
-        doc.head.append(script);
-      }
-      // `region` asks for landmarks around all content, which a component on its own never has
-      const found = await win.axe!.run(doc.querySelector('[data-zukan-preview]') ?? doc.body, {
-        resultTypes: ['violations'],
-        rules: { region: { enabled: false } }
-      });
-      result = {
-        status: 'done',
-        violations: found.violations.map((v) => ({
-          id: v.id,
-          impact: v.impact ?? null,
-          help: v.help,
-          helpUrl: v.helpUrl,
-          targets: v.nodes.map((n) => n.target.join(' '))
-        }))
-      };
+      result = { status: 'done', violations: await runAxe(doc, axe) };
     } catch (e) {
-      // an error thrown by axe comes from the preview page's realm, so `instanceof Error` does not see it
-      const message = e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e);
-      result = { status: 'failed', message };
+      result = { status: 'failed', message: messageOf(e) };
     }
   }
 
