@@ -139,7 +139,8 @@ describe('PreviewFrame resizing', () => {
     await expect.poll(() => getComputedStyle(iframe).pointerEvents).toBe('none');
     send('pointermove', 150);
     send('pointerup', 150);
-    await expect.poll(() => iframeWidth(screen.container)).toBe(425);
+    // centered, the frame grows on both sides: twice the pointer's movement
+    await expect.poll(() => iframeWidth(screen.container)).toBe(475);
     expect(getComputedStyle(iframe).pointerEvents).not.toBe('none');
   });
 
@@ -153,8 +154,8 @@ describe('PreviewFrame resizing', () => {
     send('pointerdown', 100);
     send('pointermove', 150.4);
     send('pointerup', 150.4);
-    await expect.poll(() => iframeWidth(screen.container)).toBe(425);
-    await expect.element(screen.getByRole('spinbutton', { name: 'Width in pixels' })).toHaveValue(425);
+    await expect.poll(() => iframeWidth(screen.container)).toBe(476);
+    await expect.element(screen.getByRole('spinbutton', { name: 'Width in pixels' })).toHaveValue(476);
   });
 
   it('aria-valuemin follows a narrow stage', async () => {
@@ -381,6 +382,21 @@ describe('PreviewFrame resizing', () => {
     const input = toolbar.querySelector('input')!.getBoundingClientRect();
     const unit = toolbar.querySelector('.unit')!.getBoundingClientRect();
     expect(Math.abs(unit.top - input.top)).toBeLessThan(input.height);
+  });
+
+  it('a preset narrower than the stage is centered on a patterned stage; full width is not', async () => {
+    const screen = await render(PreviewFrame, { props });
+    screen.container.style.width = '1000px';
+    const stage = screen.container.querySelector<HTMLElement>('.stage')!;
+    const frame = screen.container.querySelector<HTMLElement>('.frame')!;
+    await screen.getByRole('button', { name: 'Mobile (375px)', exact: true }).click();
+    await expect.poll(() => iframeWidth(screen.container)).toBe(375);
+    expect(stage.classList.contains('sized')).toBe(true);
+    const s = stage.getBoundingClientRect();
+    const f = frame.getBoundingClientRect();
+    expect(Math.abs(f.left - s.left - (s.right - f.right))).toBeLessThan(1);
+    await screen.getByRole('button', { name: 'Full width', exact: true }).click();
+    await expect.poll(() => stage.classList.contains('sized')).toBe(false);
   });
 
   it('labels come from props', async () => {
