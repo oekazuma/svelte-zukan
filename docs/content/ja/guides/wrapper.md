@@ -4,7 +4,7 @@ sidebar:
   order: 4
 ---
 
-`wrapper` オプションは、プレビューの iframe の中だけを囲みます。Provider やグローバル CSS を入れる場所で、Storybook の `.storybook/preview.js` に当たります。
+`wrapper` オプションはプレビューの iframe の中だけを囲みます。Provider やグローバル CSS を入れる場所で、Storybook の `.storybook/preview.js` に当たります。
 
 ```ts
 // vite.config.ts

@@ -1,0 +1,103 @@
+---
+title: Using the catalog
+sidebar:
+  order: 0
+---
+
+The catalog opens at `/__zukan/` on your dev server (`<base>__zukan/` when you set a `base`). This page walks through what you can do there.
+
+## Top page
+
+Each component is a card with a small preview of its first section, its name and directory, and the first paragraph of its [`.md` file](/guides/catalog-files#markdown-description). A component without sections shows its initial instead of a preview. Click a card to open its detail page.
+
+## Finding a component
+
+- The sidebar lists the components by group and by directory. Folders open and close, and the arrow keys move through the list
+- Type in the search box to filter by ID and by section title. Matching section titles are listed under each component and link straight to that section
+- On a detail page with several sections, a table of contents sits beside the content when the window is wide enough, with a link to the props table. Links to the previous and next components are at the bottom
+- On a narrow screen, the component list folds under the menu button
+
+## Preview toolbar
+
+Each section previews in its own frame, with a toolbar above it.
+
+<img
+  className="shot-light"
+  src="/screenshots/responsive-light.webp"
+  alt="A card previewed at 375px, centered on a dotted background, with the props table below it"
+  width="1280"
+  height="900"
+/>
+<img
+  className="shot-dark"
+  src="/screenshots/responsive-dark.webp"
+  alt="A card previewed at 375px, centered on a dotted background, with the props table below it"
+  width="1280"
+  height="900"
+/>
+
+### Width
+
+- The presets are a phone (375px), a tablet (768px), a laptop (1024px), a desktop (1280px) and the full width. You can also drag the grip on the right edge, or type a width in pixels into the number next to the presets
+- A width narrower than the page is centered on a dotted background, so the device's edges stay visible on a wide screen
+- A width wider than the page, such as the desktop preset on a laptop, is laid out at its real width and scaled down to fit. The scale is shown next to the width
+- Widths are remembered in this browser tab across reloads, so a preview keeps its width while you edit
+
+### Other buttons
+
+| Button          | What it does                                                                                                   |
+| --------------- | -------------------------------------------------------------------------------------------------------------- |
+| Background      | Switches the preview's background between the theme's color, a checkerboard (to see transparency) and a grid   |
+| Accessibility   | Opens the [accessibility panel](#accessibility-panel)                                                          |
+| Measure         | On hover, shows the element's size and draws its margin, border and padding in the colors of browser dev tools |
+| Outline         | Outlines every element of the preview                                                                          |
+| Expand          | Fills the window with the preview. <kbd>Esc</kbd> or a click outside leaves                                    |
+| Copy link       | Copies a link to this section at its current width and theme                                                   |
+| Open in new tab | Opens the preview alone, in the catalog's theme                                                                |
+
+A copied link opens the section with its width and theme. The theme applies to that tab only, so it does not replace the theme you chose. You can also write such a link by hand: add `width` and `theme` after `section`, as in `#/ui/Card?section=Basic&width=375&theme=dark`.
+
+## Accessibility panel
+
+The accessibility button runs [axe-core](https://github.com/dequelabs/axe-core) inside the preview and lists what it reports: the impact, a description, a link to learn more, and the elements involved.
+
+<img
+  className="shot-light"
+  src="/screenshots/a11y-light.webp"
+  alt="The accessibility panel under a preview, with the deuteranopia simulation applied to the cards"
+  width="1280"
+  height="860"
+/>
+<img
+  className="shot-dark"
+  src="/screenshots/a11y-dark.webp"
+  alt="The accessibility panel under a preview, with the deuteranopia simulation applied to the cards"
+  width="1280"
+  height="860"
+/>
+
+- The reported elements are outlined in the preview in the color of their impact. Hover or focus an element in the list to draw it thicker, or click it to keep it that way and scroll to it
+- The check runs again each time the preview reloads after an edit, while the panel is open
+- "Simulate vision" shows the preview as seen with blurred vision or a color vision deficiency (protanopia, deuteranopia, tritanopia, achromatopsia). Each chip shows a sample of its colors
+- With `locale: 'ja'`, axe-core's messages are in Japanese too
+
+axe-core is loaded only when a check runs. The rule about landmarks around all page content is off, since a component on its own has none.
+
+## Theme
+
+The theme button at the top of the sidebar switches the catalog and every preview between light and dark. It starts from your system's setting, and your choice is remembered in this browser. Each preview gets the theme as its `color-scheme`, so `light-dark()` and `prefers-color-scheme` in your components follow it.
+
+## Keyboard shortcuts
+
+| Key                         | Action                                        |
+| --------------------------- | --------------------------------------------- |
+| <kbd>/</kbd>                | Jump to the search box                        |
+| <kbd>J</kbd> / <kbd>K</kbd> | Next / previous component                     |
+| <kbd>T</kbd>                | Switch between light and dark                 |
+| <kbd>F</kbd>                | Expand the preview in view, or leave it       |
+| <kbd>Esc</kbd>              | Leave the expanded preview                    |
+| <kbd>↑</kbd> <kbd>↓</kbd>   | Move through the component list               |
+| <kbd>←</kbd> <kbd>→</kbd>   | Close and open a folder in the component list |
+| <kbd>?</kbd>                | Show the shortcuts                            |
+
+The shortcuts do nothing while you type in the search box or another field.
