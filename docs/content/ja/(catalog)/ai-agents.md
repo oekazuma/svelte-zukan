@@ -1,5 +1,5 @@
 ---
-title: AI エージェント
+title: AI エージェントと使う
 sidebar:
   order: 4
 ---
