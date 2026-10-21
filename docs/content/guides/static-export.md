@@ -20,7 +20,7 @@ The catalog is written to `zukan-dist/`, separately from the app build. You can 
 - `vite build --watch` does not write the catalog. It prints a warning and skips it
 - The output directory must not be Vite's root or contain it, and must not overlap the app's `build.outDir` (`dist` by default) or SvelteKit's `outDir` (`.svelte-kit`). Each of these is a build error
 - The catalog is written by `vite build` (and by `createBuilder().buildApp()` from Vite's JavaScript API). `vite build --ssr` and Vite's `build()` function build a single environment and do not write it
-- Next to `index.html`, `catalog.json` lists every component with its sections, code, props and `.md`, for tools and AI agents. The dev server serves the same data at `/__zukan/catalog.json`
+- Next to `index.html`, `catalog.json` lists every component with its sections, code, props and `.md`, and the `.svelte` files without a catalog file, for tools and AI agents. The dev server serves the same data at `/__zukan/catalog.json`
 - Before writing, only the previous catalog (`_zukan/`, `index.html` and `catalog.json` in the output directory) is removed. In SvelteKit, adapters often empty `build/`, so a warning is printed if the output directory overlaps with `build/`
 
 The [demo](https://oekazuma.github.io/svelte-zukan/demo/) is the catalog of svelte-zukan's own components, exported this way.

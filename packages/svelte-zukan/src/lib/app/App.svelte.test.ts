@@ -173,6 +173,19 @@ describe('App', () => {
     await expect.element(screen.getByRole('heading', { level: 1, name: /Button/ })).toBeInTheDocument();
   });
 
+  it('the top page lists the components without a catalog file, folded, even with no catalog files yet', async () => {
+    const { props } = setup('');
+    const screen = await render(App, {
+      props: { ...props, catalog: [], uncataloged: [{ group: 'ui', file: 'src/lib/Lone.svelte' }] }
+    });
+    await expect.element(screen.getByText('No catalog files found. Searched:')).toBeInTheDocument();
+    const summary = screen.container.querySelector<HTMLElement>('.uncataloged summary')!;
+    expect(summary.textContent).toContain('Components without a catalog file');
+    await expect.element(screen.getByText('src/lib/Lone.svelte')).not.toBeVisible();
+    summary.click();
+    await expect.element(screen.getByText('src/lib/Lone.svelte')).toBeVisible();
+  });
+
   const three = () => {
     const { props } = setup('#/ui/Card');
     props.catalog.unshift({ group: 'ui', name: 'Alert', dir: '', path: 'ui/Alert', load, meta });

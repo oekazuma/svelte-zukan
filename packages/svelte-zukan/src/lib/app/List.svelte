@@ -7,9 +7,16 @@
   let {
     entries,
     searched,
+    uncataloged = [],
     theme,
     t
-  }: { entries: Entry[]; searched: { group: string; dirs: string[] }[]; theme: Theme; t: Messages } = $props();
+  }: {
+    entries: Entry[];
+    searched: { group: string; dirs: string[] }[];
+    uncataloged?: { group: string; file: string }[];
+    theme: Theme;
+    t: Messages;
+  } = $props();
 
   // the catalog is already in group order; a Map keeps it
   const groups = $derived(
@@ -42,6 +49,18 @@
       <li>{group}: {dirs.join(', ')}</li>
     {/each}
   </ul>
+{/if}
+
+{#if uncataloged.length}
+  <details class="uncataloged">
+    <summary>{t.uncataloged} <span class="count">{uncataloged.length}</span></summary>
+    <p>{t.uncatalogedHint}</p>
+    <ul>
+      {#each uncataloged as u (u.file)}
+        <li><code>{u.file}</code></li>
+      {/each}
+    </ul>
+  </details>
 {/if}
 
 <style>
@@ -81,6 +100,37 @@
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+
+  .uncataloged {
+    margin-top: 32px;
+    color: var(--_muted);
+    font-size: 13px;
+  }
+
+  .uncataloged summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .uncataloged p {
+    margin: 8px 0;
+  }
+
+  .uncataloged ul {
+    display: block;
+    columns: 18rem;
+    padding-left: 18px;
+    list-style: disc;
+  }
+
+  .uncataloged code {
+    font-family: var(--_mono);
+    font-size: 12px;
+    overflow-wrap: anywhere;
   }
 
   .searched {

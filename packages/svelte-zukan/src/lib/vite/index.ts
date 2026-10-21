@@ -5,7 +5,7 @@ import { dirname, extname, join, relative, resolve } from 'node:path';
 import { marked } from 'marked';
 import { normalizePath, type Plugin, type PreviewServer, type ViteDevServer } from 'vite';
 import type { CatalogGroup, CatalogItem } from '../types.js';
-import { discoverGroups, listCatalog } from './discover.js';
+import { discoverGroups, listCatalog, listUncataloged } from './discover.js';
 import { catalogJson } from './catalog-json.js';
 import { extractSections } from './extract.js';
 import { extractProps } from './props.js';
@@ -65,7 +65,19 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   /** path → item, from the last listing; dropped when a catalog file is created or deleted */
   let items: Map<string, CatalogItem> | null = null;
   const scanned = () => groups.flatMap((g) => g.dirs);
-  const catalogData = () => catalogJson({ root, title: resolved.title, items: relist(), docFileOf, componentFileOf });
+  const uncataloged = (all: CatalogItem[]) =>
+    listUncataloged(groups, resolved.suffix, new Set(all.map((i) => normalizePath(componentFileOf(i.file)))));
+  const catalogData = () => {
+    const items = relist();
+    return catalogJson({
+      root,
+      title: resolved.title,
+      items,
+      uncataloged: uncataloged(items),
+      docFileOf,
+      componentFileOf
+    });
+  };
   const relist = () => {
     const all = listCatalog(groups, resolved.suffix);
     items = new Map(all.map((i) => [i.path, i]));
@@ -246,7 +258,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         const meta = { sections, doc, props: found?.props ?? null, propsType: found?.typeName ?? null };
         return `export default ${JSON.stringify(meta)};\n`;
       }
-      if (id === '\0' + CATALOG) return generateCatalogModule(relist());
+      if (id === '\0' + CATALOG) {
+        const items = relist();
+        // relative, like the rest of the static build
+        const rel = uncataloged(items).map((u) => ({ group: u.group, file: normalizePath(relative(root, u.file)) }));
+        return generateCatalogModule(items, rel);
+      }
       // read from this package's own dependency, so the catalog's client never imports a CommonJS module
       if (id === '\0' + AXE) {
         const read = (file: string) =>
@@ -345,6 +362,18 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         items = null;
         const list = moduleGraph.getModuleById('\0' + CATALOG);
         targets = [...modules, ...metas(), ...(list ? [list] : [])];
+      } else if (
+        type !== 'update' &&
+        file.endsWith('.svelte') &&
+        scanned().some((dir) => isInside(normalizePath(file), dir))
+      ) {
+        // a component created or deleted: only the list of files without a catalog file changes, and the app's own
+        // handling of the file goes on
+        const list = moduleGraph.getModuleById('\0' + CATALOG);
+        if (!list || this.environment.config.consumer !== 'client') return;
+        moduleGraph.invalidateModule(list, new Set(), timestamp, true);
+        this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
+        return;
       } else if (type === 'update' && servedProps.has(normalizePath(file))) {
         // the component's own HMR updates the previews; only a change to its props changes the detail page
         const props = JSON.stringify(extractProps(readFileSync(file, 'utf-8'), file));

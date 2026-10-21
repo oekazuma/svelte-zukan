@@ -402,12 +402,26 @@ describe('configureServer', () => {
       sections: [{ title: 'Foo', preview: '#/preview/app/A?section=Foo' }]
     });
     expect(a.sections[0].code).toBe('<div>x</div>');
+    expect(data.uncataloged).toEqual([]);
     // a file that does not compile is listed with its error instead of failing the whole response
     const broken = data.components.find((c: { id: string }) => c.id === 'app/Broken');
     expect(broken).toMatchObject({
       sections: [],
       error: expect.stringMatching(/^src\/Broken\.zukan\.svelte:1 .*title/)
     });
+  });
+
+  it('lists components without a catalog file in catalog.json and in the catalog module', async () => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/Lone.svelte'), '<p>lone</p>');
+    const { p } = boot(root);
+    const server = fakeServer(root);
+    p.configureServer(server);
+    const res = await request(server.middlewares.use.mock.calls[0][0], '/__zukan/catalog.json');
+    expect(JSON.parse(res.body!).uncataloged).toEqual([{ group: 'app', file: 'src/Lone.svelte' }]);
+    expect(p.load('\0virtual:svelte-zukan/catalog')).toContain(
+      'export const uncataloged = [{"group":"app","file":"src/Lone.svelte"}];'
+    );
   });
 
   it('serves the catalog HTML at /__zukan/', async () => {

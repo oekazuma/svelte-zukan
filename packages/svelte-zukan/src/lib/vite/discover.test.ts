@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { normalizePath } from 'vite';
-import { discoverGroups, listCatalog } from './discover.js';
+import { discoverGroups, listCatalog, listUncataloged } from './discover.js';
 
 let tmp: string;
 beforeEach(() => {
@@ -317,5 +317,35 @@ describe('listCatalog empties', () => {
     pkg('app', { name: 'app' });
     write('app/src/x.svelte');
     expect(paths(join(tmp, 'app'))).toEqual([]);
+  });
+});
+
+describe('listUncataloged', () => {
+  it('lists the .svelte files that have no catalog file next to them', () => {
+    pkg('app', { name: 'app' });
+    write('app/src/lib/Button/Button.svelte');
+    write('app/src/lib/Button/Button.zukan.svelte', '<Section title="A"><p>a</p></Section>');
+    write('app/src/lib/Card.svelte');
+    write('app/src/lib/forms/Input.svelte');
+    write('app/src/lib/Card.test.svelte');
+    write('app/src/routes/+page.svelte');
+    write('app/src/routes/Header.svelte');
+    write('app/src/lib/node_modules/x/X.svelte');
+    const groups = discoverGroups(join(tmp, 'app'));
+    const cataloged = new Set([p('app/src/lib/Button/Button.svelte')]);
+    expect(listUncataloged(groups, 'zukan', cataloged)).toEqual([
+      { group: 'app', file: p('app/src/lib/Card.svelte') },
+      { group: 'app', file: p('app/src/lib/forms/Input.svelte') }
+    ]);
+  });
+
+  it('keeps routes/ when the scanned directory is not src, and follows the suffix', () => {
+    pkg('app', { name: 'app' });
+    write('app/ui/routes/Tab.svelte');
+    write('app/ui/Tab.catalog.svelte');
+    const groups = discoverGroups(join(tmp, 'app'), { ui: 'ui' });
+    expect(listUncataloged(groups, 'catalog', new Set())).toEqual([
+      { group: 'ui', file: p('app/ui/routes/Tab.svelte') }
+    ]);
   });
 });

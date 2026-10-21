@@ -95,3 +95,34 @@ export function listCatalog(groups: CatalogGroup[], suffix: string): CatalogItem
     .sort((a, b) => a.order - b.order || collator.compare(a.rel, b.rel) || byCodePoint(a.rel, b.rel))
     .map(({ group, name, dir, path, file }) => ({ group, name, dir, path, file }));
 }
+
+/**
+ * The `.svelte` files in the scanned directories that no catalog file sits next to, so a person or an agent can see
+ * what is left to catalog. SvelteKit's route files (`+page.svelte`), tests, and `routes/` under a scanned `src` are
+ * not components of the library and are left out.
+ */
+export function listUncataloged(
+  groups: CatalogGroup[],
+  suffix: string,
+  cataloged: Set<string>
+): { group: string; file: string }[] {
+  const ext = `.${suffix}.svelte`;
+  const out: { group: string; file: string }[] = [];
+  for (const { name: group, dirs } of groups) {
+    for (const dir of dirs) {
+      const exclude = ['**/node_modules/**', ...(dir.endsWith('/src') ? ['routes/**'] : [])];
+      const found = globSync('**/*.svelte', { cwd: dir, exclude })
+        .map((f) => normalizePath(f))
+        .filter((f) => {
+          const base = f.slice(f.lastIndexOf('/') + 1);
+          return !f.endsWith(ext) && !base.startsWith('+') && !/\.(test|spec)\.svelte$/.test(base);
+        })
+        .sort((a, b) => collator.compare(a, b) || byCodePoint(a, b));
+      for (const f of found) {
+        const file = normalizePath(join(dir, f));
+        if (!cataloged.has(file)) out.push({ group, file });
+      }
+    }
+  }
+  return out;
+}
