@@ -407,6 +407,30 @@ describe('PreviewFrame resizing', () => {
     await expect.poll(() => stage.classList.contains('sized')).toBe(false);
   });
 
+  it('measures the element under the pointer with its margin, border and padding', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    const doc = frame.contentDocument!;
+    const target = doc.createElement('div');
+    target.className = 'card svelte-1abc2de';
+    target.style.cssText = 'width:100px;height:50px;margin:10px;padding:5px;border:2px solid;box-sizing:border-box';
+    doc.body.append(target);
+    const hover = () => target.dispatchEvent(new PointerEvent('pointermove', { bubbles: true }));
+    hover();
+    expect(doc.body.textContent).not.toContain('100 × 50');
+    await screen.getByRole('button', { name: 'Measure elements on hover' }).click();
+    await expect.poll(() => (hover(), doc.documentElement.textContent)).toContain('div.card  100 × 50');
+    const boxes = [...doc.documentElement.querySelectorAll<HTMLElement>('[aria-hidden="true"] > div')];
+    expect(boxes.map((b) => [b.style.width, b.style.borderWidth]).slice(0, 3)).toEqual([
+      ['120px', '10px'],
+      ['100px', '2px'],
+      ['96px', '5px']
+    ]);
+    await screen.getByRole('button', { name: 'Measure elements on hover' }).click();
+    await expect.poll(() => doc.documentElement.textContent).not.toContain('100 × 50');
+  });
+
   it('labels come from props', async () => {
     const screen = await render(PreviewFrame, {
       props: {

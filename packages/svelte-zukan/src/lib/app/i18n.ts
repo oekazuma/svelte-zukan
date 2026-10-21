@@ -76,6 +76,7 @@ export type Messages = {
   visionHintTritanopia: string;
   visionHintAchromatopsia: string;
   scaledToFit: string;
+  measure: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -156,7 +157,8 @@ export const messages: Record<'en' | 'ja', Messages> = {
     visionHintDeuteranopia: 'Green is hard to tell apart',
     visionHintTritanopia: 'Blue is hard to tell apart',
     visionHintAchromatopsia: 'No colors, only lightness',
-    scaledToFit: 'Wider than the page: laid out at this width and scaled down to fit'
+    scaledToFit: 'Wider than the page: laid out at this width and scaled down to fit',
+    measure: 'Measure elements on hover'
   },
   ja: {
     nav: 'コンポーネント',
@@ -235,6 +237,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     visionHintDeuteranopia: '緑が見分けにくい',
     visionHintTritanopia: '青が見分けにくい',
     visionHintAchromatopsia: '色がなく、明るさだけで見える',
-    scaledToFit: 'ページより広いので、この幅で描画して縮小表示しています'
+    scaledToFit: 'ページより広いので、この幅で描画して縮小表示しています',
+    measure: 'カーソルを当てた要素を計測'
   }
 };
