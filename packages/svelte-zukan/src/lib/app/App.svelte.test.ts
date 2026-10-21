@@ -132,6 +132,44 @@ describe('App', () => {
     }
   });
 
+  it('the theme option fixes the theme and removes the switch', async () => {
+    localStorage.setItem('svelte-zukan:theme', 'dark');
+    try {
+      const { props } = setup('#/ui/Card?theme=dark');
+      const screen = await render(App, { props: { ...props, fixedTheme: 'light' as const } });
+      const zukan = screen.container.querySelector('.zukan')!;
+      expect(zukan.getAttribute('data-theme')).toBe('light');
+      await expect.element(screen.getByRole('button', { name: 'Dark mode' })).not.toBeInTheDocument();
+      await userEvent.keyboard('t');
+      expect(zukan.getAttribute('data-theme')).toBe('light');
+      const changed = new Promise((resolve) => addEventListener('hashchange', resolve, { once: true }));
+      location.hash = '#/ui/Card?section=One&theme=dark';
+      await changed;
+      await tick();
+      expect(zukan.getAttribute('data-theme')).toBe('light');
+      expect(localStorage.getItem('svelte-zukan:theme')).toBe('dark');
+      await userEvent.keyboard('?');
+      await expect.element(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument();
+      expect(screen.getByRole('dialog').getByText('Switch between light and dark').query()).toBeNull();
+    } finally {
+      localStorage.removeItem('svelte-zukan:theme');
+    }
+  });
+
+  it('a preview page uses the fixed theme over the link and the stored one', async () => {
+    localStorage.setItem('svelte-zukan:theme', 'light');
+    try {
+      const { props } = setup('#/preview/ui/Card?section=Two&theme=light');
+      const screen = await render(App, { props: { ...props, fixedTheme: 'dark' as const } });
+      await expect.element(screen.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+      expect(document.documentElement.style.colorScheme).toBe('dark');
+    } finally {
+      localStorage.removeItem('svelte-zukan:theme');
+      document.documentElement.style.colorScheme = '';
+      document.documentElement.style.backgroundColor = '';
+    }
+  });
+
   it('an unknown ID is not found', async () => {
     const { props } = setup('#/ui/Nope');
     const screen = await render(App, { props });

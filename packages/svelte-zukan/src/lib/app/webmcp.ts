@@ -51,7 +51,10 @@ export function buildTools(opts: {
   axe?: () => Promise<string>;
   /** the catalog page's path, for preview URLs */
   page: string;
+  /** false when the `theme` option fixes the theme: the tools then take no `theme` */
+  themes?: boolean;
 }): WebMcpTool[] {
+  const withTheme: Record<string, object> = opts.themes === false ? {} : { theme: THEME };
   const find = async (id: string | undefined) => (await opts.fetchCatalog()).components.find((c) => c.id === id);
   const tools: WebMcpTool[] = [
     {
@@ -91,11 +94,10 @@ export function buildTools(opts: {
     },
     {
       name: 'open_component',
-      description:
-        "Shows a component's page in the catalog, optionally scrolled to a section and with that section's preview at a width and in a theme.",
+      description: `Shows a component's page in the catalog, optionally scrolled to a section and with that section's preview at a width${opts.themes === false ? '' : ' and in a theme'}.`,
       inputSchema: {
         type: 'object',
-        properties: { id: ID, section: SECTION, width: WIDTH, theme: THEME },
+        properties: { id: ID, section: SECTION, width: WIDTH, ...withTheme },
         required: ['id']
       },
       annotations: { readOnlyHint: false, openWorldHint: false },
@@ -118,7 +120,7 @@ export function buildTools(opts: {
         "Runs axe-core on one section of a component, rendered on its own, and returns the violations: rule, impact, help text and the elements' selectors. An empty list means axe-core found nothing.",
       inputSchema: {
         type: 'object',
-        properties: { id: ID, section: SECTION, width: { ...WIDTH, default: 1280 }, theme: THEME },
+        properties: { id: ID, section: SECTION, width: { ...WIDTH, default: 1280 }, ...withTheme },
         required: ['id', 'section']
       },
       annotations: { readOnlyHint: true, openWorldHint: false },

@@ -56,6 +56,11 @@ describe('generateEntryModule', () => {
     expect(code).toContain('wrapper: null');
   });
 
+  it('passes the fixed theme, or null to let the viewer switch', () => {
+    expect(generateEntryModule({ ...base, logo: null, wrapper: null })).toContain('fixedTheme: null');
+    expect(generateEntryModule({ ...base, logo: null, wrapper: null, theme: 'dark' })).toContain('fixedTheme: "dark"');
+  });
+
   it('passes the searched places', () => {
     const searched = [{ group: 'ui', dirs: ['src', '../outside'] }];
     const code = generateEntryModule({ ...base, logo: null, wrapper: null, searched });

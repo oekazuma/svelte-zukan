@@ -34,6 +34,7 @@ export function generateEntryModule(opts: {
   wrapper: string | null;
   title: string;
   locale: 'en' | 'ja';
+  theme?: 'light' | 'dark' | null;
   /** dirs relative to the Vite root, shown when the catalog is empty */
   searched: { group: string; dirs: string[] }[];
 }): string {
@@ -59,6 +60,7 @@ export function generateEntryModule(opts: {
     `      wrapper: ${opts.wrapper ? `() => import(${s(opts.wrapper)})` : 'null'},`,
     `      title: ${s(opts.title)},`,
     `      locale: ${s(opts.locale)},`,
+    `      fixedTheme: ${s(opts.theme ?? null)},`,
     `      searched: ${s(opts.searched)},`,
     `      axe: () => import(${s(AXE)}).then((m) => m.default)`,
     `    }`,

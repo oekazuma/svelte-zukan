@@ -58,6 +58,18 @@ describe('WebMCP tools', () => {
     expect(tools.map((t) => t.annotations.readOnlyHint)).toEqual([true, true, false]);
   });
 
+  it('takes no theme when the catalog has only one', () => {
+    const fixed = buildTools({
+      fetchCatalog: () => Promise.resolve(catalog),
+      page: '/',
+      axe: () => Promise.resolve(''),
+      themes: false
+    });
+    for (const name of ['open_component', 'check_accessibility'])
+      expect(Object.keys(tool(fixed, name).inputSchema.properties)).not.toContain('theme');
+    expect(tool(fixed, 'open_component').description).not.toContain('theme');
+  });
+
   it('refuses a section the component does not have, before rendering anything', async () => {
     const withAxe = buildTools({
       fetchCatalog: () => Promise.resolve(catalog),
