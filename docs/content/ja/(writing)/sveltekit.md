@@ -1,7 +1,7 @@
 ---
-title: SvelteKit の実行時 API
+title: SvelteKit の機能を使う
 sidebar:
-  order: 1
+  order: 3
 ---
 
 svelte-zukan は `$app/state` や `$app/navigation` のような SvelteKit の実行時 API を差し替えず、モックもしません。カタログの中では SvelteKit の実行時コードが既定の状態で動きます。

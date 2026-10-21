@@ -1,7 +1,7 @@
 ---
 title: 静的な書き出し
 sidebar:
-  order: 3
+  order: 2
 ---
 
 `build: true` にすると、`vite build` のときにカタログも静的なファイルとして書き出します。

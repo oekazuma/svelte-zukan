@@ -1,7 +1,7 @@
 ---
-title: モノレポ
+title: モノレポで使う
 sidebar:
-  order: 2
+  order: 1
 ---
 
 `groups` オプションがないとき、svelte-zukan は次の順にカタログファイルを探します。

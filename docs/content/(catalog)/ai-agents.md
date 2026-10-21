@@ -1,5 +1,5 @@
 ---
-title: AI agents
+title: Using it with AI agents
 sidebar:
   order: 4
 ---

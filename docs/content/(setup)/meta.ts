@@ -1,6 +1,6 @@
 import { defineMeta } from 'blume';
 
 export default defineMeta({
-  title: '連携',
+  title: 'Setup and publishing',
   order: 40
 });
