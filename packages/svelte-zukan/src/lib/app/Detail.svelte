@@ -91,6 +91,49 @@
               <CodeBlock code={s.code} labels={t} />
             </div>
           {/each}
+          {#if meta.props?.length || meta.propsType}
+            <h2>{t.props}</h2>
+            {#if meta.propsType}
+              <p class="props-type">{t.propsType} <code>{meta.propsType}</code></p>
+            {/if}
+            {#if meta.props?.length}
+              <div class="props">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{t.propName}</th>
+                      <th>{t.propType}</th>
+                      <th>{t.propDefault}</th>
+                      <th>{t.propDescription}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each meta.props as p (p.name)}
+                      <tr>
+                        <td>
+                          <code class="name">{p.name}</code>
+                          {#if p.required}<span class="flag">{t.required}</span>{/if}
+                          {#if p.bindable}<span class="flag">{t.bindable}</span>{/if}
+                        </td>
+                        <td
+                          >{#if p.type}<code>{p.type}</code>{/if}</td
+                        >
+                        <td
+                          >{#if p.default}<code>{p.default}</code>{/if}</td
+                        >
+                        <!-- rendered by the plugin from the component's own JSDoc -->
+                        <!-- eslint-disable svelte/no-at-html-tags -->
+                        <td
+                          >{#if p.description}{@html p.description}{/if}</td
+                        >
+                        <!-- eslint-enable svelte/no-at-html-tags -->
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/if}
+          {/if}
           {#if previous || next}
             <nav class="pager" aria-label="{t.previous} / {t.next}">
               {#if previous}{@render pagerLink(previous, 'prev')}{/if}
@@ -235,6 +278,58 @@
 
   .empty {
     color: var(--_muted);
+  }
+
+  .props {
+    overflow-x: auto;
+  }
+
+  .props table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .props :is(th, td) {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--_border);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .props th {
+    color: var(--_muted);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .props td:first-child {
+    white-space: nowrap;
+  }
+
+  .props :global(code),
+  .props-type code {
+    padding: 0.1em 0.3em;
+    border-radius: 4px;
+    background: var(--_code-bg);
+    font-family: var(--_mono);
+    font-size: 0.9em;
+  }
+
+  .props .name {
+    font-weight: 600;
+  }
+
+  .flag {
+    margin-left: 6px;
+    color: var(--_muted);
+    font-size: 12px;
+  }
+
+  .props-type {
+    margin: 0 0 8px;
+    color: var(--_muted);
+    font-size: 14px;
   }
 
   .page {

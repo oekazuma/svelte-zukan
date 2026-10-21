@@ -6,6 +6,7 @@ export function createMatchers(suffix: string) {
   return {
     isCatalogFile: (file: string) => file.endsWith(ext),
     isDocFile: (file: string) => file.endsWith(docExt),
-    docFileOf: (catalogFile: string) => catalogFile.slice(0, -ext.length) + docExt
+    docFileOf: (catalogFile: string) => catalogFile.slice(0, -ext.length) + docExt,
+    componentFileOf: (catalogFile: string) => catalogFile.slice(0, -ext.length) + '.svelte'
   };
 }

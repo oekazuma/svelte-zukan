@@ -269,6 +269,21 @@ describe('metadata modules', () => {
     expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/A.zukan.md`);
   });
 
+  it('reads the props of the component next to the file and watches it', async () => {
+    const { tmp, root } = await makeApp();
+    const { p } = boot(root);
+    expect(p.load.call({ addWatchFile: vi.fn() }, meta('app/A'))).toContain('"props":null,"propsType":null');
+    await writeFile(
+      path.join(root, 'src/A.svelte'),
+      '<script lang="ts">\n  let { a = 1 }: { a?: number } = $props();\n</script>'
+    );
+    const addWatchFile = vi.fn();
+    const code = p.load.call({ addWatchFile }, meta('app/A'));
+    expect(code).toContain('"props":[{"name":"a","type":"number","default":"1"');
+    expect(code).not.toContain(tmp);
+    expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/A.svelte`);
+  });
+
   it('reads B.<suffix>.md for a custom suffix', async () => {
     const { root } = await makeApp();
     await writeFile(path.join(root, 'src/B.catalog.svelte'), '<Section title="B"><p>b</p></Section>');

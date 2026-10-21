@@ -6,6 +6,7 @@ import { normalizePath, type Plugin, type PreviewServer, type ViteDevServer } fr
 import type { CatalogGroup, CatalogItem } from '../types.js';
 import { discoverGroups, listCatalog } from './discover.js';
 import { extractSections } from './extract.js';
+import { extractProps } from './props.js';
 import { renderHtml } from './html.js';
 import { detectSvelteKit } from './kit.js';
 import { createMatchers } from './matchers.js';
@@ -45,7 +46,9 @@ const printCatalogUrl = (server: ViteDevServer | PreviewServer) => {
 };
 
 export function zukan(options: ZukanOptions = {}): Plugin {
-  const { isCatalogFile, isDocFile, docFileOf } = createMatchers(options.suffix ?? 'zukan');
+  const { isCatalogFile, isDocFile, docFileOf, componentFileOf } = createMatchers(options.suffix ?? 'zukan');
+  /** component file → its props as last served, to tell a props change from any other edit */
+  const servedProps = new Map<string, string>();
   let root = '';
   let groups: CatalogGroup[] = [];
   let resolved: ReturnType<typeof resolveOptions>;
@@ -224,7 +227,15 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           doc = marked.parse(readFileSync(docPath, 'utf-8'), { async: false });
         }
         const sections = extractSections(readFileSync(item.file, 'utf-8'), item.file);
-        return `export default ${JSON.stringify({ sections, doc })};\n`;
+        const component = componentFileOf(item.file);
+        let found = null;
+        if (existsSync(component)) {
+          this.addWatchFile(component);
+          found = extractProps(readFileSync(component, 'utf-8'), component);
+          servedProps.set(normalizePath(component), JSON.stringify(found));
+        }
+        const meta = { sections, doc, props: found?.props ?? null, propsType: found?.typeName ?? null };
+        return `export default ${JSON.stringify(meta)};\n`;
       }
       if (id === '\0' + CATALOG) return generateCatalogModule(relist());
       if (id === '\0' + ENTRY) {
@@ -311,6 +322,14 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         items = null;
         const list = moduleGraph.getModuleById('\0' + CATALOG);
         targets = [...modules, ...metas(), ...(list ? [list] : [])];
+      } else if (type === 'update' && servedProps.has(normalizePath(file))) {
+        // the component's own HMR updates the previews; only a change to its props changes the detail page
+        const props = JSON.stringify(extractProps(readFileSync(file, 'utf-8'), file));
+        if (props === servedProps.get(normalizePath(file)) || this.environment.config.consumer !== 'client') return;
+        servedProps.set(normalizePath(file), props);
+        for (const mod of metas()) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
+        this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
+        return;
       } else return;
 
       for (const mod of targets) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);

@@ -2,7 +2,23 @@ import type { Component } from 'svelte';
 
 export type ZukanSection = { title: string; code: string };
 
-export type ZukanMeta = { sections: ZukanSection[]; doc: string | null };
+/** `type` and `default` are source text; `description` is the JSDoc comment rendered as inline Markdown */
+export type ZukanProp = {
+  name: string;
+  type: string | null;
+  default: string | null;
+  required: boolean;
+  bindable: boolean;
+  description: string | null;
+};
+
+/** `props` is null when the component next to the catalog file declares none; `propsType` names a type it imports */
+export type ZukanMeta = {
+  sections: ZukanSection[];
+  doc: string | null;
+  props?: ZukanProp[] | null;
+  propsType?: string | null;
+};
 
 export type ZukanModule = { default: Component };
 

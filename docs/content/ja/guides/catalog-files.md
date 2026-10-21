@@ -58,6 +58,26 @@ src/lib/Button/
 A button for the main action on a page. Use one per screen.
 ```
 
+## Props の一覧
+
+`Button.zukan.svelte` の隣に `Button.svelte` があれば、詳細ページのセクションの下に、その props の一覧を出します。名前、型、既定値、JSDoc コメント（最初の `@` タグの手前まで。インラインの Markdown として表示）が並びます。`?` も既定値もない props には「必須」、既定値が `$bindable()` の props には「bind 可」と付きます。
+
+```svelte
+<!-- src/lib/Button/Button.svelte -->
+<script lang="ts">
+  let {
+    variant = 'primary',
+    disabled = false
+  }: {
+    /** the look of the button: `primary` for the main action */
+    variant?: 'primary' | 'secondary';
+    disabled?: boolean;
+  } = $props();
+</script>
+```
+
+props はコンポーネントのソースを読んで取り出します。コンポーネントを実行はしません。型はその場に書いても、コンポーネント内で宣言した type エイリアスや interface（interface の `extends` を含む）でもかまいません。別ファイルから import した型のときは、一覧にはその型の名前と、分割代入した props だけを型なしで出します。パースできないコンポーネントや `$props()` のないコンポーネントには、一覧を出しません。JSDoc コメントも `.md` と同じく HTML として挿入するので、カタログを公開する前にコードと同じようにレビューしてください。
+
 ## 接尾辞を変える
 
 接尾辞は `suffix` オプションで変えられます。`zukan({ suffix: 'catalog' })` なら `*.catalog.svelte` と `*.catalog.md` になります。
@@ -65,6 +85,6 @@ A button for the main action on a page. Use one per screen.
 ## 監視と HMR
 
 - カタログファイルや `.md` を作成・削除・編集すると、`/__zukan/` のタブだけが再読み込みされます。同じ dev サーバーにつないだアプリのタブは再読み込みされません
-- コンポーネント本体（`Button.svelte` など）の編集は通常の HMR で、アプリとカタログの両方に反映されます
+- コンポーネント本体（`Button.svelte` など）の編集は通常の HMR で、アプリとカタログの両方に反映されます。props が変わる編集のときは、props の一覧を更新するために `/__zukan/` のタブも再読み込みされます
 - Vite の root の外にあるディレクトリ（モノレポの別パッケージなど）も監視します
 - 2 つのカタログファイルが同じ ID になったときは、ターミナルに加えて、dev サーバーに接続しているアプリのタブにも Vite のエラーオーバーレイが出ます
