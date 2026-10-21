@@ -1,5 +1,16 @@
 # svelte-zukan
 
+## 0.8.0
+
+### Minor Changes
+
+- 9a06890: feat: the package includes a skill for AI coding agents, `skills/svelte-zukan/SKILL.md`: how to find what to catalog, write catalog files, and check them through `catalog.json` and the preview pages.
+- da3663d: feat: the catalog as data for tools and AI agents. The dev server serves `/__zukan/catalog.json`, and `build: true` writes `catalog.json` next to `index.html`: every component with its sections (code and preview link), its `.md`, its props and its file paths.
+- 04167ac: feat: the props table reads types imported by a relative path, from a `.ts` file or another component's `<script module>`, and refreshes when such a file changes. Types from packages are still shown by name.
+- d22bbc4: feat: on the dev server, the detail page opens the catalog file and the component in your editor, through Vite's own open-in-editor endpoint.
+- 72c94e7: feat: list the `.svelte` files that have no catalog file next to them, folded on the catalog's top page and as `uncataloged` in `catalog.json`.
+- 3495680: feat: in browsers that implement WebMCP, the catalog page offers `list_components`, `get_component`, `open_component` and `check_accessibility` as tools for agents.
+
 ## 0.7.0
 
 ### Minor Changes
