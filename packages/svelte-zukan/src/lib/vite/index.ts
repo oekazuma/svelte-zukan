@@ -60,6 +60,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   let appBuilder = false;
   /** where SvelteKit writes version.json into every client environment, the catalog's included */
   let kitAppDir: string | null = null;
+  /** `vite dev`: the catalog may then carry absolute paths, to open files in an editor */
+  let serving = false;
   /** printed once in buildApp: Vite resolves the config again for every environment */
   let warning: string | null = null;
   /** path → item, from the last listing; dropped when a catalog file is created or deleted */
@@ -92,6 +94,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       // after the other plugins, so that a `builder` or a `renderBuiltUrl` they set is seen
       order: 'post',
       async handler(config, { command }) {
+        serving = command === 'serve';
         kitAppDir = null;
         items = null;
         root = normalizePath(resolve(config.root ?? process.cwd()));
@@ -262,7 +265,13 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         const items = relist();
         // relative, like the rest of the static build
         const rel = uncataloged(items).map((u) => ({ group: u.group, file: normalizePath(relative(root, u.file)) }));
-        return generateCatalogModule(items, rel);
+        const edit = serving
+          ? (file: string) => {
+              const component = componentFileOf(file);
+              return { file, component: existsSync(component) ? normalizePath(component) : null };
+            }
+          : undefined;
+        return generateCatalogModule(items, rel, edit);
       }
       // read from this package's own dependency, so the catalog's client never imports a CommonJS module
       if (id === '\0' + AXE) {

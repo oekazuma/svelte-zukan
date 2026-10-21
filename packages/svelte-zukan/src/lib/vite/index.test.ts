@@ -424,6 +424,16 @@ describe('configureServer', () => {
     );
   });
 
+  it('gives the dev catalog the files to open in an editor, and the build none', async () => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/A.svelte'), '<p>a</p>');
+    const dev = boot(root).p.load('\0virtual:svelte-zukan/catalog');
+    expect(dev).toContain(`"edit":{"file":"${root}/src/A.zukan.svelte","component":"${root}/src/A.svelte"}`);
+    const { p } = await bootBuild(root, { build: true });
+    const built = p.load('\0virtual:svelte-zukan/catalog');
+    expect(built).not.toContain('"edit"');
+  });
+
   it('serves the catalog HTML at /__zukan/', async () => {
     const { root } = await makeApp();
     const { p } = boot(root, { title: 'My UI', locale: 'ja' });
