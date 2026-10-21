@@ -39,7 +39,7 @@
 
 - [Documentation](https://oekazuma.github.io/svelte-zukan/) (Support for English and Japanese)
 - [Demo](https://oekazuma.github.io/svelte-zukan/demo/) ([日本語](https://oekazuma.github.io/svelte-zukan/demo/ja/))
-- [Using it with AI agents](https://oekazuma.github.io/svelte-zukan/guides/ai-agents/): `catalog.json` and a skill in the package
+- [Using it with AI agents](https://oekazuma.github.io/svelte-zukan/guides/ai-agents/): `catalog.json`, WebMCP tools, and a skill you install with `npx skills add oekazuma/svelte-zukan`
 - [Contribution Guide](CONTRIBUTING.md)
 
 ## License

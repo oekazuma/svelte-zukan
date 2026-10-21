@@ -43,7 +43,15 @@ Browsers without WebMCP ignore them, and nothing is loaded for them.
 
 ## The skill
 
-The package includes a skill for agents that read [Agent Skills](https://agentskills.io): `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md`. It says how to find what to catalog, how to write a catalog file, and how to check it. Copy the folder to where your agent looks for skills, for example `.claude/skills/svelte-zukan/` for Claude Code:
+svelte-zukan has a skill for agents that read [Agent Skills](https://agentskills.io), such as Claude Code, Cursor and Codex. It says how to find what to catalog, how to write a catalog file, and how to check it. Install it with the [skills CLI](https://github.com/vercel-labs/skills):
+
+```sh
+npx skills add oekazuma/svelte-zukan
+```
+
+The CLI asks which of your agents to install it for and puts it in each one's skill directory in your project. Choose agents with `-a` (for example `-a claude-code`), or add `-g` to install it for all your projects.
+
+The npm package ships the same skill, at `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md`, matching the version you installed. You can also copy that folder to your agent's skill directory yourself:
 
 ```sh
 mkdir -p .claude/skills && cp -r node_modules/svelte-zukan/skills/svelte-zukan .claude/skills/
