@@ -32,4 +32,4 @@ zukan({
 
 ## UI language
 
-The catalog UI is in English by default. `locale: 'ja'` switches it to Japanese. Strings you write yourself, such as `groups` keys and section titles, are not translated. The plugin's error messages are always in English.
+The catalog UI is in English by default. `locale: 'ja'` switches it to Japanese. The messages of the accessibility checks follow it too. Strings you write yourself, such as `groups` keys and section titles, are not translated. The plugin's error messages are always in English.

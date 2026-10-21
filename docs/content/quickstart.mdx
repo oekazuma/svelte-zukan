@@ -76,17 +76,14 @@ Start the dev server and open `/__zukan/`. The catalog URL is also listed in the
 
 If you set Vite's `base` or SvelteKit's `paths.base`, the catalog moves to `<base>__zukan/` (for example, `/app/__zukan/` when `base: '/app/'`).
 
-In the catalog:
-
-- The top page shows each component as a card with a small preview of its first section and the first paragraph of its `.md`
-- Type in the search box, or press <kbd>/</kbd> to jump to it, to filter the components by ID and by section title. <kbd>J</kbd> and <kbd>K</kbd> move to the next and previous component, <kbd>T</kbd> switches between light and dark, <kbd>F</kbd> expands the preview in view, the arrow keys move through the component list (<kbd>←</kbd> and <kbd>→</kbd> close and open folders), and <kbd>?</kbd> lists the shortcuts
-- A detail page with several sections has a table of contents beside it when the window is wide enough, and links to the previous and next components at the bottom
-- Each section has width presets for a phone (375px), a tablet (768px), a laptop (1024px), a desktop (1280px) and the full width (or drag the right edge, or type a width in pixels), a button that switches the background between the theme's color, a checkerboard and a grid, a button that outlines every element of the preview, a button that measures the element under the pointer (its size, with its margin, border and padding drawn like in browser dev tools), a button that checks the preview's accessibility with [axe-core](https://github.com/dequelabs/axe-core) (it lists what it finds, outlines the reported elements, checks again after each edit, and can simulate blurred vision and color vision deficiencies), a button that expands it over the page (<kbd>Esc</kbd> leaves), a link that opens the preview alone in a new tab, and a button that copies a link to the section at its current width and theme. A width narrower than the page is centered on a dotted background, so the device's edges stay visible on a wide screen; a wider one (such as the desktop preset on a laptop) is laid out at its real width and scaled down to fit, with the scale shown next to the width. The widths are remembered in this browser across reloads; a copied link opens with its own width and theme, without changing the theme you chose
-- The theme button at the top of the sidebar switches the catalog and every preview between light and dark. It starts from your system's setting, and your choice is remembered in this browser. On a narrow screen, the component list folds under the menu button
+The top page lists every component with a small preview. Each detail page shows the sections with a toolbar for widths, backgrounds, measuring and accessibility checks, the code of each section, and the component's props. [Using the catalog](/guides/catalog-ui) walks through all of it, with the keyboard shortcuts.
 
 ## Next steps
 
 <CardGroup cols={2}>
+  <Card title="Using the catalog" icon="layout" href="/guides/catalog-ui">
+    The preview toolbar, the accessibility panel, search and the keyboard shortcuts.
+  </Card>
   <Card title="Catalog files" icon="file-text" href="/guides/catalog-files">
     The rules for `<Section>`, the Markdown description, and what the code view shows.
   </Card>
