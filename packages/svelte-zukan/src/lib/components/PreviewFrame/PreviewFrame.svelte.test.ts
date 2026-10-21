@@ -310,6 +310,31 @@ describe('PreviewFrame resizing', () => {
     await expect.element(screen.getByText('Accessibility issues (1)')).not.toBeInTheDocument();
   });
 
+  it('highlights the reported elements, thicker when picked, and simulates vision', async () => {
+    const source = `window.axe = { run: async () => ({ violations: [{ id: 'color-contrast', impact: 'serious',
+      help: 'Elements must meet minimum color contrast ratio thresholds', helpUrl: 'https://example.com/c',
+      nodes: [{ target: ['body'] }] }] }) };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    const head = () => frame.contentDocument!.head.textContent;
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.poll(head).toContain('body{outline:2px solid');
+    await screen.getByRole('button', { name: 'body' }).click();
+    await expect.element(screen.getByRole('button', { name: 'body' })).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(head).toContain('body{outline:4px solid');
+    await screen.getByRole('checkbox', { name: 'Highlight issues' }).click();
+    await expect.poll(head).not.toContain('outline');
+    await screen.getByRole('combobox', { name: 'Simulate vision' }).selectOptions('Deuteranopia (green-blind)');
+    await expect.poll(head).toContain('url(#zukan-vision)');
+    expect(frame.contentDocument!.querySelector('#zukan-vision feColorMatrix')).not.toBeNull();
+    await screen.getByRole('combobox', { name: 'Simulate vision' }).selectOptions('Blurred vision');
+    await expect.poll(head).toContain('blur(2px)');
+    await screen.getByRole('button', { name: 'Close' }).click();
+    await expect.poll(head).not.toContain('filter');
+    expect(frame.contentDocument!.querySelector('#zukan-vision')).toBeNull();
+  });
+
   it('says when nothing is found, and when the check fails', async () => {
     const axe = () =>
       Promise.resolve(

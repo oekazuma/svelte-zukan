@@ -242,8 +242,14 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       }
       if (id === '\0' + CATALOG) return generateCatalogModule(relist());
       // read from this package's own dependency, so the catalog's client never imports a CommonJS module
-      if (id === '\0' + AXE)
-        return `export default ${JSON.stringify(readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf-8'))};\n`;
+      if (id === '\0' + AXE) {
+        const read = (file: string) =>
+          readFileSync(createRequire(import.meta.url).resolve(`axe-core/${file}`), 'utf-8');
+        // axe's own translation, so its messages follow the catalog's `locale`
+        const locale =
+          resolved.locale === 'en' ? '' : `\naxe.configure({ locale: ${read(`locales/${resolved.locale}.json`)} });`;
+        return `export default ${JSON.stringify(read('axe.min.js') + locale)};\n`;
+      }
       if (id === '\0' + ENTRY) {
         // relative, so that absolute paths do not end up in the static build
         const searched = groups.map((g) => ({

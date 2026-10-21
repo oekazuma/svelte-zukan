@@ -256,6 +256,9 @@ describe('metadata modules', () => {
     const code: string = p.load('\0virtual:svelte-zukan/axe');
     expect(code.startsWith('export default "')).toBe(true);
     expect(code).toContain('axe.run');
+    expect(code).not.toContain('axe.configure({ locale');
+    const ja: string = boot(root, { locale: 'ja' }).p.load('\0virtual:svelte-zukan/axe');
+    expect(ja).toContain('axe.configure({ locale');
   });
 
   it('exports the sections and no absolute path', async () => {
