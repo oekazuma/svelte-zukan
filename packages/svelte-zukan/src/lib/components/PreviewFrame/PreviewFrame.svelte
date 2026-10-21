@@ -1,6 +1,15 @@
 <script lang="ts">
   import { messages, type Messages } from '../../app/i18n.js';
-  import { BACKGROUNDS, readWidth, writeWidth, type Theme } from './storage.js';
+  import {
+    BACKGROUND_MODES,
+    BACKGROUNDS,
+    readBackground,
+    readWidth,
+    writeBackground,
+    writeWidth,
+    type Background,
+    type Theme
+  } from './storage.js';
 
   const PRESETS = [
     {
@@ -42,6 +51,20 @@
     'M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1'
   ];
   const CHECK_ICON = ['M5 12.5l4.5 4.5L19 7'];
+  const BACKGROUND_ICONS: Record<Background, string[]> = {
+    theme: ['M4 4h16v16H4z'],
+    checker: ['M4 4h16v16H4z', 'M4 12h16', 'M12 4v16', 'M4 4h8v8H4z', 'M12 12h8v8h-8z'],
+    grid: ['M4 4h16v16H4z', 'M4 9.3h16', 'M4 14.7h16', 'M9.3 4v16', 'M14.7 4v16']
+  };
+  /** the app's CSS may paint the body, which would hide the pattern */
+  const backgroundCss = (mode: Background, theme: Theme) => {
+    const [base, mark] = theme === 'dark' ? ['#0d1117', '#262c36'] : ['#ffffff', '#e4e6ea'];
+    const image =
+      mode === 'checker'
+        ? `conic-gradient(${mark} 25%, transparent 0 50%, ${mark} 0 75%, transparent 0)`
+        : `linear-gradient(to right, ${mark} 1px, transparent 1px), linear-gradient(to bottom, ${mark} 1px, transparent 1px)`;
+    return `html{background:${base} ${image} 0 0/16px 16px !important}body{background:transparent !important}`;
+  };
   const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'];
   const MIN_WIDTH = 200;
   const MIN_HEIGHT = 80;
@@ -83,6 +106,11 @@
       | 'expand'
       | 'collapse'
       | 'loading'
+      | 'background'
+      | 'backgroundTheme'
+      | 'backgroundChecker'
+      | 'backgroundGrid'
+      | 'widthInPixels'
     >;
   } = $props();
 
@@ -94,6 +122,7 @@
   let height = $state(MIN_HEIGHT);
   let dragging = $state(false);
   let outlined = $state(false);
+  let background = $state<Background>(readBackground());
   let expanded = $state(false);
   // until the first height is measured, a skeleton covers the frame (lazy frames load only when scrolled to)
   let ready = $state(false);
@@ -191,6 +220,28 @@
     return () => style.remove();
   });
 
+  $effect(() => {
+    if (!doc || background === 'theme') return;
+    const style = doc.createElement('style');
+    style.textContent = backgroundCss(background, theme);
+    doc.head.append(style);
+    return () => style.remove();
+  });
+
+  function nextBackground() {
+    background = BACKGROUND_MODES[(BACKGROUND_MODES.indexOf(background) + 1) % BACKGROUND_MODES.length];
+    writeBackground(background);
+  }
+
+  const BACKGROUND_LABELS = { theme: 'backgroundTheme', checker: 'backgroundChecker', grid: 'backgroundGrid' } as const;
+  const backgroundName = $derived(`${labels.background}: ${labels[BACKGROUND_LABELS[background]]}`);
+
+  function setWidthFrom(input: HTMLInputElement) {
+    const value = Math.round(Number(input.value));
+    if (input.value !== '' && value > 0) width = clamp(value);
+    input.value = String(Math.round(current));
+  }
+
   function toggleExpanded() {
     expanded = !expanded;
     // the button moves with the toolbar; keep the focus on it
@@ -274,11 +325,28 @@
         {@render icon(FULL_ICON)}
       </button>
     </div>
-    <!-- the handle reports the same value (aria-valuenow); a live region here would announce every pixel while dragging -->
-    <span class="width" aria-hidden="true">
-      {#if stageWidth}{Math.round(current)}<span class="unit">px</span>{/if}
-    </span>
+    <!-- not a live region: it would announce every pixel while dragging -->
+    <label class="width">
+      <input
+        type="number"
+        inputmode="numeric"
+        min={stageWidth ? min : undefined}
+        max={stageWidth ? max : undefined}
+        aria-label={labels.widthInPixels}
+        value={stageWidth ? Math.round(current) : ''}
+        onchange={(e) => setWidthFrom(e.currentTarget)}
+        onkeydown={(e) => {
+          if (e.key === 'Escape') {
+            e.currentTarget.value = String(Math.round(current));
+            e.currentTarget.blur();
+          }
+        }}
+      /><span class="unit" aria-hidden="true">px</span>
+    </label>
     <div class="group">
+      <button type="button" class="icon" aria-label={backgroundName} title={backgroundName} onclick={nextBackground}>
+        {@render icon(BACKGROUND_ICONS[background])}
+      </button>
       <button
         type="button"
         class="icon"
@@ -495,6 +563,33 @@
     font-size: 13px;
     font-variant-numeric: tabular-nums;
     color: var(--_text);
+  }
+
+  .width input {
+    width: 5ch;
+    padding: 2px 4px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: right;
+    appearance: textfield;
+  }
+
+  .width input::-webkit-inner-spin-button,
+  .width input::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
+  .width input:hover {
+    border-color: var(--_border);
+  }
+
+  .width input:focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: -1px;
   }
 
   .unit {

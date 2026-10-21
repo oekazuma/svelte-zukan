@@ -4,6 +4,10 @@ export const BACKGROUNDS: Record<Theme, string> = { light: '#fff', dark: '#0d111
 
 const THEME_KEY = 'svelte-zukan:theme';
 const widthKey = (src: string) => `svelte-zukan:width:${src}`;
+const BACKGROUND_KEY = 'svelte-zukan:background';
+
+export type Background = 'theme' | 'checker' | 'grid';
+export const BACKGROUND_MODES: readonly Background[] = ['theme', 'checker', 'grid'];
 
 // storage can throw (blocked site data, some private modes); the catalog then just forgets
 const tryStorage = <T>(fn: () => T, fallback: T) => {
@@ -36,3 +40,13 @@ export const writeWidth = (src: string, value: number | null) =>
       value === null ? sessionStorage.removeItem(widthKey(src)) : sessionStorage.setItem(widthKey(src), String(value)),
     undefined
   );
+
+/** per tab, like widths, and shared by every frame: it is a way of looking, not a setting of one example */
+export const readBackground = (): Background =>
+  tryStorage(() => {
+    const value = sessionStorage.getItem(BACKGROUND_KEY);
+    return BACKGROUND_MODES.includes(value as Background) ? (value as Background) : 'theme';
+  }, 'theme');
+
+export const writeBackground = (value: Background) =>
+  tryStorage(() => sessionStorage.setItem(BACKGROUND_KEY, value), undefined);
