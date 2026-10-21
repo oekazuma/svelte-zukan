@@ -77,6 +77,7 @@
     tabHref = src,
     shareUrl,
     requestedWidth,
+    expanded = $bindable(false),
     title,
     theme = 'light',
     labels = messages.en
@@ -88,6 +89,7 @@
     shareUrl?: (width: number | null) => string;
     /** a width from a shared link; it wins over the remembered one */
     requestedWidth?: number;
+    expanded?: boolean;
     title: string;
     theme?: Theme;
     labels?: Pick<
@@ -123,7 +125,6 @@
   let dragging = $state(false);
   let outlined = $state(false);
   let background = $state<Background>(readBackground());
-  let expanded = $state(false);
   // until the first height is measured, a skeleton covers the frame (lazy frames load only when scrolled to)
   let ready = $state(false);
   let expandButton: HTMLButtonElement | undefined = $state();

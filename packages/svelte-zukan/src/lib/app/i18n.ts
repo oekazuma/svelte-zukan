@@ -48,6 +48,9 @@ export type Messages = {
   backgroundChecker: string;
   backgroundGrid: string;
   widthInPixels: string;
+  shortcutTheme: string;
+  shortcutExpand: string;
+  shortcutTree: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -100,7 +103,10 @@ export const messages: Record<'en' | 'ja', Messages> = {
     backgroundTheme: 'Theme',
     backgroundChecker: 'Checkerboard',
     backgroundGrid: 'Grid',
-    widthInPixels: 'Width in pixels'
+    widthInPixels: 'Width in pixels',
+    shortcutTheme: 'Switch between light and dark',
+    shortcutExpand: 'Expand the preview in view, or leave it',
+    shortcutTree: 'Move through the component list; open and close folders'
   },
   ja: {
     nav: 'コンポーネント',
@@ -151,6 +157,9 @@ export const messages: Record<'en' | 'ja', Messages> = {
     backgroundTheme: 'テーマの色',
     backgroundChecker: '市松模様',
     backgroundGrid: 'グリッド',
-    widthInPixels: '幅（px）'
+    widthInPixels: '幅（px）',
+    shortcutTheme: 'ライトとダークを切り替える',
+    shortcutExpand: '表示中のプレビューを拡大する（もう一度で戻る）',
+    shortcutTree: 'コンポーネントの一覧を移動する・フォルダーを開閉する'
   }
 };
