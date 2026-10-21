@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, type Component, type Snippet } from 'svelte';
+  import { onMount, tick, type Component, type Snippet } from 'svelte';
   import { readTheme, writeTheme, type Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
   import Detail from './Detail.svelte';
@@ -61,6 +61,20 @@
   const index = $derived(entry ? catalog.indexOf(entry) : -1);
   const previous = $derived(index > 0 ? catalog[index - 1] : undefined);
   const next = $derived(index === -1 ? (route.view === 'list' ? catalog[0] : undefined) : catalog[index + 1]);
+
+  // only on the catalog page, and only in browsers that implement WebMCP
+  onMount(() => {
+    const context =
+      (navigator as { modelContext?: object }).modelContext ?? (document as { modelContext?: object }).modelContext;
+    if (route.view === 'preview' || !context) return;
+    const catalogUrl = new URL('catalog.json', location.href.split('#')[0]);
+    import('./webmcp.js').then(({ buildTools, registerTools }) =>
+      registerTools(
+        buildTools({ fetchCatalog: () => fetch(catalogUrl).then((r) => r.json()), axe, page: location.pathname }),
+        context
+      )
+    );
+  });
 
   let shortcuts: HTMLDialogElement | undefined = $state();
   let detail: ReturnType<typeof Detail> | undefined = $state();
