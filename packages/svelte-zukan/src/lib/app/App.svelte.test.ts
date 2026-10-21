@@ -520,7 +520,24 @@ describe('App', () => {
     const screen = await render(App, { props });
     const src = `${location.pathname}#/preview/ui/Card?section=One`;
     await expect.element(screen.getByTitle('One')).toHaveAttribute('src', src);
-    await expect.element(screen.getByRole('link', { name: 'Open in new tab' })).toHaveAttribute('href', src);
+    await expect
+      .element(screen.getByRole('link', { name: 'Open in new tab' }))
+      .toHaveAttribute(
+        'href',
+        expect.stringMatching(new RegExp(`^${src.replace(/[.?]/g, '\\$&')}&theme=(light|dark)$`))
+      );
+  });
+
+  it('a shared link sets the theme and the width without storing the theme', async () => {
+    localStorage.removeItem('svelte-zukan:theme');
+    const { props } = setup('#/ui/Card?section=One&width=375&theme=dark');
+    props.catalog[0].meta = () =>
+      Promise.resolve({ default: { sections: [{ title: 'One', code: '<p>one</p>' }], doc: null } });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByTitle('One')).toBeInTheDocument();
+    expect(document.querySelector('.zukan')!.getAttribute('data-theme')).toBe('dark');
+    await expect.poll(() => Math.round(screen.getByTitle('One').element().getBoundingClientRect().width)).toBe(375);
+    expect(localStorage.getItem('svelte-zukan:theme')).toBeNull();
   });
 
   it('on a narrow screen the menu button shows the navigation', async () => {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { userEvent } from 'vitest/browser';
 import PreviewFrame from './PreviewFrame.svelte';
@@ -225,6 +225,35 @@ describe('PreviewFrame resizing', () => {
     }
   });
 
+  it('a width from a shared link wins over the remembered one', async () => {
+    sessionStorage.setItem('svelte-zukan:width:about:blank', '500');
+    const screen = await render(PreviewFrame, { props: { ...props, requestedWidth: 375 } });
+    screen.container.style.width = '1000px';
+    await expect.poll(() => iframeWidth(screen.container)).toBe(375);
+  });
+
+  it('copies a link to the current width and opens the themed page in a new tab', async () => {
+    const shareUrl = (width: number | null) => `https://example.com/#/ui/A?width=${width}`;
+    const screen = await render(PreviewFrame, {
+      props: { ...props, shareUrl, tabHref: '/x#/preview/ui/A?theme=dark' }
+    });
+    screen.container.style.width = '1000px';
+    await screen.getByRole('button', { name: 'Tablet (768px)', exact: true }).click();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    await screen.getByRole('button', { name: 'Copy link to this view' }).click();
+    await expect.element(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith('https://example.com/#/ui/A?width=768');
+    expect(screen.getByRole('link', { name: 'Open in new tab' }).element().getAttribute('href')).toBe(
+      '/x#/preview/ui/A?theme=dark'
+    );
+  });
+
+  it('has no copy-link button without a share URL', async () => {
+    const screen = await render(PreviewFrame, { props });
+    await expect.element(screen.getByRole('link', { name: 'Open in new tab' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy link to this view' }).query()).toBeNull();
+  });
+
   it('labels come from props', async () => {
     const screen = await render(PreviewFrame, {
       props: {
@@ -240,7 +269,10 @@ describe('PreviewFrame resizing', () => {
           outline: 'Boxes',
           expand: 'Bigger',
           collapse: 'Smaller',
-          loading: 'Wait'
+          loading: 'Wait',
+          copyLink: 'Share',
+          copied: 'Done',
+          copyFailed: 'Nope'
         }
       }
     });
