@@ -62,6 +62,14 @@ export type Messages = {
   impactSerious: string;
   impactModerate: string;
   impactMinor: string;
+  a11yHighlight: string;
+  vision: string;
+  visionNone: string;
+  visionBlurred: string;
+  visionProtanopia: string;
+  visionDeuteranopia: string;
+  visionTritanopia: string;
+  visionAchromatopsia: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -128,7 +136,15 @@ export const messages: Record<'en' | 'ja', Messages> = {
     impactCritical: 'critical',
     impactSerious: 'serious',
     impactModerate: 'moderate',
-    impactMinor: 'minor'
+    impactMinor: 'minor',
+    a11yHighlight: 'Highlight issues',
+    vision: 'Simulate vision',
+    visionNone: 'Normal',
+    visionBlurred: 'Blurred vision',
+    visionProtanopia: 'Protanopia (red-blind)',
+    visionDeuteranopia: 'Deuteranopia (green-blind)',
+    visionTritanopia: 'Tritanopia (blue-blind)',
+    visionAchromatopsia: 'Achromatopsia (no color)'
   },
   ja: {
     nav: 'コンポーネント',
@@ -193,6 +209,14 @@ export const messages: Record<'en' | 'ja', Messages> = {
     impactCritical: '重大',
     impactSerious: '深刻',
     impactModerate: '中程度',
-    impactMinor: '軽微'
+    impactMinor: '軽微',
+    a11yHighlight: '問題を強調',
+    vision: '見え方',
+    visionNone: '通常',
+    visionBlurred: 'ぼやけた視界',
+    visionProtanopia: 'P 型色覚（赤が見えにくい）',
+    visionDeuteranopia: 'D 型色覚（緑が見えにくい）',
+    visionTritanopia: 'T 型色覚（青が見えにくい）',
+    visionAchromatopsia: '色の区別がない'
   }
 };
