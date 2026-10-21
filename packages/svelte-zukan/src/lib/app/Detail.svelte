@@ -124,7 +124,9 @@
               <p class="props-type">{t.propsType} <code>{meta.propsType}</code></p>
             {/if}
             {#if meta.props?.length}
-              <div class="props">
+              <!-- focusable, so a keyboard can scroll the table when it is wider than the page -->
+              <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+              <div class="props" role="region" aria-label={t.props} tabindex="0">
                 <table>
                   <thead>
                     <tr>

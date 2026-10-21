@@ -35,6 +35,8 @@ export default defineConfig(({ command }) => ({
     projects: [
       {
         extends: './vite.config.ts',
+        // prebundled up front: found mid-run, it would reload the page under the first tests
+        optimizeDeps: { include: ['axe-core'] },
         test: {
           name: 'client',
           browser: {
