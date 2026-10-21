@@ -249,6 +249,15 @@ describe('metadata modules', () => {
     expect(p.load('\0virtual:svelte-zukan/catalog')).toContain(`import("${metaId('app/A')}")`);
   });
 
+  it('serves the source of axe-core as a string', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    expect(p.resolveId('virtual:svelte-zukan/axe')).toBe('\0virtual:svelte-zukan/axe');
+    const code: string = p.load('\0virtual:svelte-zukan/axe');
+    expect(code.startsWith('export default "')).toBe(true);
+    expect(code).toContain('axe.run');
+  });
+
   it('exports the sections and no absolute path', async () => {
     const { tmp, root } = await makeApp();
     const { p } = boot(root);
@@ -682,6 +691,7 @@ describe('build', () => {
       emptyOutDir: false,
       cssCodeSplit: true,
       cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
+      chunkSizeWarningLimit: 1000,
       rolldownOptions: { input: { zukan: ENTRY } }
     });
     const client = inherited();

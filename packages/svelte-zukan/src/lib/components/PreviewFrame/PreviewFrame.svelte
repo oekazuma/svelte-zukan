@@ -65,6 +65,31 @@
         : `linear-gradient(to right, ${mark} 1px, transparent 1px), linear-gradient(to bottom, ${mark} 1px, transparent 1px)`;
     return `html{background:${base} ${image} 0 0/16px 16px !important}body{background:transparent !important}`;
   };
+  const A11Y_ICON = ['M12 4.5a1.5 1.5 0 1 0 0-.01', 'M5 8.5l7 1.5 7-1.5', 'M12 10v4.5', 'M8.5 20l3.5-5.5 3.5 5.5'];
+  type Violation = { id: string; impact: Impact | null; help: string; helpUrl: string; targets: string[] };
+  type Impact = 'critical' | 'serious' | 'moderate' | 'minor';
+  type AxeWindow = Window & {
+    axe?: {
+      run(
+        context: Element,
+        options: object
+      ): Promise<{
+        violations: {
+          id: string;
+          impact?: Impact | null;
+          help: string;
+          helpUrl: string;
+          nodes: { target: unknown[] }[];
+        }[];
+      }>;
+    };
+  };
+  const IMPACT_LABELS = {
+    critical: 'impactCritical',
+    serious: 'impactSerious',
+    moderate: 'impactModerate',
+    minor: 'impactMinor'
+  } as const;
   const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'];
   const MIN_WIDTH = 200;
   const MIN_HEIGHT = 80;
@@ -78,6 +103,7 @@
     shareUrl,
     requestedWidth,
     expanded = $bindable(false),
+    axe,
     title,
     theme = 'light',
     labels = messages.en
@@ -90,6 +116,8 @@
     /** a width from a shared link; it wins over the remembered one */
     requestedWidth?: number;
     expanded?: boolean;
+    /** the source of axe-core; without it there is no accessibility check */
+    axe?: () => Promise<string>;
     title: string;
     theme?: Theme;
     labels?: Pick<
@@ -113,6 +141,18 @@
       | 'backgroundChecker'
       | 'backgroundGrid'
       | 'widthInPixels'
+      | 'checkA11y'
+      | 'a11yChecking'
+      | 'a11yPassed'
+      | 'a11yIssues'
+      | 'a11yFailed'
+      | 'a11yLearnMore'
+      | 'a11yRerun'
+      | 'impactCritical'
+      | 'impactSerious'
+      | 'impactModerate'
+      | 'impactMinor'
+      | 'close'
     >;
   } = $props();
 
@@ -243,6 +283,44 @@
     input.value = String(Math.round(current));
   }
 
+  let a11y = $state<
+    { status: 'running' } | { status: 'done'; violations: Violation[] } | { status: 'failed'; message: string } | null
+  >(null);
+
+  async function checkA11y() {
+    if (!doc || !axe) return;
+    const page = doc;
+    a11y = { status: 'running' };
+    try {
+      const win = page.defaultView as AxeWindow;
+      if (!win.axe) {
+        const script = page.createElement('script');
+        script.textContent = await axe();
+        page.head.append(script);
+      }
+      // `region` asks for landmarks around all content, which a component on its own never has
+      const result = await win.axe!.run(page.querySelector('[data-zukan-preview]') ?? page.body, {
+        resultTypes: ['violations'],
+        rules: { region: { enabled: false } }
+      });
+      if (doc !== page) return;
+      a11y = {
+        status: 'done',
+        violations: result.violations.map((v) => ({
+          id: v.id,
+          impact: v.impact ?? null,
+          help: v.help,
+          helpUrl: v.helpUrl,
+          targets: v.nodes.map((n) => n.target.join(' '))
+        }))
+      };
+    } catch (e) {
+      // an error thrown by axe comes from the preview page's realm, so `instanceof Error` does not see it
+      const message = e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e);
+      if (doc === page) a11y = { status: 'failed', message };
+    }
+  }
+
   function toggleExpanded() {
     expanded = !expanded;
     // the button moves with the toolbar; keep the focus on it
@@ -348,6 +426,18 @@
       <button type="button" class="icon" aria-label={backgroundName} title={backgroundName} onclick={nextBackground}>
         {@render icon(BACKGROUND_ICONS[background])}
       </button>
+      {#if axe}
+        <button
+          type="button"
+          class="icon"
+          aria-label={labels.checkA11y}
+          title={labels.checkA11y}
+          disabled={!doc || a11y?.status === 'running'}
+          onclick={checkA11y}
+        >
+          {@render icon(A11Y_ICON)}
+        </button>
+      {/if}
       <button
         type="button"
         class="icon"
@@ -405,6 +495,7 @@
           const loaded = (e.currentTarget as HTMLIFrameElement).contentDocument;
           if (!loaded?.body) return;
           doc = loaded;
+          a11y = null;
           observe(loaded);
         }}
         class:dragging
@@ -429,9 +520,117 @@
       ></div>
     </div>
   </div>
+  {#if a11y}
+    <div class="a11y">
+      <div class="a11y-head" aria-live="polite">
+        {#if a11y.status === 'running'}
+          <p>{labels.a11yChecking}</p>
+        {:else if a11y.status === 'failed'}
+          <p>{labels.a11yFailed} {a11y.message}</p>
+        {:else if !a11y.violations.length}
+          <p class="passed">{labels.a11yPassed}</p>
+        {:else}
+          <p>{labels.a11yIssues} ({a11y.violations.length})</p>
+        {/if}
+        <button type="button" disabled={a11y.status === 'running'} onclick={checkA11y}>{labels.a11yRerun}</button>
+        <button type="button" onclick={() => (a11y = null)}>{labels.close}</button>
+      </div>
+      {#if a11y.status === 'done' && a11y.violations.length}
+        <ul>
+          {#each a11y.violations as v (v.id)}
+            <li>
+              {#if v.impact}<span class={['impact', v.impact]}>{labels[IMPACT_LABELS[v.impact]]}</span>{/if}
+              {v.help}
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+              <a href={v.helpUrl} target="_blank" rel="noopener">{labels.a11yLearnMore}</a>
+              <ul class="targets">
+                {#each v.targets as target, i (i)}<li><code>{target}</code></li>{/each}
+              </ul>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
+  .a11y {
+    border-top: 1px solid var(--_border);
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .a11y-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .a11y-head p {
+    margin: 0 auto 0 0;
+    font-weight: 600;
+  }
+
+  .a11y-head .passed {
+    color: var(--_success);
+  }
+
+  .a11y-head button {
+    padding: 2px 10px;
+    border: 1px solid var(--_border);
+    border-radius: 6px;
+    background: var(--_bg);
+    color: var(--_text);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .a11y ul {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .a11y li + li {
+    margin-top: 8px;
+  }
+
+  .a11y a {
+    color: var(--_accent);
+  }
+
+  .a11y .targets {
+    margin: 4px 0 0;
+  }
+
+  .a11y .targets li {
+    margin: 2px 0 0;
+  }
+
+  .a11y code {
+    font-family: var(--_mono);
+    font-size: 12px;
+    color: var(--_muted);
+    overflow-wrap: anywhere;
+  }
+
+  .impact {
+    margin-right: 6px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--_code-bg);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .impact.critical,
+  .impact.serious {
+    background: var(--_danger-bg);
+    color: var(--_danger);
+  }
+
   .sr-only {
     position: absolute;
     width: 1px;

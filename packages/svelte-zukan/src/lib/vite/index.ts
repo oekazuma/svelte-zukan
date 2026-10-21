@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import type { OutgoingHttpHeaders, ServerResponse } from 'node:http';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { marked } from 'marked';
@@ -11,7 +12,7 @@ import { renderHtml } from './html.js';
 import { detectSvelteKit } from './kit.js';
 import { createMatchers } from './matchers.js';
 import { appFile, extendFsAllow, isInside, libDir, resolveOptions, type ZukanOptions } from './options.js';
-import { CATALOG, ENTRY, META, generateCatalogModule, generateEntryModule, pathOfMeta } from './virtual.js';
+import { AXE, CATALOG, ENTRY, META, generateCatalogModule, generateEntryModule, pathOfMeta } from './virtual.js';
 
 export type { ZukanOptions };
 
@@ -158,12 +159,14 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       // `emptyOutDir: false` also because Kit sets it for the whole build; buildApp removes only the catalog's own files
       // `cssCodeSplit`: index.html is written without Vite's HTML transform, which is the only thing that links merged CSS
       // `cssTarget`: lowered `light-dark()` follows prefers-color-scheme, not the theme the catalog sets on each preview
+      // `chunkSizeWarningLimit`: axe-core (about 650 kB) is one chunk, loaded only when an accessibility check runs
       Object.assign(config.build, {
         ssr: false,
         lib: false,
         emptyOutDir: false,
         cssCodeSplit: true,
-        cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5']
+        cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
+        chunkSizeWarningLimit: 1000
       });
       config.build.rolldownOptions = { ...config.build.rolldownOptions, input: { zukan: ENTRY } };
     },
@@ -210,7 +213,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       }
     },
     resolveId(id) {
-      if (id === ENTRY || id === CATALOG || id.startsWith(META)) return '\0' + id;
+      if (id === ENTRY || id === CATALOG || id === AXE || id.startsWith(META)) return '\0' + id;
     },
     load(id) {
       if (id.startsWith('\0' + META)) {
@@ -238,6 +241,9 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         return `export default ${JSON.stringify(meta)};\n`;
       }
       if (id === '\0' + CATALOG) return generateCatalogModule(relist());
+      // read from this package's own dependency, so the catalog's client never imports a CommonJS module
+      if (id === '\0' + AXE)
+        return `export default ${JSON.stringify(readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf-8'))};\n`;
       if (id === '\0' + ENTRY) {
         // relative, so that absolute paths do not end up in the static build
         const searched = groups.map((g) => ({

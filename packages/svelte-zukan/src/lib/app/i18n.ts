@@ -51,6 +51,17 @@ export type Messages = {
   shortcutTheme: string;
   shortcutExpand: string;
   shortcutTree: string;
+  checkA11y: string;
+  a11yChecking: string;
+  a11yPassed: string;
+  a11yIssues: string;
+  a11yFailed: string;
+  a11yLearnMore: string;
+  a11yRerun: string;
+  impactCritical: string;
+  impactSerious: string;
+  impactModerate: string;
+  impactMinor: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -106,7 +117,18 @@ export const messages: Record<'en' | 'ja', Messages> = {
     widthInPixels: 'Width in pixels',
     shortcutTheme: 'Switch between light and dark',
     shortcutExpand: 'Expand the preview in view, or leave it',
-    shortcutTree: 'Move through the component list; open and close folders'
+    shortcutTree: 'Move through the component list; open and close folders',
+    checkA11y: 'Check accessibility',
+    a11yChecking: 'Checking…',
+    a11yPassed: 'No accessibility issues found',
+    a11yIssues: 'Accessibility issues',
+    a11yFailed: 'Could not run the check:',
+    a11yLearnMore: 'Learn more',
+    a11yRerun: 'Check again',
+    impactCritical: 'critical',
+    impactSerious: 'serious',
+    impactModerate: 'moderate',
+    impactMinor: 'minor'
   },
   ja: {
     nav: 'コンポーネント',
@@ -160,6 +182,17 @@ export const messages: Record<'en' | 'ja', Messages> = {
     widthInPixels: '幅（px）',
     shortcutTheme: 'ライトとダークを切り替える',
     shortcutExpand: '表示中のプレビューを拡大する（もう一度で戻る）',
-    shortcutTree: 'コンポーネントの一覧を移動する・フォルダーを開閉する'
+    shortcutTree: 'コンポーネントの一覧を移動する・フォルダーを開閉する',
+    checkA11y: 'アクセシビリティを検査',
+    a11yChecking: '検査中…',
+    a11yPassed: 'アクセシビリティの問題は見つかりませんでした',
+    a11yIssues: 'アクセシビリティの問題',
+    a11yFailed: '検査を実行できませんでした:',
+    a11yLearnMore: '詳しく',
+    a11yRerun: 'もう一度検査',
+    impactCritical: '重大',
+    impactSerious: '深刻',
+    impactModerate: '中程度',
+    impactMinor: '軽微'
   }
 };

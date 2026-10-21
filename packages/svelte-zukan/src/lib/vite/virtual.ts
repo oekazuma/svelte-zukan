@@ -3,6 +3,8 @@ import type { CatalogItem } from '../types.js';
 export const ENTRY = 'virtual:svelte-zukan/entry';
 export const CATALOG = 'virtual:svelte-zukan/catalog';
 export const META = 'virtual:svelte-zukan/meta/';
+/** the source of axe-core as a string, injected into a preview page when its check runs */
+export const AXE = 'virtual:svelte-zukan/axe';
 
 /** hex of the UTF-8 ID: the dev server's decodeURI leaves it alone, and it never ends like a file extension */
 export const metaId = (path: string) => META + Buffer.from(path, 'utf8').toString('hex');
@@ -48,7 +50,8 @@ export function generateEntryModule(opts: {
     `      wrapper: ${opts.wrapper ? `() => import(${s(opts.wrapper)})` : 'null'},`,
     `      title: ${s(opts.title)},`,
     `      locale: ${s(opts.locale)},`,
-    `      searched: ${s(opts.searched)}`,
+    `      searched: ${s(opts.searched)},`,
+    `      axe: () => import(${s(AXE)}).then((m) => m.default)`,
     `    }`,
     `  })`,
     `);`,

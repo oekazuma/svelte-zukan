@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { userEvent } from 'vitest/browser';
+import { messages } from '../../app/i18n.js';
 import PreviewFrame from './PreviewFrame.svelte';
 
 const props = { src: 'about:blank', title: 'preview' };
@@ -286,11 +287,56 @@ describe('PreviewFrame resizing', () => {
     expect(screen.getByRole('button', { name: 'Copy link to this view' }).query()).toBeNull();
   });
 
+  it('runs axe-core inside the preview page and lists what it finds', async () => {
+    const source = `window.axe = { run: async (context) => ({ violations: [{ id: 'image-alt', impact: 'critical',
+      help: 'Images must have alternative text', helpUrl: 'https://example.com/image-alt',
+      nodes: [{ target: [context.tagName.toLowerCase()] }] }] }) };`;
+    const axe = vi.fn(() => Promise.resolve(source));
+    const screen = await render(PreviewFrame, { props: { ...props, axe } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    await expect.element(screen.getByRole('button', { name: 'Check accessibility' })).toBeEnabled();
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.element(screen.getByText('Accessibility issues (1)')).toBeInTheDocument();
+    await expect.element(screen.getByText('critical')).toBeInTheDocument();
+    await expect.element(screen.getByText('body')).toBeInTheDocument();
+    await expect
+      .element(screen.getByRole('link', { name: 'Learn more' }))
+      .toHaveAttribute('href', 'https://example.com/image-alt');
+    await screen.getByRole('button', { name: 'Check again' }).click();
+    await expect.element(screen.getByText('Accessibility issues (1)')).toBeInTheDocument();
+    expect(axe).toHaveBeenCalledTimes(1);
+    await screen.getByRole('button', { name: 'Close' }).click();
+    await expect.element(screen.getByText('Accessibility issues (1)')).not.toBeInTheDocument();
+  });
+
+  it('says when nothing is found, and when the check fails', async () => {
+    const axe = () =>
+      Promise.resolve(
+        'window.axe = { run: async () => { if (window.fail) throw new Error("boom"); return { violations: [] }; } };'
+      );
+    const screen = await render(PreviewFrame, { props: { ...props, axe } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.element(screen.getByText('No accessibility issues found')).toBeInTheDocument();
+    (frame.contentWindow as Window & { fail?: boolean }).fail = true;
+    await screen.getByRole('button', { name: 'Check again' }).click();
+    await expect.element(screen.getByText('Could not run the check: boom')).toBeInTheDocument();
+  });
+
+  it('has no accessibility button without axe-core', async () => {
+    const screen = await render(PreviewFrame, { props });
+    await expect.element(screen.getByRole('button', { name: 'Show outlines' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Check accessibility' }).query()).toBeNull();
+  });
+
   it('labels come from props', async () => {
     const screen = await render(PreviewFrame, {
       props: {
         ...props,
         labels: {
+          ...messages.en,
           previewWidth: 'Frame width',
           mobile: 'Phone',
           tablet: 'Pad',

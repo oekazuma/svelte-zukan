@@ -15,7 +15,8 @@
     wrapper,
     title,
     locale,
-    searched
+    searched,
+    axe
   }: {
     catalog: Entry[];
     logo: string | null;
@@ -23,6 +24,8 @@
     title: string;
     locale: 'en' | 'ja';
     searched: { group: string; dirs: string[] }[];
+    /** the source of axe-core, loaded on the first accessibility check */
+    axe?: () => Promise<string>;
   } = $props();
 
   // an ignored hash stays in the URL; the history entry keeps the catalog route so a reload can return to it
@@ -139,6 +142,7 @@
           {previous}
           {next}
           {theme}
+          {axe}
           {t}
         />
       {:else}
@@ -194,6 +198,9 @@
     --_border: #d1d9e0;
     --_accent: #0969da;
     --_code-bg: #f6f8fa;
+    --_success: #1a7f37;
+    --_danger: #cf222e;
+    --_danger-bg: #ffebe9;
     --_syntax-comment: #6e7781;
     --_syntax-string: #0a3069;
     --_syntax-tag: #116329;
@@ -219,6 +226,9 @@
     --_border: #3d444d;
     --_accent: #4493f8;
     --_code-bg: #151b23;
+    --_success: #3fb950;
+    --_danger: #ff7b72;
+    --_danger-bg: #3c1618;
     --_syntax-comment: #9198a1;
     --_syntax-string: #a5d6ff;
     --_syntax-tag: #7ee787;
