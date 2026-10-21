@@ -6,6 +6,8 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import Inspect from 'vite-plugin-inspect';
 import { zukan } from './src/lib/vite/index.js';
 
+const ja = process.env.ZUKAN_DEMO_LOCALE === 'ja';
+
 export default defineConfig(({ command }) => ({
   // the DevTools server keeps the process alive, so `vite build` would never exit; vitest also runs as 'serve' and only gets noise from it
   devtools: command === 'serve' && !process.env.VITEST,
@@ -16,9 +18,9 @@ export default defineConfig(({ command }) => ({
   plugins: [
     Inspect(),
     zukan({
-      groups: { ui: 'src/lib', examples: 'src/examples' },
+      groups: { ui: 'src/lib', examples: ja ? 'src/examples-ja' : 'src/examples' },
       wrapper: '.zukan/Wrapper.svelte',
-      locale: process.env.ZUKAN_DEMO_LOCALE === 'ja' ? 'ja' : 'en',
+      locale: ja ? 'ja' : 'en',
       build: true
     }),
     sveltekit({
