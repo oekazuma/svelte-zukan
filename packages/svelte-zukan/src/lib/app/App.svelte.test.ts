@@ -148,6 +148,31 @@ describe('App', () => {
     await expect.element(main.getByRole('link', { name: /Card/ })).toHaveAttribute('href', '#/ui/Card');
   });
 
+  it('each card shows its first example as an inert thumbnail and the first line of its doc', async () => {
+    const { props } = setup('');
+    props.catalog[0].meta = () =>
+      Promise.resolve({
+        default: {
+          sections: [
+            { title: 'First one', code: '' },
+            { title: 'Second', code: '' }
+          ],
+          doc: '<h2>Heading</h2><p>A card for <code>things</code>.</p><p>More.</p>'
+        }
+      });
+    props.catalog.push({ group: 'ui', name: 'Button', dir: '', path: 'ui/Button', load, meta });
+    const screen = await render(App, { props });
+    const main = screen.getByRole('main');
+    await expect.element(main.getByText('A card for things.')).toBeInTheDocument();
+    const thumb = screen.container.querySelector('.thumb iframe')!;
+    expect(thumb.getAttribute('src')).toBe(`${location.pathname}#/preview/ui/Card?section=First%20one`);
+    expect(thumb.closest('[inert]')).not.toBeNull();
+    // without sections there is nothing to show: the initial stands in
+    await expect.poll(() => screen.container.querySelectorAll('.thumb .mark').length).toBe(1);
+    await main.getByRole('link', { name: 'Button' }).click();
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Button/ })).toBeInTheDocument();
+  });
+
   const three = () => {
     const { props } = setup('#/ui/Card');
     props.catalog.unshift({ group: 'ui', name: 'Alert', dir: '', path: 'ui/Alert', load, meta });

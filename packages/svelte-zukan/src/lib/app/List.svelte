@@ -1,10 +1,15 @@
 <script lang="ts">
+  import type { Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
-  import { formatHash } from './hash.js';
+  import EntryCard from './EntryCard.svelte';
   import type { Messages } from './i18n.js';
 
-  let { entries, searched, t }: { entries: Entry[]; searched: { group: string; dirs: string[] }[]; t: Messages } =
-    $props();
+  let {
+    entries,
+    searched,
+    theme,
+    t
+  }: { entries: Entry[]; searched: { group: string; dirs: string[] }[]; theme: Theme; t: Messages } = $props();
 
   // the catalog is already in group order; a Map keeps it
   const groups = $derived(
@@ -14,7 +19,6 @@
     )
   );
 
-  const hue = (name: string) => [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 11);
   const id = $props.id();
 </script>
 
@@ -25,17 +29,7 @@
       <h2 id="{id}-{i}">{group} <span class="count">{items.length}</span></h2>
       <ul>
         {#each items as entry (entry.path)}
-          <li>
-            <!-- the catalog is a hash-routed SPA outside SvelteKit, so resolve() does not apply -->
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-            <a href={formatHash('detail', entry.path)}>
-              <span class="mark" style:--hue={hue(entry.name)} aria-hidden="true">{entry.name[0]}</span>
-              <span class="text">
-                <span class="name">{entry.name}</span>
-                {#if entry.dir}<span class="dir">{entry.dir}</span>{/if}
-              </span>
-            </a>
-          </li>
+          <li><EntryCard {entry} {theme} /></li>
         {/each}
       </ul>
     </section>
@@ -82,67 +76,11 @@
 
   ul {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
     margin: 0;
     padding: 0;
     list-style: none;
-  }
-
-  a {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    height: 100%;
-    box-sizing: border-box;
-    padding: 12px 14px;
-    border: 1px solid var(--_border);
-    border-radius: 10px;
-    background: var(--_bg);
-    color: var(--_text);
-    text-decoration: none;
-    transition:
-      border-color 0.15s,
-      box-shadow 0.15s;
-  }
-
-  a:hover {
-    border-color: var(--_accent);
-    box-shadow: 0 2px 10px -4px color-mix(in srgb, var(--_accent) 40%, transparent);
-  }
-
-  a:focus-visible {
-    outline: 2px solid var(--_accent);
-    outline-offset: 2px;
-  }
-
-  .mark {
-    display: grid;
-    place-items: center;
-    flex: none;
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    /* dark enough for white text at every hue */
-    background: hsl(var(--hue) 60% 42%);
-    color: #fff;
-    font-weight: 700;
-  }
-
-  .text {
-    display: grid;
-    min-width: 0;
-  }
-
-  .name {
-    font-weight: 600;
-    overflow-wrap: anywhere;
-  }
-
-  .dir {
-    color: var(--_muted);
-    font-size: 12px;
-    overflow-wrap: anywhere;
   }
 
   .searched {

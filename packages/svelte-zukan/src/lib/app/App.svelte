@@ -132,7 +132,7 @@
     />
     <main>
       {#if route.view === 'list'}
-        <List entries={catalog} {searched} {t} />
+        <List entries={catalog} {searched} {theme} {t} />
       {:else if entry}
         <Detail
           bind:this={detail}
