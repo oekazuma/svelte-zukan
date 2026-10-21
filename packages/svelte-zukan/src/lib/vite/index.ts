@@ -6,6 +6,7 @@ import { marked } from 'marked';
 import { normalizePath, type Plugin, type PreviewServer, type ViteDevServer } from 'vite';
 import type { CatalogGroup, CatalogItem } from '../types.js';
 import { discoverGroups, listCatalog } from './discover.js';
+import { catalogJson } from './catalog-json.js';
 import { extractSections } from './extract.js';
 import { extractProps } from './props.js';
 import { renderHtml } from './html.js';
@@ -19,6 +20,8 @@ export type { ZukanOptions };
 const ENTRY_SRC = '/@id/__x00__' + ENTRY;
 /** where the static catalog puts its files: apart from the app's, so that their URLs can be made relative */
 const OUT_PREFIX = '_zukan/';
+/** the catalog as data, next to index.html: `/__zukan/catalog.json` in dev */
+const CATALOG_JSON = 'catalog.json';
 /** the types of what the catalog build writes; anything else is served as octet-stream, which browsers refuse for module scripts */
 const CONTENT_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -62,6 +65,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   /** path → item, from the last listing; dropped when a catalog file is created or deleted */
   let items: Map<string, CatalogItem> | null = null;
   const scanned = () => groups.flatMap((g) => g.dirs);
+  const catalogData = () => catalogJson({ root, title: resolved.title, items: relist(), docFileOf, componentFileOf });
   const relist = () => {
     const all = listCatalog(groups, resolved.suffix);
     items = new Map(all.map((i) => [i.path, i]));
@@ -192,6 +196,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         // only what this plugin writes: the outDir may be shared with other files
         rmSync(join(resolved.build, OUT_PREFIX), { recursive: true, force: true });
         rmSync(join(resolved.build, 'index.html'), { force: true });
+        rmSync(join(resolved.build, CATALOG_JSON), { force: true });
         const out = await builder.build(env);
         const entry = (Array.isArray(out) ? out : [out])
           .flatMap((o) => ('output' in o ? o.output : []))
@@ -205,6 +210,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           icon
         });
         writeFileSync(join(resolved.build, 'index.html'), html);
+        writeFileSync(join(resolved.build, CATALOG_JSON), JSON.stringify(catalogData(), null, 2) + '\n');
         if (kitAppDir) {
           const kitDir = join(resolved.build, kitAppDir);
           rmSync(join(kitDir, 'version.json'), { force: true });
@@ -272,6 +278,11 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           res.statusCode = 302;
           res.setHeader('location', `${path}/${url.slice(path.length)}`);
           return res.end();
+        }
+        if (path === `${base}__zukan/${CATALOG_JSON}`) {
+          setHeaders(res, server.config.server.headers);
+          res.setHeader('content-type', CONTENT_TYPES['.json']);
+          return res.end(JSON.stringify(catalogData(), null, 2));
         }
         if (path !== `${base}__zukan/`) return next();
         const icon = readFileSync(appFile('icon.svg'), 'utf-8');
