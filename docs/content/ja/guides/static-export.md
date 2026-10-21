@@ -20,6 +20,7 @@ zukan({ build: true });
 - `vite build --watch` ではカタログを書き出しません。警告を出して飛ばします
 - 出力先は Vite の root そのものや root を含むディレクトリにできません。アプリの `build.outDir`（既定は `dist`）や SvelteKit の `outDir`（`.svelte-kit`）と重なってもいけません。どれもビルドエラーになります
 - カタログを書き出すのは `vite build`（Vite の JavaScript API なら `createBuilder().buildApp()`）です。`vite build --ssr` と Vite の `build()` 関数は 1 つの環境だけをビルドするので、カタログは書き出しません
-- 書き出しの前に、前回のカタログ（出力先の `_zukan/` と `index.html`）だけを消します。SvelteKit では、adapter が `build/` を空にすることが多いので、出力先が `build/` と重なると警告を出します
+- `index.html` の隣に `catalog.json` も書き出します。全コンポーネントのセクション、コード、props、`.md` をまとめたもので、ツールや AI エージェント向けです。dev サーバーでは同じ内容を `/__zukan/catalog.json` で返します
+- 書き出しの前に、前回のカタログ（出力先の `_zukan/`、`index.html`、`catalog.json`）だけを消します。SvelteKit では、adapter が `build/` を空にすることが多いので、出力先が `build/` と重なると警告を出します
 
 [デモ](https://oekazuma.github.io/svelte-zukan/demo/ja/)は svelte-zukan 自身のコンポーネントのカタログをこの方法で書き出したものです。

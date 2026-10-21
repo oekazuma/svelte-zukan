@@ -375,6 +375,41 @@ const request = (mw: (...a: unknown[]) => void, url: string) =>
   });
 
 describe('configureServer', () => {
+  it('serves the catalog as data at /__zukan/catalog.json', async () => {
+    const { tmp, root } = await makeApp();
+    await writeFile(path.join(root, 'src/A.zukan.md'), '# A\n\nAbout A.');
+    await writeFile(
+      path.join(root, 'src/A.svelte'),
+      '<script lang="ts">\n  let { a = 1 }: { a?: number } = $props();\n</script>'
+    );
+    await writeFile(path.join(root, 'src/Broken.zukan.svelte'), '<Section><p>x</p></Section>');
+    const { p } = boot(root, { title: 'My UI' });
+    const server = fakeServer(root);
+    p.configureServer(server);
+    const res = await request(server.middlewares.use.mock.calls[0][0], '/__zukan/catalog.json');
+    expect(res.type).toBe('application/json');
+    expect(res.body).not.toContain(tmp);
+    const data = JSON.parse(res.body!);
+    expect(data.title).toBe('My UI');
+    const a = data.components.find((c: { id: string }) => c.id === 'app/A');
+    expect(a).toMatchObject({
+      group: 'app',
+      name: 'A',
+      file: 'src/A.zukan.svelte',
+      component: 'src/A.svelte',
+      doc: '# A\n\nAbout A.',
+      props: [{ name: 'a', type: 'number', default: '1' }],
+      sections: [{ title: 'Foo', preview: '#/preview/app/A?section=Foo' }]
+    });
+    expect(a.sections[0].code).toBe('<div>x</div>');
+    // a file that does not compile is listed with its error instead of failing the whole response
+    const broken = data.components.find((c: { id: string }) => c.id === 'app/Broken');
+    expect(broken).toMatchObject({
+      sections: [],
+      error: expect.stringMatching(/^src\/Broken\.zukan\.svelte:1 .*title/)
+    });
+  });
+
   it('serves the catalog HTML at /__zukan/', async () => {
     const { root } = await makeApp();
     const { p } = boot(root, { title: 'My UI', locale: 'ja' });

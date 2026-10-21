@@ -145,6 +145,11 @@ test('plain vite build', { timeout: 120_000 }, async () => {
   const css = globSync('zukan-dist/_zukan/*.css', { cwd: dir }).map((f) => readFileSync(join(dir, f), 'utf8'));
   expect(css.join('\n')).toContain('light-dark(#000');
 
+  // the catalog as data, for tools and agents
+  const data = JSON.parse(readFileSync(join(dir, 'zukan-dist/catalog.json'), 'utf8'));
+  expect(data.components.map((c: { id: string }) => c.id)).toEqual(['vite-svelte/lib/Counter']);
+  expect(data.components[0].sections.map((s: { title: string }) => s.title)).toContain('Basic');
+
   // `vite preview` serves the static catalog too
   const server = await preview({
     root: dir,
@@ -157,6 +162,8 @@ test('plain vite build', { timeout: 120_000 }, async () => {
     const html = await (await fetch(`${url}__zukan/`)).text();
     const src = html.match(/src="\.\/(_zukan\/[^"]+)"/)![1];
     expect((await fetch(`${url}__zukan/${src}`)).status).toBe(200);
+    const json = await fetch(`${url}__zukan/catalog.json`);
+    expect(json.headers.get('content-type')).toBe('application/json');
   } finally {
     await server.close();
   }
