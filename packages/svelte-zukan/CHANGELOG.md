@@ -1,5 +1,19 @@
 # svelte-zukan
 
+## 0.6.0
+
+### Minor Changes
+
+- d14a2b2: feat: the accessibility panel outlines the elements axe-core reports (the picked one thicker), checks again after each edit, simulates blurred vision and color vision deficiencies, and shows axe's messages in Japanese with `locale: 'ja'`.
+- a72ae06: feat: a preview narrower than the page is centered on a dotted background with a shadow, and preset changes animate, so a phone or tablet width is easy to see on a wide screen.
+
+### Patch Changes
+
+- ebaa332: fix: the preview toolbar wraps on narrow screens instead of cutting off its last buttons.
+- 7434471: fix: a props table wider than the page can be scrolled with the keyboard.
+- 0627e61: feat: the table of contents on a detail page links to the props table.
+- 2a48905: feat: the accessibility panel picks a vision simulation from swatch chips (a radio group) instead of a select, and emphasizes an issue's element while it is hovered or focused in the list.
+
 ## 0.5.0
 
 ### Minor Changes
