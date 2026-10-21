@@ -70,6 +70,11 @@ export type Messages = {
   visionDeuteranopia: string;
   visionTritanopia: string;
   visionAchromatopsia: string;
+  visionHintBlurred: string;
+  visionHintProtanopia: string;
+  visionHintDeuteranopia: string;
+  visionHintTritanopia: string;
+  visionHintAchromatopsia: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -140,11 +145,16 @@ export const messages: Record<'en' | 'ja', Messages> = {
     a11yHighlight: 'Highlight issues',
     vision: 'Simulate vision',
     visionNone: 'Normal',
-    visionBlurred: 'Blurred vision',
-    visionProtanopia: 'Protanopia (red-blind)',
-    visionDeuteranopia: 'Deuteranopia (green-blind)',
-    visionTritanopia: 'Tritanopia (blue-blind)',
-    visionAchromatopsia: 'Achromatopsia (no color)'
+    visionBlurred: 'Blurred',
+    visionProtanopia: 'Protanopia',
+    visionDeuteranopia: 'Deuteranopia',
+    visionTritanopia: 'Tritanopia',
+    visionAchromatopsia: 'Achromatopsia',
+    visionHintBlurred: 'Details are hard to make out',
+    visionHintProtanopia: 'Red is hard to tell apart',
+    visionHintDeuteranopia: 'Green is hard to tell apart',
+    visionHintTritanopia: 'Blue is hard to tell apart',
+    visionHintAchromatopsia: 'No colors, only lightness'
   },
   ja: {
     nav: 'コンポーネント',
@@ -213,10 +223,15 @@ export const messages: Record<'en' | 'ja', Messages> = {
     a11yHighlight: '問題を強調',
     vision: '見え方',
     visionNone: '通常',
-    visionBlurred: 'ぼやけた視界',
-    visionProtanopia: 'P 型色覚（赤が見えにくい）',
-    visionDeuteranopia: 'D 型色覚（緑が見えにくい）',
-    visionTritanopia: 'T 型色覚（青が見えにくい）',
-    visionAchromatopsia: '色の区別がない'
+    visionBlurred: 'ぼやけ',
+    visionProtanopia: 'P 型色覚',
+    visionDeuteranopia: 'D 型色覚',
+    visionTritanopia: 'T 型色覚',
+    visionAchromatopsia: '1 色覚',
+    visionHintBlurred: '細かいところが見えにくい',
+    visionHintProtanopia: '赤が見分けにくい',
+    visionHintDeuteranopia: '緑が見分けにくい',
+    visionHintTritanopia: '青が見分けにくい',
+    visionHintAchromatopsia: '色がなく、明るさだけで見える'
   }
 };
