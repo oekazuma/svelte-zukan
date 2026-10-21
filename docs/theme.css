@@ -1,3 +1,13 @@
 img[alt='svelte-zukan'] {
   height: 2rem !important;
 }
+
+/* screenshots come in both themes; the site's theme picks one */
+.shot-dark,
+[data-theme='dark'] .shot-light {
+  display: none;
+}
+
+[data-theme='dark'] .shot-dark {
+  display: block;
+}
