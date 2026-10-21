@@ -76,7 +76,7 @@ When `Button.svelte` sits next to `Button.zukan.svelte`, the detail page lists i
 </script>
 ```
 
-The props are read from the component's source, not by running it. The type can be written inline, or as a type alias or interface declared in the component (an interface's `extends` included). For a type imported from another file, the table shows its name and lists only the destructured props, without types. A component that does not parse, or that has no `$props()`, gets no table. Like the `.md` file, a JSDoc comment is inserted as HTML, so review it like code before you publish the catalog.
+The props are read from the component's source, not by running it. The type can be written inline, or as a type alias or interface declared in the component (an interface's `extends` included). A type imported by a relative path is read too: from a `.ts` file (`./types`, `./types.js`, `./types/index.ts`) or from another component's `<script module>`, following imports up to three files deep. A type the table can not read, such as one from a package (`HTMLButtonAttributes` from `svelte/elements`), is shown by its name, and for it the table lists only the destructured props, without types. Editing a file a props type comes from refreshes the table. A component that does not parse, or that has no `$props()`, gets no table. Like the `.md` file, a JSDoc comment is inserted as HTML, so review it like code before you publish the catalog.
 
 ## Changing the suffix
 
