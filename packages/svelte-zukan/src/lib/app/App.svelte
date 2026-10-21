@@ -57,6 +57,7 @@
   const next = $derived(index === -1 ? (route.view === 'list' ? catalog[0] : undefined) : catalog[index + 1]);
 
   let shortcuts: HTMLDialogElement | undefined = $state();
+  let detail: ReturnType<typeof Detail> | undefined = $state();
 
   function onkeydown(e: KeyboardEvent) {
     if (route.view === 'preview' || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -65,6 +66,16 @@
     if (e.key === '?') {
       e.preventDefault();
       shortcuts?.showModal();
+      return;
+    }
+    if (e.key === 't') {
+      e.preventDefault();
+      toggleTheme();
+      return;
+    }
+    if (e.key === 'f' && detail) {
+      e.preventDefault();
+      detail.toggleExpanded();
       return;
     }
     const to = e.key === 'j' ? next : e.key === 'k' ? previous : undefined;
@@ -121,6 +132,7 @@
         <List entries={catalog} {searched} {t} />
       {:else if entry}
         <Detail
+          bind:this={detail}
           {entry}
           section={route.view === 'detail' ? route.section : null}
           width={route.view === 'detail' ? route.width : undefined}
@@ -143,8 +155,14 @@
         <dd>{t.shortcutNext}</dd>
         <dt><kbd>K</kbd></dt>
         <dd>{t.shortcutPrevious}</dd>
+        <dt><kbd>T</kbd></dt>
+        <dd>{t.shortcutTheme}</dd>
+        <dt><kbd>F</kbd></dt>
+        <dd>{t.shortcutExpand}</dd>
         <dt><kbd>Esc</kbd></dt>
         <dd>{t.shortcutExpanded}</dd>
+        <dt><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd></dt>
+        <dd>{t.shortcutTree}</dd>
         <dt><kbd>?</kbd></dt>
         <dd>{t.shortcutHelp}</dd>
       </dl>

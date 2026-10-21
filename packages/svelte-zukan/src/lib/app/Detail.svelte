@@ -27,7 +27,10 @@
 
   // the section whose heading was last scrolled past the top third of the window
   let active = $state<string | null>(null);
+  /** in page order: the headings mount in order */
+  const headings: string[] = [];
   function track(node: HTMLElement, title: string) {
+    headings.push(title);
     const observer = new IntersectionObserver(
       ([e]) => {
         if (e.isIntersecting) active = title;
@@ -35,7 +38,20 @@
       { rootMargin: '0px 0px -66% 0px' }
     );
     observer.observe(node);
-    return { destroy: () => observer.disconnect() };
+    return {
+      destroy: () => {
+        observer.disconnect();
+        headings.splice(headings.indexOf(title), 1);
+      }
+    };
+  }
+
+  let expandedTitle = $state<string | null>(null);
+
+  /** the section in view, or the first one, fills the page; again, it goes back */
+  export function toggleExpanded() {
+    if (expandedTitle !== null) expandedTitle = null;
+    else expandedTitle = active ?? headings[0] ?? null;
   }
 
   // the detail page is not remounted when only the section changes, so the action also runs on update
@@ -91,6 +107,7 @@
                   location.href.split('#')[0] +
                   formatHash('detail', entry.path, s.title, { width: w ?? undefined, theme })}
                 requestedWidth={section === s.title ? width : undefined}
+                bind:expanded={() => expandedTitle === s.title, (v) => (expandedTitle = v ? s.title : null)}
                 title={s.title}
                 {theme}
                 labels={t}

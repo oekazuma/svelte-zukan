@@ -180,6 +180,58 @@ describe('App', () => {
     await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
   });
 
+  it('T switches the theme and F expands the preview in view', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = () =>
+      Promise.resolve({
+        default: {
+          sections: [
+            { title: 'One', code: '' },
+            { title: 'Two', code: '' }
+          ],
+          doc: null
+        }
+      });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByTitle('One')).toBeInTheDocument();
+    const root = document.querySelector('.zukan')!;
+    const before = root.getAttribute('data-theme');
+    await userEvent.keyboard('t');
+    expect(root.getAttribute('data-theme')).not.toBe(before);
+    await userEvent.keyboard('f');
+    await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(1);
+    // the one in view: which heading the observer saw last depends on the page's scroll position
+    expect(['One', 'Two']).toContain(document.querySelector('.preview.expanded iframe')!.getAttribute('title'));
+    await userEvent.keyboard('f');
+    await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(0);
+  });
+
+  it('arrow keys move through the component list and fold folders', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog.push({ group: 'ui', name: 'Button', dir: 'forms', path: 'ui/forms/Button', load, meta });
+    const screen = await render(App, { props });
+    const nav = screen.getByRole('navigation', { name: 'Components' });
+    const card = nav.getByRole('link', { name: 'Card' }).element() as HTMLElement;
+    const folder = nav.getByText('forms').element().closest('summary')!;
+    const button = nav.getByRole('link', { name: 'Button' }).element() as HTMLElement;
+    // the tree's order: folders and entries as they were found, Card first
+    card.focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(folder);
+    await userEvent.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(button);
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(document.activeElement).toBe(folder);
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(folder.parentElement!.hasAttribute('open')).toBe(false);
+    await userEvent.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(folder);
+    await userEvent.keyboard('{ArrowRight}');
+    expect(folder.parentElement!.hasAttribute('open')).toBe(true);
+    await userEvent.keyboard('{Home}');
+    expect(document.activeElement).toBe(card);
+  });
+
   it('? and the sidebar button open the shortcuts', async () => {
     const screen = await render(App, { props: three() });
     const dialog = screen.container.querySelector('dialog')!;

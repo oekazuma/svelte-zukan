@@ -52,6 +52,35 @@
     return { entries: entries.filter((e) => e.path.toLowerCase().includes(q) || hits.has(e.path)), hits };
   });
 
+  /** ↑ ↓ Home End move between the links and folders shown; → opens a folder, ← closes it or goes to its parent */
+  function moveInTree(e: KeyboardEvent) {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    const target = e.target as HTMLElement;
+    const items = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('a[href], summary')].filter((el) =>
+      el.checkVisibility()
+    );
+    const i = items.indexOf(target);
+    if (i === -1) return;
+    const folder = target.tagName === 'SUMMARY' ? (target.parentElement as HTMLDetailsElement) : null;
+    let to: HTMLElement | undefined;
+    if (e.key === 'ArrowDown') to = items[i + 1];
+    else if (e.key === 'ArrowUp') to = items[i - 1];
+    else if (e.key === 'Home') to = items[0];
+    else if (e.key === 'End') to = items.at(-1);
+    else if (e.key === 'ArrowRight' && folder) {
+      if (folder.open) to = items[i + 1];
+      else folder.open = true;
+    } else if (e.key === 'ArrowLeft') {
+      if (folder?.open) folder.open = false;
+      else
+        to =
+          (folder?.parentElement ?? target).closest('details')?.querySelector<HTMLElement>(':scope > summary') ??
+          undefined;
+    } else return;
+    e.preventDefault();
+    to?.focus();
+  }
+
   async function onkeydown(e: KeyboardEvent) {
     const target = e.target as HTMLElement;
     if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -136,8 +165,8 @@
       autocomplete="off"
     />
     <!-- following a link closes the panel on narrow screens; the links themselves handle the keyboard -->
-    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-    <nav aria-label={t.nav} onclick={() => (open = false)}>
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <nav aria-label={t.nav} onclick={() => (open = false)} onkeydown={moveInTree}>
       {#if matches.entries.length}
         <!-- re-created when a search starts or ends, so every folder is open while searching -->
         {#key !!query.trim()}
