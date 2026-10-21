@@ -4,6 +4,8 @@ A component catalog for Svelte. Put a catalog file next to a component and you g
 
 ![A detail page of the catalog: the component's description, a live preview with its toolbar, and the table of contents](https://oekazuma.github.io/svelte-zukan/screenshots/detail-light.webp)
 
+For AI coding agents, the package includes a skill (`skills/svelte-zukan/SKILL.md`), and the dev server serves the catalog as data at `/__zukan/catalog.json`. See [AI agents](https://oekazuma.github.io/svelte-zukan/guides/ai-agents/).
+
 ## Install
 
 ```sh
