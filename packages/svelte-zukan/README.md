@@ -2,6 +2,8 @@
 
 A component catalog for Svelte. Put a catalog file next to a component and you get a list, a live preview, and a code view.
 
+![A detail page of the catalog: the component's description, a live preview with its toolbar, and the table of contents](https://oekazuma.github.io/svelte-zukan/screenshots/detail-light.webp)
+
 ## Install
 
 ```sh
