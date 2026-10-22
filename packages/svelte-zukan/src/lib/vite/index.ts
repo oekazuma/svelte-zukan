@@ -1,10 +1,19 @@
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { OutgoingHttpHeaders, ServerResponse } from 'node:http';
-import { dirname, extname, join, relative, resolve } from 'node:path';
+import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { marked } from 'marked';
-import { normalizePath, type Plugin, type PreviewServer, type ViteDevServer } from 'vite';
-import type { CatalogGroup, CatalogItem } from '../types.js';
+import {
+  createIdResolver,
+  normalizePath,
+  type Environment,
+  type FSWatcher,
+  type Plugin,
+  type PreviewServer,
+  type ResolvedConfig,
+  type ViteDevServer
+} from 'vite';
+import type { CatalogGroup, CatalogItem, TailwindSource } from '../types.js';
 import { discoverGroups, listCatalog, listUncataloged } from './discover.js';
 import { catalogJson } from './catalog-json.js';
 import { extractSections } from './extract.js';
@@ -13,7 +22,19 @@ import { renderHtml } from './html.js';
 import { detectSvelteKit } from './kit.js';
 import { createMatchers } from './matchers.js';
 import { appFile, extendFsAllow, isInside, libDir, resolveOptions, type ZukanOptions } from './options.js';
-import { AXE, CATALOG, ENTRY, META, generateCatalogModule, generateEntryModule, pathOfMeta } from './virtual.js';
+import { hasTailwind, loadTailwind, type Resolver } from './tailwind-load.js';
+import {
+  AXE,
+  CATALOG,
+  ENTRY,
+  META,
+  TAILWIND,
+  TAILWIND_SOURCE,
+  generateCatalogModule,
+  generateEntryModule,
+  generateTailwindModule,
+  pathOfMeta
+} from './virtual.js';
 
 export type { ZukanOptions };
 
@@ -39,6 +60,29 @@ const CONTENT_TYPES: Record<string, string> = {
 const setHeaders = (res: ServerResponse, headers: OutgoingHttpHeaders | undefined) => {
   for (const [name, value] of Object.entries(headers ?? {})) if (value !== undefined) res.setHeader(name, value);
 };
+
+/**
+ * Vite's resolver, wrapped like `@tailwindcss/vite` wraps it for `@tailwindcss/node`: aliases first, a relative result
+ * made absolute, and only results that `accept` takes. Built from the environment's config on the first call.
+ */
+function viteResolver(
+  env: () => Environment,
+  options: (config: ResolvedConfig) => Parameters<typeof createIdResolver>[1],
+  accept: (file: string) => boolean
+): Resolver {
+  let resolveId: ReturnType<typeof createIdResolver> | undefined;
+  return async (id, base) => {
+    const environment = env();
+    resolveId ??= createIdResolver(environment.config, options(environment.config));
+    const importer = join(base, '__placeholder__.ts');
+    for (const aliasOnly of [true, false]) {
+      let file = await resolveId(environment, id, importer, aliasOnly);
+      if (!file || file === id) continue;
+      if (file.startsWith('.')) file = resolve(base, file);
+      if (accept(file) && isAbsolute(file)) return file;
+    }
+  };
+}
 
 const printCatalogUrl = (server: ViteDevServer | PreviewServer) => {
   const printUrls = server.printUrls;
@@ -78,17 +122,58 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   /** path → item, from the last listing; dropped when a catalog file is created or deleted */
   let items: Map<string, CatalogItem> | null = null;
   const scanned = () => groups.flatMap((g) => g.dirs);
+  // the root's `src` too: a SvelteKit app keeps `src/app.css` while its groups often point at `src/lib`
+  const cssDirs = () => [...new Set([...scanned(), ...(existsSync(`${root}/src`) ? [`${root}/src`] : [])])];
+  /** generated on the first demand and cached until a watched file changes */
+  let tailwind: Promise<{ sources: TailwindSource[]; watch: string[] }> | null = null;
+  /** the files the last generation read */
+  let tailwindWatch = new Set<string>();
+  /** the sources as the catalog page last received them, to tell a change of the data from any other edit */
+  let served: string | null = null;
+  // Tailwind's dependencies are added to the dev server's watcher, not with `addWatchFile`: that would make each one an
+  // import of the Tailwind modules, whose chain up to the entry accepts no update, so Vite would answer with `full-reload`
+  let watcher: FSWatcher | null = null;
+  const tailwindData = (env: () => Environment) =>
+    (tailwind ??= (async () => {
+      const css = viteResolver(
+        env,
+        (config) => ({
+          ...config.resolve,
+          extensions: ['.css'],
+          mainFields: ['style'],
+          conditions: ['style', 'development|production'],
+          tryIndex: false,
+          preferRelative: true
+        }),
+        (file) => file.endsWith('.css')
+      );
+      const js = viteResolver(
+        env,
+        (config) => config.resolve,
+        (file) => !file.endsWith('.css')
+      );
+      const data = await loadTailwind(root, cssDirs(), { css, js });
+      // Vite does not watch node_modules; a reinstall restarts the dev server anyway
+      const watch = data.watch.filter((file) => !file.includes('/node_modules/'));
+      tailwindWatch = new Set(watch);
+      // the root is watched already
+      const outside = watch.filter((file) => !isInside(file, root));
+      if (outside.length) watcher?.add(outside);
+      return { sources: data.sources, watch };
+    })());
   const uncataloged = (all: CatalogItem[]) =>
     listUncataloged(groups, resolved.suffix, new Set(all.map((i) => normalizePath(componentFileOf(i.file)))));
-  const catalogData = () => {
+  const catalogData = async (env: () => Environment) => {
     const items = relist();
+    const { sources } = await tailwindData(env);
     return catalogJson({
       root,
       title: resolved.title,
       items,
       uncataloged: uncataloged(items),
       docFileOf,
-      componentFileOf
+      componentFileOf,
+      tailwind: sources
     });
   };
   const relist = () => {
@@ -108,6 +193,9 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         serving = command === 'serve';
         kitAppDir = null;
         items = null;
+        tailwind = null;
+        tailwindWatch = new Set();
+        served = null;
         root = normalizePath(resolve(config.root ?? process.cwd()));
         resolved = resolveOptions(root, options);
         groups = discoverGroups(root, options.groups);
@@ -237,7 +325,11 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           icon
         });
         writeFileSync(join(resolved.build, 'index.html'), html);
-        writeFileSync(join(resolved.build, CATALOG_JSON), JSON.stringify(catalogData(), null, 2) + '\n');
+        const data = await catalogData(() => env);
+        for (const source of data.tailwind ?? [])
+          if (source.error)
+            builder.config.logger.warn(`svelte-zukan: Tailwind CSS entry ${source.file}: ${source.error}`);
+        writeFileSync(join(resolved.build, CATALOG_JSON), JSON.stringify(data, null, 2) + '\n');
         if (kitAppDir) {
           const kitDir = join(resolved.build, kitAppDir);
           rmSync(join(kitDir, 'version.json'), { force: true });
@@ -246,7 +338,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       }
     },
     resolveId(id) {
-      if (id === ENTRY || id === CATALOG || id === AXE || id.startsWith(META)) return '\0' + id;
+      if ([ENTRY, CATALOG, AXE, TAILWIND].includes(id) || id.startsWith(META) || id.startsWith(TAILWIND_SOURCE))
+        return '\0' + id;
     },
     load(id) {
       if (id.startsWith('\0' + META)) {
@@ -285,6 +378,18 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           : undefined;
         return generateCatalogModule(items, rel, edit);
       }
+      if (id === '\0' + TAILWIND || id.startsWith('\0' + TAILWIND_SOURCE)) {
+        return tailwindData(() => this.environment).then(({ sources }) => {
+          if (id === '\0' + TAILWIND) {
+            served = JSON.stringify(sources);
+            return generateTailwindModule(sources);
+          }
+          const sourceId = id.slice(TAILWIND_SOURCE.length + 1);
+          const source = sources.find((s) => s.id === sourceId);
+          if (!source) throw new Error(`svelte-zukan: no Tailwind CSS entry for ID "${sourceId}"`);
+          return `export default ${JSON.stringify(source)};\n`;
+        });
+      }
       // read from this package's own dependency, so the catalog's client never imports a CommonJS module
       if (id === '\0' + AXE) {
         const read = (file: string) =>
@@ -300,11 +405,17 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           group: g.name,
           dirs: g.dirs.map((dir) => normalizePath(relative(root, dir)) || '.')
         }));
-        return generateEntryModule({ appFile: appFile('App.svelte'), ...resolved, searched });
+        return generateEntryModule({
+          appFile: appFile('App.svelte'),
+          ...resolved,
+          searched,
+          tailwind: hasTailwind(cssDirs(), root)
+        });
       }
     },
     configureServer(server) {
       const { root, base } = server.config;
+      watcher = server.watcher;
       const outside = scanned().filter((dir) => !isInside(dir, normalizePath(root)));
       if (outside.length) server.watcher.add(outside);
 
@@ -320,7 +431,10 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         if (path === `${base}__zukan/${CATALOG_JSON}`) {
           setHeaders(res, server.config.server.headers);
           res.setHeader('content-type', CONTENT_TYPES['.json']);
-          return res.end(JSON.stringify(catalogData(), null, 2));
+          catalogData(() => server.environments.client)
+            .then((data) => res.end(JSON.stringify(data, null, 2)))
+            .catch(next);
+          return;
         }
         if (path !== `${base}__zukan/`) return next();
         const icon = readFileSync(appFile('icon.svg'), 'utf-8');
@@ -378,6 +492,27 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       // the metadata of an entry depends on its catalog file and its .md, which the component's module does not track
       const metas = () => [...moduleGraph.idToModuleMap.values()].filter((m) => m.id?.startsWith('\0' + META));
       let targets: Iterable<(typeof modules)[number]>;
+      const normalized = normalizePath(file);
+      if (
+        tailwindWatch.has(normalized) ||
+        (type !== 'update' && file.endsWith('.css') && cssDirs().some((dir) => isInside(normalized, dir)))
+      ) {
+        // the other environments see the same file: one regeneration is enough
+        if (this.environment.config.consumer !== 'client') return;
+        tailwind = null;
+        if (!moduleGraph.getModuleById('\0' + TAILWIND)) return;
+        const env = this.environment;
+        // undefined, never []: the app's own handling of the file (e.g. `@tailwindcss/vite`'s CSS update) goes on
+        return tailwindData(() => env).then(({ sources }) => {
+          const json = JSON.stringify(sources);
+          if (json === served) return;
+          served = json;
+          for (const mod of moduleGraph.idToModuleMap.values())
+            if (mod.id === '\0' + TAILWIND || mod.id?.startsWith('\0' + TAILWIND_SOURCE))
+              moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
+          env.hot.send({ type: 'custom', event: 'zukan:reload' });
+        });
+      }
       if (isDocFile(file)) {
         targets = metas();
       } else if (type === 'update' && isCatalogFile(file)) {

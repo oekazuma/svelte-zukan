@@ -1,10 +1,13 @@
-import type { CatalogItem } from '../types.js';
+import type { CatalogItem, TailwindSource } from '../types.js';
 
 export const ENTRY = 'virtual:svelte-zukan/entry';
 export const CATALOG = 'virtual:svelte-zukan/catalog';
 export const META = 'virtual:svelte-zukan/meta/';
 /** the source of axe-core as a string, injected into a preview page when its check runs */
 export const AXE = 'virtual:svelte-zukan/axe';
+/** the Tailwind CSS entries, each one's data and sample CSS in `TAILWIND_SOURCE + id`: JS strings, never a CSS import */
+export const TAILWIND = 'virtual:svelte-zukan/tailwind';
+export const TAILWIND_SOURCE = 'virtual:svelte-zukan/tailwind/';
 
 /** hex of the UTF-8 ID: the dev server's decodeURI leaves it alone, and it never ends like a file extension */
 export const metaId = (path: string) => META + Buffer.from(path, 'utf8').toString('hex');
@@ -26,6 +29,14 @@ export function generateCatalogModule(
     `export const catalog = [\n${entries.join(',\n')}\n];\n` +
     `export const uncataloged = ${JSON.stringify(uncataloged)};\n`
   );
+}
+
+export function generateTailwindModule(sources: TailwindSource[]): string {
+  const items = sources.map(
+    ({ id, file, error }) =>
+      `  { ...${JSON.stringify({ id, file, error: error ?? null })}, load: () => import(${JSON.stringify(TAILWIND_SOURCE + id)}) }`
+  );
+  return `export const tailwind = [\n${items.join(',\n')}\n];\n`;
 }
 
 /**
@@ -56,6 +67,8 @@ export function generateEntryModule(opts: {
   title: string;
   locale: 'en' | 'ja';
   theme?: 'light' | 'dark' | null;
+  /** false leaves the Tailwind list out of the module graph, so the build gains no file */
+  tailwind?: boolean;
   /** dirs relative to the Vite root, shown when the catalog is empty */
   searched: { group: string; dirs: string[] }[];
 }): string {
@@ -70,12 +83,15 @@ export function generateEntryModule(opts: {
     `if (import.meta.hot) import.meta.hot.on('zukan:reload', () => {`,
     `  if (!inPreview()) location.reload();`,
     `});`,
-    `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)})]).then(([{ default: App }, { catalog, uncataloged }]) =>`,
+    opts.tailwind
+      ? `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)}), import(${s(TAILWIND)})]).then(([{ default: App }, { catalog, uncataloged }, { tailwind }]) =>`
+      : `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)})]).then(([{ default: App }, { catalog, uncataloged }]) =>`,
     `  mount(App, {`,
     `    target: document.body,`,
     `    props: {`,
     `      catalog,`,
     `      uncataloged,`,
+    opts.tailwind ? `      tailwind,` : `      tailwind: [],`,
     `      logo: ${opts.logo ? 'logo' : 'null'},`,
     `      wrapper: ${opts.wrapper ? `() => import(${s(opts.wrapper)})` : 'null'},`,
     `      title: ${s(opts.title)},`,

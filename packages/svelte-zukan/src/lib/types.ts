@@ -74,3 +74,11 @@ export type TailwindSource = {
   css: string;
   error?: string;
 };
+
+/** an item of the virtual Tailwind module; the data and the sample CSS are loaded with `load` */
+export type TailwindListItem = {
+  id: string;
+  file: string;
+  error: string | null;
+  load: () => Promise<{ default: TailwindSource }>;
+};

@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   META,
   RELOAD_ON_PRELOAD_ERROR,
+  TAILWIND,
+  TAILWIND_SOURCE,
   generateCatalogModule,
   generateEntryModule,
+  generateTailwindModule,
   metaId,
   pathOfMeta
 } from './virtual.js';
@@ -77,9 +80,42 @@ describe('generateEntryModule', () => {
     expect(generateEntryModule({ ...base, logo: null, wrapper: null, theme: 'dark' })).toContain('fixedTheme: "dark"');
   });
 
+  it('imports the Tailwind list only when there is Tailwind', () => {
+    const without = generateEntryModule({ ...base, logo: null, wrapper: null });
+    expect(without).not.toContain(TAILWIND);
+    expect(without).toContain('tailwind: []');
+    const code = generateEntryModule({ ...base, logo: null, wrapper: null, tailwind: true });
+    expect(code).toContain(`import("${TAILWIND}")`);
+    expect(code).toContain('{ catalog, uncataloged }, { tailwind }');
+    expect(code).toMatch(/^ {6}tailwind,$/m);
+  });
+
   it('passes the searched places', () => {
     const searched = [{ group: 'ui', dirs: ['src', '../outside'] }];
     const code = generateEntryModule({ ...base, logo: null, wrapper: null, searched });
     expect(code).toContain('searched: [{"group":"ui","dirs":["src","../outside"]}]');
+  });
+});
+
+describe('generateTailwindModule', () => {
+  it('lists the entries with their data loaded lazily', () => {
+    const source = {
+      id: 'abc123',
+      file: 'src/app.css',
+      version: '4.3.3',
+      prefix: null,
+      categories: [],
+      variables: { '--color-x': 'red' },
+      css: '.x{}'
+    };
+    const code = generateTailwindModule([source, { ...source, id: 'def456', file: 'src/b.css', error: 'boom' }]);
+    expect(code).toContain('export const tailwind = [');
+    expect(code).toContain('"id":"abc123","file":"src/app.css","error":null');
+    expect(code).toContain('"id":"def456","file":"src/b.css","error":"boom"');
+    expect(code).toContain(`load: () => import("${TAILWIND_SOURCE}abc123")`);
+    // the data stays in the lazily loaded module
+    expect(code).not.toContain('--color-x');
+    expect(code).not.toContain('.x{}');
+    expect(generateTailwindModule([])).toBe('export const tailwind = [\n\n];\n');
   });
 });

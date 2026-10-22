@@ -1,23 +1,27 @@
 import { once } from 'node:events';
-import { realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { createServer, type ViteDevServer } from 'vite';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { dirname, join } from 'node:path';
+import { createServer, type InlineConfig, type Plugin, type ViteDevServer } from 'vite';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { zukan } from './index.js';
-import { metaId } from './virtual.js';
+import { findPackage } from './tailwind-load.js';
+import { TAILWIND, TAILWIND_SOURCE, metaId } from './virtual.js';
 
 let tmp: string;
 let server: ViteDevServer;
+let plugin: Plugin;
 let send: ReturnType<typeof vi.spyOn>;
 
-async function start(options: Parameters<typeof zukan>[0] = {}) {
+async function start(options: Parameters<typeof zukan>[0] = {}, config: InlineConfig = {}) {
+  plugin = zukan(options);
   server = await createServer({
+    ...config,
     root: join(tmp, 'app'),
     configFile: false,
     logLevel: 'silent',
-    plugins: [zukan(options)],
+    plugins: [plugin],
     // no HTTP or WebSocket server: payloads are read from the spy on hot.send
     server: { middlewareMode: true, ws: false }
   });
@@ -207,4 +211,184 @@ it('changing an imported props type updates the metadata', { timeout: 25_000 }, 
   await waitForReload();
   expect(fullReloads()).toBe(0);
   expect(await meta('app/A')).toContain('"name":"b","type":"string"');
+});
+
+describe('Tailwind CSS', () => {
+  const brand = '@import "tailwindcss";\n@theme { --color-brand: #ff3e00; }\n';
+
+  /** restarts the server with Tailwind linked into the app and `files` (relative to the temp dir) written */
+  async function withTailwind(files: Record<string, string>, config: InlineConfig = {}) {
+    await server.close();
+    for (const name of ['tailwindcss', '@tailwindcss/node']) {
+      const at = join(tmp, 'app/node_modules', name);
+      mkdirSync(dirname(at), { recursive: true });
+      symlinkSync(findPackage(name, import.meta.dirname)!, at, 'junction');
+    }
+    for (const [file, content] of Object.entries(files)) {
+      mkdirSync(dirname(join(tmp, file)), { recursive: true });
+      writeFileSync(join(tmp, file), content);
+    }
+    await start({}, config);
+  }
+
+  const transform = async (id: string) => (await server.environments.client.transformRequest(id))!.code;
+  const sourceIds = (code: string) => [...code.matchAll(/"id":"([0-9a-f]+)"/g)].map((m) => m[1]);
+  const firstSource = async () => transform(TAILWIND_SOURCE + sourceIds(await transform(TAILWIND))[0]);
+  type Data = { components: { id: string }[]; tailwind: Record<string, unknown>[] | null };
+  const catalogJson = () =>
+    new Promise<{ body: string; data: Data }>((resolve, reject) => {
+      const res = {
+        statusCode: 200,
+        getHeader() {},
+        setHeader() {},
+        end: (body: string) => resolve({ body, data: JSON.parse(body) })
+      };
+      server.middlewares(
+        { url: '/__zukan/catalog.json', method: 'GET', headers: { host: 'localhost' } } as never,
+        res as never,
+        reject
+      );
+    });
+  const variables = (data: Data) => data.tailwind!.map((t) => t.variables as Record<string, string>);
+
+  it("resolves and loads the Tailwind list and one entry's data", { timeout: 30_000 }, async () => {
+    await withTailwind({ 'app/src/app.css': brand });
+    const list = await transform(TAILWIND);
+    expect(list).toContain('export const tailwind');
+    expect(list).toContain('"file":"src/app.css","error":null');
+    expect(list).toContain(TAILWIND_SOURCE);
+    expect(list).not.toContain('#ff3e00');
+    const data = await firstSource();
+    expect(data).toContain('"--color-brand":"#ff3e00"');
+    expect(data).toContain('"css":');
+    await expect(transform(TAILWIND_SOURCE + 'nope')).rejects.toThrow(/no Tailwind CSS entry/);
+  });
+
+  it('serves catalog.json when an entry fails', { timeout: 30_000 }, async () => {
+    await withTailwind({
+      'app/src/app.css': brand,
+      'app/src/broken.css': '@import "tailwindcss";\n@import "./missing.css";\n'
+    });
+    const { data } = await catalogJson();
+    expect(data.components.map((c) => c.id)).toEqual(['app/A']);
+    expect(data.tailwind!.map((t) => [t.file, t.error])).toEqual([
+      ['src/app.css', undefined],
+      ['src/broken.css', expect.stringContaining('missing.css')]
+    ]);
+    expect(variables(data)[0]['--color-brand']).toBe('#ff3e00');
+  });
+
+  it('keeps absolute paths and the sample CSS out of catalog.json', { timeout: 30_000 }, async () => {
+    await withTailwind({
+      'app/src/app.css': brand,
+      'app/src/broken.css': '@import "tailwindcss";\n@import "./missing.css";\n'
+    });
+    const { body, data } = await catalogJson();
+    expect(body).not.toContain(tmp);
+    expect(data.tailwind!.map((t) => Object.keys(t))).toEqual([
+      ['file', 'version', 'prefix', 'categories', 'variables'],
+      ['file', 'version', 'prefix', 'categories', 'variables', 'error']
+    ]);
+    expect(body).not.toContain('@layer');
+  });
+
+  it('resolves CSS imports through Vite aliases', { timeout: 30_000 }, async () => {
+    await withTailwind(
+      {
+        'app/src/app.css': '@import "tailwindcss";\n@import "$lib/theme.css";\n',
+        'app/src/lib/theme.css': '@theme { --color-aliased: red; }\n'
+      },
+      { resolve: { alias: { $lib: join(tmp, 'app/src/lib') } } }
+    );
+    const { data } = await catalogJson();
+    // theme.css is a partial of app.css, not an entry of its own
+    expect(data.tailwind!.map((t) => [t.file, t.error])).toEqual([['src/app.css', undefined]]);
+    expect(variables(data)[0]['--color-aliased']).toBe('red');
+  });
+
+  it('reloads the catalog when a watched file changes the data', { timeout: 30_000 }, async () => {
+    await withTailwind({ 'app/src/app.css': brand });
+    await transform(TAILWIND);
+    send.mockClear();
+    writeFileSync(join(tmp, 'app/src/app.css'), brand.replace('#ff3e00', '#000'));
+    await waitForReload();
+    expect(fullReloads()).toBe(0);
+    expect(await firstSource()).toContain('"--color-brand":"#000"');
+  });
+
+  it('does not reload when the data did not change', { timeout: 30_000 }, async () => {
+    await withTailwind({ 'app/src/app.css': brand });
+    await transform(TAILWIND);
+    send.mockClear();
+    writeFileSync(join(tmp, 'app/src/app.css'), brand + '/* a comment */\n');
+    await new Promise((r) => setTimeout(r, 2000));
+    expect(reloaded()).toBe(false);
+    // the same file still reloads once its data changes
+    writeFileSync(join(tmp, 'app/src/app.css'), brand.replace('#ff3e00', '#000'));
+    await waitForReload();
+  });
+
+  it('picks up a CSS entry created in a searched dir', { timeout: 30_000 }, async () => {
+    await withTailwind({ 'app/src/app.css': brand });
+    await transform(TAILWIND);
+    send.mockClear();
+    writeFileSync(join(tmp, 'app/src/other.css'), '@theme { --color-other: blue; }\n');
+    await waitForReload();
+    expect(fullReloads()).toBe(0);
+    expect(await transform(TAILWIND)).toContain('"file":"src/other.css"');
+  });
+
+  it("does not swallow the app's CSS update", { timeout: 30_000 }, async () => {
+    await withTailwind({ 'app/src/app.css': brand });
+    await firstSource();
+    // the app imports the same file
+    await transform(join(tmp, 'app/src/app.css'));
+    const result = (plugin.hotUpdate as (...args: unknown[]) => unknown).call(
+      { environment: server.environments.client },
+      { type: 'update', file: join(tmp, 'app/src/app.css'), modules: [], timestamp: Date.now() }
+    );
+    expect(Array.isArray(result)).toBe(false);
+    expect(await result).toBeUndefined();
+    send.mockClear();
+    writeFileSync(join(tmp, 'app/src/app.css'), brand.replace('#ff3e00', '#000'));
+    await waitForReload();
+    await expect
+      .poll(() => send.mock.calls.some(([p]: unknown[]) => (p as { type?: string })?.type === 'update'), {
+        timeout: 10_000
+      })
+      .toBe(true);
+    expect(fullReloads()).toBe(0);
+  });
+
+  it('ignores CSS changes when no Tailwind module is loaded', { timeout: 30_000 }, async () => {
+    await withTailwind({ 'app/src/app.css': brand });
+    send.mockClear();
+    writeFileSync(join(tmp, 'app/src/app.css'), brand.replace('#ff3e00', '#000'));
+    writeFileSync(join(tmp, 'app/src/other.css'), '@theme { --color-other: blue; }\n');
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('serves an edit in catalog.json when the list module was never loaded', { timeout: 30_000 }, async () => {
+    await withTailwind({ 'app/src/app.css': brand });
+    expect(variables((await catalogJson()).data)[0]['--color-brand']).toBe('#ff3e00');
+    writeFileSync(join(tmp, 'app/src/app.css'), brand.replace('#ff3e00', '#000'));
+    await expect
+      .poll(async () => variables((await catalogJson()).data)[0]['--color-brand'], { timeout: 10_000 })
+      .toBe('#000');
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('reloads on a change to an imported file outside the root', { timeout: 30_000 }, async () => {
+    await withTailwind({
+      'app/src/app.css': '@import "tailwindcss";\n@import "../../tokens.css";\n',
+      'tokens.css': '@theme { --color-outside: red; }\n'
+    });
+    expect(await firstSource()).toContain('"--color-outside":"red"');
+    send.mockClear();
+    writeFileSync(join(tmp, 'tokens.css'), '@theme { --color-outside: blue; }\n');
+    await waitForReload();
+    expect(fullReloads()).toBe(0);
+    expect(await firstSource()).toContain('"--color-outside":"blue"');
+  });
 });
