@@ -4,7 +4,13 @@ import { userEvent } from 'vitest/browser';
 import { messages } from '../../app/i18n.js';
 import PreviewFrame from './PreviewFrame.svelte';
 
-const props = { src: 'about:blank', title: 'preview' };
+const props = {
+  src: 'about:blank',
+  tabHref: 'about:blank',
+  title: 'preview',
+  theme: 'light' as const,
+  labels: messages.en
+};
 
 // widths and the background are remembered in storage; no test may start from another test's choice
 beforeEach(() => {
@@ -485,7 +491,9 @@ describe('PreviewFrame toolbar', () => {
   });
 
   it('links to the preview in a new tab', async () => {
-    const screen = await render(PreviewFrame, { props: { ...props, src: './#/preview/ui/Card?section=One' } });
+    const screen = await render(PreviewFrame, {
+      props: { ...props, src: './#/preview/ui/Card?section=One', tabHref: './#/preview/ui/Card?section=One' }
+    });
     const link = screen.getByRole('link', { name: 'Open in new tab' });
     await expect.element(link).toHaveAttribute('href', './#/preview/ui/Card?section=One');
     await expect.element(link).toHaveAttribute('target', '_blank');

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { messages, type Messages } from '../../app/i18n.js';
+  import type { Messages } from '../../app/i18n.js';
   import A11yPanel from './A11yPanel.svelte';
   import { startMeasure } from './measure.js';
   import {
@@ -80,18 +80,18 @@
 
   let {
     src,
-    tabHref = src,
+    tabHref,
     shareUrl,
     requestedWidth,
     expanded = $bindable(false),
     axe,
     title,
-    theme = 'light',
-    labels = messages.en
+    theme,
+    labels
   }: {
     src: string;
     /** "open in new tab"; unlike `src`, it may carry the theme without reloading the frame */
-    tabHref?: string;
+    tabHref: string;
     /** a link to this view at the given width, for the copy-link button */
     shareUrl?: (width: number | null) => string;
     /** a width from a shared link; it wins over the remembered one */
@@ -100,56 +100,8 @@
     /** the source of axe-core; without it there is no accessibility check */
     axe?: () => Promise<string>;
     title: string;
-    theme?: Theme;
-    labels?: Pick<
-      Messages,
-      | 'previewWidth'
-      | 'mobile'
-      | 'tablet'
-      | 'laptop'
-      | 'desktop'
-      | 'fullWidth'
-      | 'openInNewTab'
-      | 'copyLink'
-      | 'copied'
-      | 'copyFailed'
-      | 'outline'
-      | 'expand'
-      | 'collapse'
-      | 'loading'
-      | 'background'
-      | 'backgroundTheme'
-      | 'backgroundChecker'
-      | 'backgroundGrid'
-      | 'widthInPixels'
-      | 'checkA11y'
-      | 'a11yChecking'
-      | 'a11yPassed'
-      | 'a11yIssues'
-      | 'a11yFailed'
-      | 'a11yLearnMore'
-      | 'a11yRerun'
-      | 'a11yHighlight'
-      | 'vision'
-      | 'visionNone'
-      | 'visionBlurred'
-      | 'visionProtanopia'
-      | 'visionDeuteranopia'
-      | 'visionTritanopia'
-      | 'visionAchromatopsia'
-      | 'visionHintBlurred'
-      | 'visionHintProtanopia'
-      | 'visionHintDeuteranopia'
-      | 'visionHintTritanopia'
-      | 'visionHintAchromatopsia'
-      | 'scaledToFit'
-      | 'measure'
-      | 'impactCritical'
-      | 'impactSerious'
-      | 'impactModerate'
-      | 'impactMinor'
-      | 'close'
-    >;
+    theme: Theme;
+    labels: Messages;
   } = $props();
 
   // null = 100%; the frame is recreated per entry, so `src` is read once
