@@ -74,6 +74,12 @@ describe('extractTokens', () => {
     expect(token('drop-shadow', 'drop-shadow-md')?.value).not.toContain('var(');
   });
 
+  it('shows none for a token with an empty value', async () => {
+    const { result, token } = await load('@import "tailwindcss";');
+    expect(token('drop-shadow', 'drop-shadow-none')?.value).toBe('none');
+    for (const { tokens } of result.categories) for (const t of tokens) expect(t.value.trim()).not.toBe('');
+  });
+
   it('collapses line breaks and indentation in values', async () => {
     const { result, token } = await load('@import "tailwindcss";');
     const family = token('font-family', 'font-mono');

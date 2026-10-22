@@ -241,7 +241,8 @@ export function extractTokens(
       cssVariable =
         Object.keys(variables).find((key) => variables[key] === value && key.endsWith(`-${suffix}`)) ?? null;
     }
-    return { class: classPrefix + name, cssVariable, value: resolveValue(shown, values) };
+    // `drop-shadow-none` sets `--tw-drop-shadow` to nothing, which a blank cell would not explain
+    return { class: classPrefix + name, cssVariable, value: resolveValue(shown, values) || 'none' };
   };
 
   const themeIndex = new Map(Object.keys(variables).map((key, i) => [key, i]));
