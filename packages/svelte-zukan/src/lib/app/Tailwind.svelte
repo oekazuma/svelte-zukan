@@ -5,6 +5,7 @@
   import { CATEGORIES } from '../vite/tailwind-tokens.js';
   import { formatTailwindHash } from './hash.js';
   import { categoryTitles, type Messages } from './i18n.js';
+  import { filterVariables } from './tailwind-filter.js';
   import TailwindTokens from './TailwindTokens.svelte';
 
   let {
@@ -65,12 +66,7 @@
   // svelte-ignore state_referenced_locally
   let sampleText = $state(t.sampleTextValue);
 
-  const variables = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    return Object.entries(data?.variables ?? {}).filter(([name, value]) =>
-      [name, value].some((s) => s.toLowerCase().includes(q))
-    );
-  });
+  const variables = $derived(filterVariables(data?.variables ?? {}, query));
 
   // mounted once per frame, so a filter or a category change updates the samples in place
   const tokenProps = $state<Partial<ComponentProps<typeof TailwindTokens>>>({});

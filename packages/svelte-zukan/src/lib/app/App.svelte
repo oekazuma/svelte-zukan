@@ -88,7 +88,8 @@
           fetchCatalog: () => fetch(catalogUrl).then((r) => r.json()),
           axe,
           page: location.pathname,
-          themes: !fixedTheme
+          themes: !fixedTheme,
+          tailwind: tailwind.length > 0
         }),
         context
       )

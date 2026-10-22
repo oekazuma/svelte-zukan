@@ -5,6 +5,7 @@
   import type { Theme } from '../components/PreviewFrame/storage.js';
   import type { TailwindCategory } from '../types.js';
   import type { Messages } from './i18n.js';
+  import { filterTokens } from './tailwind-filter.js';
 
   let {
     category,
@@ -16,13 +17,7 @@
   }: { category: TailwindCategory; kind: string; query: string; sampleText: string; theme: Theme; t: Messages } =
     $props();
 
-  const tokens = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return category.tokens;
-    return category.tokens.filter((token) =>
-      [token.class, token.cssVariable, token.value].some((s) => s?.toLowerCase().includes(q))
-    );
-  });
+  const tokens = $derived(filterTokens(category.tokens, query));
   const text = $derived(kind === 'text' || kind === 'text-color');
   const wide = $derived(['text', 'width', 'padding', 'margin'].includes(kind));
 

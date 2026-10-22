@@ -1,6 +1,9 @@
 import { messageOf, runAxe } from '../components/PreviewFrame/run-axe.js';
 import type { Theme } from '../components/PreviewFrame/storage.js';
+import { CATEGORIES } from '../vite/tailwind-tokens.js';
+import type { TailwindSource } from '../types.js';
 import { formatHash } from './hash.js';
+import { filterTokens, filterVariables } from './tailwind-filter.js';
 
 /**
  * WebMCP: tools an agent driving the browser can call on the catalog page instead of reading the screen. Browsers
@@ -27,6 +30,7 @@ export type ModelContext = {
 type CatalogJson = {
   components: { id: string; name: string; group: string; doc: string | null; sections: { title: string }[] }[];
   uncataloged: unknown[];
+  tailwind?: Omit<TailwindSource, 'id' | 'css'>[] | null;
 };
 
 const text = (value: unknown, isError = false): Result => ({
@@ -53,6 +57,8 @@ export function buildTools(opts: {
   page: string;
   /** false when the `theme` option fixes the theme: the tools then take no `theme` */
   themes?: boolean;
+  /** whether the catalog has Tailwind CSS data */
+  tailwind?: boolean;
 }): WebMcpTool[] {
   const withTheme: Record<string, object> = opts.themes === false ? {} : { theme: THEME };
   const find = async (id: string | undefined) => (await opts.fetchCatalog()).components.find((c) => c.id === id);
@@ -150,6 +156,55 @@ export function buildTools(opts: {
         } finally {
           frame.remove();
         }
+      }
+    });
+  }
+  if (opts.tailwind) {
+    tools.push({
+      name: 'list_tailwind_tokens',
+      description:
+        "Lists the Tailwind CSS v4 tokens of this project's CSS entries: the utility classes, theme variables and values that exist. Without a category it returns each entry's categories and their token counts; with one, that category's tokens. Use only the classes listed here.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          category: {
+            type: 'string',
+            enum: [...CATEGORIES.map((c) => c.id), 'full-config'],
+            description: '"full-config" lists every theme variable of the entry'
+          },
+          query: {
+            type: 'string',
+            description: 'Keeps the tokens whose class, CSS variable or value contains this text'
+          }
+        }
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      async execute(input) {
+        const category = str(input.category);
+        if (category && category !== 'full-config' && !CATEGORIES.some((c) => c.id === category))
+          return text(`No category "${category}". Call without a category to list them.`, true);
+        const query = str(input.query) ?? '';
+        const entries = (await opts.fetchCatalog()).tailwind ?? [];
+        return text(
+          entries.map(({ file, prefix, categories, variables, error }) => {
+            const err = error !== undefined && { error };
+            if (!category)
+              return {
+                file,
+                prefix,
+                ...err,
+                categories: categories.map((c) => ({ id: c.id, title: c.title, count: c.tokens.length }))
+              };
+            return {
+              file,
+              ...err,
+              tokens:
+                category === 'full-config'
+                  ? Object.fromEntries(filterVariables(variables, query))
+                  : filterTokens(categories.find((c) => c.id === category)?.tokens ?? [], query)
+            };
+          })
+        );
       }
     });
   }
