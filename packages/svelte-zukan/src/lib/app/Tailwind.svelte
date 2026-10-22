@@ -56,13 +56,14 @@
 
   const titles = $derived(categoryTitles[locale]);
   const categories = $derived(data?.categories ?? []);
-  const selected = $derived(
-    category === FULL ? undefined : (categories.find((c) => c.id === category) ?? categories[0])
-  );
   const groups = $derived(
     categoryGroups
       .map((g) => ({ title: t[g.title], categories: g.ids.flatMap((id) => categories.filter((c) => c.id === id)) }))
       .filter((g) => g.categories.length)
+  );
+  // the default is the first one in the list, which is not the first in CATEGORIES when some are missing
+  const selected = $derived(
+    category === FULL ? undefined : (categories.find((c) => c.id === category) ?? groups[0]?.categories[0])
   );
   const current = $derived(selected?.id ?? FULL);
   const id = $props.id();

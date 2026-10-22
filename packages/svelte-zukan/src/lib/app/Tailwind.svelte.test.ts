@@ -155,6 +155,27 @@ describe('the Tailwind CSS page', () => {
     expect(screen.getByRole('combobox', { name: 'Tailwind CSS categories' }).query()).toBeNull();
   });
 
+  it('opens the first listed category when the hash names none', async () => {
+    // Width is listed before Font Size, though Font Size comes first in the category order
+    const sizes: TailwindSource = {
+      ...source,
+      categories: [
+        { id: 'font-size', title: 'Font Size', tokens: source.categories[1].tokens },
+        { id: 'width', title: 'Width', tokens: [{ class: 'w-4', cssVariable: '--spacing', value: '0.25rem' }] }
+      ]
+    };
+    const screen = await render(App, { props: props('#/tailwind', [item(sizes)]) });
+    const nav = screen.getByRole('navigation', { name: 'Tailwind CSS categories' });
+    expect(
+      nav
+        .getByRole('link')
+        .elements()
+        .map((a) => a.querySelector('span:not(.count)')!.textContent)
+    ).toEqual(['Width', 'Font Size', 'Full config']);
+    await expect.element(nav.getByRole('link', { name: 'Width' })).toHaveAttribute('aria-current', 'page');
+    await expect.element(nav.getByRole('link', { name: 'Font Size' })).not.toHaveAttribute('aria-current');
+  });
+
   it('switches category with a select on a narrow screen', async () => {
     await page.viewport(390, 800);
     const screen = await render(App, { props: props('#/tailwind') });
