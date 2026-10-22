@@ -16,7 +16,7 @@ People use svelte-zukan as the place where a design system lives. When the app s
 - Show the resolved Tailwind theme of the project: Tailwind's defaults plus everything the project's CSS adds or overrides with `@theme` (and `@plugin` / `@config`, as far as Tailwind resolves them).
 - Same categories and the same "one representative utility per category" rule as Histoire, so each token appears once per category with a live sample.
 - Search within a category; copy the class name and the CSS variable.
-- Works with no configuration: it appears when Tailwind CSS v4 (4.0.0 or later) is installed and a Tailwind CSS entry is found, and is absent otherwise.
+- Works with no configuration: it appears when Tailwind CSS 4.1.0 or later is installed and a Tailwind CSS entry is found, and is absent otherwise.
 - Agents can read the tokens from `catalog.json` and through a WebMCP tool.
 - Dev updates when the CSS changes; `build: true` includes it in the static catalog.
 
@@ -53,13 +53,14 @@ People use svelte-zukan as the place where a design system lives. When the app s
 
 - svelte-zukan loads Tailwind through the project's own `@tailwindcss/node`, the package that `@tailwindcss/vite`, `@tailwindcss/postcss` and `@tailwindcss/cli` use to build the app's CSS. It is looked up from the entry's directory, then from the Vite root, either directly or through one of those three packages (pnpm does not hoist it). The `tailwindcss` used is the one that `@tailwindcss/node` depends on, so the catalog sees the same Tailwind that builds the app; its version is the entry's `version`. Never svelte-zukan's own copy.
 - No `@tailwindcss/node` found, or a `tailwindcss` older than v4: the entry is skipped silently (no page, no warning). This is the v3 case too.
+- A 4.0.x install is v4 but below the minimum: the entry gets the `error` "Tailwind CSS <version> is older than 4.1.0, the first version svelte-zukan supports", so the user learns to upgrade instead of seeing nothing. The maintainer chose 4.1.0 (April 2025) as the minimum.
 - Two calls per entry:
   - `__unstable__loadDesignSystem(css, { base, loadStylesheet, loadModule })` of that `tailwindcss`, for the theme and the class list.
   - `compile(css, { base, onDependency, customCssResolver, customJsResolver })` of `@tailwindcss/node`, then `build(classes)` for the listed classes, for the sample stylesheet and the files to watch.
 - Resolution matches the app's build:
   - CSS `@import`s (in both calls, and when telling an entry from a partial) go through Vite's resolver with the options `@tailwindcss/vite` uses: `createIdResolver(config, { ...config.resolve, extensions: ['.css'], mainFields: ['style'], conditions: ['style', 'development|production'], tryIndex: false, preferRelative: true })`. Node resolution of the package's `style` export is the fallback. So aliases such as `$lib/theme.css` work.
-  - `@plugin` and `@config` load through `@tailwindcss/node`'s `loadModule`, which handles TypeScript files on the Node 22.17 floor. It is exported only since 4.1.0. With 4.0.x, the design system gets a `loadModule` that throws "`@plugin` and `@config` need Tailwind CSS 4.1.0 or later in svelte-zukan": an entry without them still works, and one with them gets that `error`.
-- Everything used exists since Tailwind v4.0.0, so v4.0.0 is the minimum. `candidatesToAst()` (only since 4.1.18) is not used. The guard checks `__unstable__loadDesignSystem`, `compile`, `theme.entries`, `theme.prefix`, `getClassList` and `candidatesToCss`. A mismatch is the entry's `error`: "Tailwind CSS <version> does not expose the design-system API svelte-zukan uses".
+  - `@plugin` and `@config` load through `@tailwindcss/node`'s `loadModule`, which handles TypeScript files on the Node 22.17 floor (it is exported since 4.1.0, one reason for the minimum).
+- The minimum is 4.1.0, checked by version first. `candidatesToAst()` (only since 4.1.18) is not used. The guard checks `__unstable__loadDesignSystem`, `compile`, `loadModule`, `theme.entries`, `theme.prefix`, `getClassList` and `candidatesToCss`. A mismatch is the entry's `error`: "Tailwind CSS <version> does not expose the design-system API svelte-zukan uses".
 
 ### Detection
 
