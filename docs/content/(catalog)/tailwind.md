@@ -23,7 +23,9 @@ What the page lists is everything Tailwind resolves from the entry: its defaults
 
 ## The page
 
-The categories are tabs under the title:
+The categories are a list on the left, grouped as Colors, Spacing & sizing, Typography, Borders, Effects and Layout, then **Full config**, each with its token count. On a narrow page the list becomes a select above the tokens. With no category chosen, the first one in the list opens.
+
+Tokens come in the theme's order: sizes from small to large, and the default palette in Tailwind's order, with your own colors after the defaults (the filter finds them). The categories:
 
 | Category                                   | Class                                      |
 | ------------------------------------------ | ------------------------------------------ |
@@ -37,7 +39,7 @@ The categories are tabs under the title:
 | Breakpoints                                | `--breakpoint-*` variables                 |
 | Spacing                                    | the `--spacing` base and the `p-*` classes |
 
-A category with no token is left out. After them comes **Full config**, a table of every theme variable and its value.
+A category with no token is left out. **Full config** is a table of every theme variable and its value.
 
 Each token is a card with a live sample, its class and its CSS variable, and the value it resolves to, such as `calc(0.25rem * 4)` for `p-4`. The class and the variable each have a button that copies the name. With a Tailwind `prefix`, the classes carry it (`tw:bg-brand-500`). Breakpoints and the spacing base are no classes, so they show the variable only. A token shows a variable when its class reads one, or, for an `@theme inline` token, when a theme variable holds the same value.
 
