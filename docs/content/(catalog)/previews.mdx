@@ -28,6 +28,10 @@ Each section previews in its own frame, with a toolbar above it.
 - A width wider than the page, such as the desktop preset on a laptop, is laid out at its real width and scaled down to fit. The scale is shown next to the width
 - Widths are remembered in this browser tab across reloads, so a preview keeps its width while you edit
 
+## Height
+
+A preview is as tall as its content in normal flow. Content in the top layer or with `position: fixed` or `absolute`, such as a modal, a popover or a menu, adds no height, so it can be clipped. Give the section's content a `min-height` that leaves room for it, or use Expand.
+
 ## Other buttons
 
 | Button          | What it does                                                                                                   |
