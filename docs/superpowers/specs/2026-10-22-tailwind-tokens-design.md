@@ -50,8 +50,9 @@ People use svelte-zukan as the place where a design system lives. When the app s
 
 ### Detection
 
-- Resolve `tailwindcss/package.json` from the Vite root (the user's install, never svelte-zukan's own copy). Major version 4 or later turns the feature on; anything else, or no Tailwind, turns it off silently.
-- Tailwind CSS entries are CSS files in the directories svelte-zukan already scans for catalog files (the Vite root's `src` and the `src` of workspace packages, or the `groups` directories), that `@import "tailwindcss"` (or a `tailwindcss/…` path) or contain `@theme`. A file imported by another found entry is a partial, not an entry; `@reference` imports do not count. One entry → one "Tailwind" item. Several → one item each, labelled with the path relative to the Vite root.
+- Tailwind CSS entries are CSS files that `@import "tailwindcss"` (or a `tailwindcss/…` path) or contain `@theme`, found in the directories svelte-zukan already scans for catalog files (the Vite root's `src` and the `src` of workspace packages, or the `groups` directories) and, always, the Vite root's `src`, even when `groups` leaves it out: a SvelteKit app usually keeps its entry at `src/app.css` while its `groups` point at `src/lib`. A file imported by another found entry is a partial, not an entry; `@reference` imports do not count. One entry → one "Tailwind" item. Several → one item each, labelled with the path relative to the Vite root.
+- Each entry uses the `tailwindcss` its own file would load: resolved from the entry's directory, falling back to the Vite root's install (never svelte-zukan's own copy). Major version 4 or later is required; an entry that resolves no Tailwind or an older one is skipped silently. The API guard runs per entry, and `version` in the data is per entry.
+- An entry with `@theme` but no `@import "tailwindcss"` is loaded with Tailwind's defaults added in front of it, so its page shows the defaults plus its own tokens, like every other entry.
 
 ### Data, per entry
 
@@ -66,7 +67,7 @@ Following Histoire's `v4.ts`:
 - A "Tailwind" item in the sidebar and a page of its own, with the categories as tabs or a sub-list, plus "Full config" (all theme variables).
 - Each token: a live sample (color swatch, padded box, sized bar, text sample, shadowed square, …, as in Histoire's `render.ts`), the class name and the CSS variable, each with a copy button.
 - A filter box per page that matches class names and values. Text categories have a sample-text field.
-- The page follows the catalog's light/dark theme. Sample CSS is the `candidatesToCss()` output for the listed classes and the theme variables, scoped to the token page so it neither leaks out nor picks up catalog styles.
+- The page itself follows the catalog's light/dark theme. Samples and values are the theme's base values: `theme.entries()` has no dark-mode values (`.dark { --color-… }`, `@custom-variant dark`), so dark values are out of scope for this version. Sample CSS is the `candidatesToCss()` output for the listed classes and the theme variables, scoped to the token page so it neither leaks out nor picks up catalog styles.
 - The route must never collide with a component ID (IDs are `<group>/<path>`, and group names come from package names or the `groups` keys).
 
 ### Agents
@@ -87,15 +88,18 @@ Following Histoire's `v4.ts`:
 
 ## Calls made by Claude (the maintainer can override)
 
+- The Vite root's `src` is always searched for CSS entries, even with `groups` (otherwise `src/app.css` would never be found in the usual SvelteKit setup).
+- Each entry uses the `tailwindcss` its own location resolves, falling back to the Vite root's.
+- An `@theme`-only entry gets Tailwind's defaults added.
 - No `zukan()` option in this version, not even to point at a CSS file. Add one only when detection proves insufficient in real projects.
 - `tailwindcss` is not declared even as an optional peer dependency.
 - A failure in the build warns instead of failing the build (Histoire fails it).
-- The library's own catalog (dogfooding, deployed as the docs demo) gets `tailwindcss` as a dev dependency and a small CSS entry with a few `@theme` values, so the demo shows the page in both the English and the Japanese build.
+- The library's own catalog (dogfooding, deployed as the docs demo) gets `tailwindcss` as a dev dependency and a small CSS entry with a few `@theme` values, so the demo shows the page in both the English and the Japanese build. The entry must not sit in `src/lib` (svelte-package would publish it).
 
 ## Left to the builder
 
 - How `@import "tailwindcss"`, `@plugin` and `@config` are loaded for `__unstable__loadDesignSystem` (the loaders): through Vite's resolver, through the user's `@tailwindcss/node` when it is resolvable, or Node resolution from the CSS file. It must resolve from the CSS file's location and work with pnpm's strict layout and in a monorepo.
-- The route shape and how the page is split by category, within the collision rule above.
+- The route shape and how the page is split by category, within the collision rule above (a single-segment hash such as `#/tailwind` cannot collide, since IDs always have a group prefix).
 - Whether the samples render in the page or in an iframe, and whether long lists need virtualizing (expect up to a few hundred tokens per category).
 - The name and input schema of the WebMCP tool.
 - Test layout: unit tests against a real `tailwindcss` v4 (dev dependency from the catalog), a `tests/build` fixture with Tailwind, a client test for the page; CI's `floor` job should keep passing without Tailwind installed.
