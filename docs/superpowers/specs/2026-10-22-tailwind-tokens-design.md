@@ -158,7 +158,7 @@ Following Histoire's `v4.ts`, with two corrections.
 - Neither `tailwindcss` nor `@tailwindcss/node` is declared, even as an optional peer dependency.
 - A failure in the build warns instead of failing the build (Histoire fails it).
 - `@font-face` with relative URLs is not rewritten for the samples.
-- The library's own catalog (dogfooding, deployed as the docs demo) gets `tailwindcss` and `@tailwindcss/node` as dev dependencies and a small CSS entry with a few `@theme` values, so the demo shows the page in both the English and the Japanese build. The entry must not sit in `src/lib` (svelte-package would publish it).
+- The library's own catalog (dogfooding, deployed as the docs demo) gets `tailwindcss`, `@tailwindcss/node` and `@tailwindcss/vite` as dev dependencies and a small CSS entry with a few `@theme` values, so the demo shows the page in both the English and the Japanese build. The entry must not sit in `src/lib` (svelte-package would publish it).
 
 ## Left to the builder
 
