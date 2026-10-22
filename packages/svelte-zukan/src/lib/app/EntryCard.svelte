@@ -6,11 +6,15 @@
   /** the width a thumbnail is laid out at; it is scaled down to the card */
   const LAYOUT_WIDTH = 480;
   const THUMB_HEIGHT = 150;
-  /** a thumbnail is a picture of the first example: it never scrolls, and its content sits in the middle unless it is taller */
+  /**
+   * a thumbnail is a picture of the first example: it never scrolls, and its content sits in the middle unless it is
+   * taller. `display` must beat the preview's own scoped `display: flow-root`, which is injected after this. Centring
+   * across too would shrink every block to its content, so a full-width card or field would look narrower than it is
+   */
   const THUMB_CSS =
     'html,body{overflow:hidden !important}' +
     '[data-zukan-preview]{box-sizing:border-box;min-height:100vh;padding:24px;' +
-    'display:flex;flex-direction:column;justify-content:safe center}';
+    'display:flex !important;flex-direction:column;justify-content:safe center}';
 
   let { entry, theme }: { entry: Entry; theme: Theme } = $props();
 
