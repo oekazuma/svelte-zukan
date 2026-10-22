@@ -1,5 +1,5 @@
 <script module lang="ts">
-  /** the modifier shown with K; ⌘ and Ctrl both open the search everywhere */
+  /** the modifier that opens the search with K: ⌘ on Apple platforms, where Ctrl+K deletes to the end of a line */
   export const modifier = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 </script>
 

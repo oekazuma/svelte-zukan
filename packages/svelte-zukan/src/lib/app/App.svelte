@@ -97,7 +97,8 @@
   function onkeydown(e: KeyboardEvent) {
     if (route.view === 'preview') return;
     // works while typing too, the sidebar's search box included
-    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+    const mod = modifier === '⌘' ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+    if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       searchDialog?.open();
       return;

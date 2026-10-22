@@ -3,6 +3,7 @@ import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import type { ZukanMeta } from '../types.js';
 import App from './App.svelte';
+import { modifier } from './SearchDialog.svelte';
 import Catalog from './Catalog.test.svelte';
 
 const load = () => Promise.resolve({ default: Catalog });
@@ -42,7 +43,8 @@ function setup(hash = '#/ui/Card') {
   };
 }
 
-const openSearch = () => userEvent.keyboard('{Control>}k{/Control}');
+const key = modifier === '⌘' ? 'Meta' : 'Control';
+const openSearch = () => userEvent.keyboard(`{${key}>}k{/${key}}`);
 // a closed dialog leaves the accessibility tree, so a role locator cannot find it
 const isOpen = () => document.querySelector<HTMLDialogElement>('dialog[aria-label="Search the catalog"]')?.open;
 

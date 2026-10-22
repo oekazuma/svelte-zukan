@@ -5,6 +5,7 @@ import { render } from 'vitest-browser-svelte';
 import type { ZukanMeta } from '../types.js';
 import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
+import { modifier } from './SearchDialog.svelte';
 
 const meta: ZukanMeta = {
   sections: [
@@ -83,7 +84,7 @@ describe.each(['light', 'dark'] as const)('the catalog UI in %s has no axe viola
   it('with the search dialog showing results', async () => {
     await page.viewport(1280, 800);
     const screen = await render(App, { props: props('#/ui/Card', theme) });
-    await userEvent.keyboard('{Control>}k{/Control}');
+    await userEvent.keyboard(modifier === '⌘' ? '{Meta>}k{/Meta}' : '{Control>}k{/Control}');
     // matches names, section titles, a prop and the doc
     await screen.getByRole('combobox').fill('t');
     await expect.element(screen.getByRole('option').first()).toBeInTheDocument();
