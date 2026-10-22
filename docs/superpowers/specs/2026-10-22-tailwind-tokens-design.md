@@ -1,6 +1,6 @@
 # Tailwind CSS tokens in the catalog — design
 
-Date: 2026-10-22. Status: draft, waiting for the maintainer's approval.
+Date: 2026-10-22. Status: draft, waiting for the maintainer's approval of the final version.
 
 ## Intent
 
@@ -27,6 +27,7 @@ People use svelte-zukan as the place where a design system lives. When the app s
 - Every utility a token feeds. Colors appear as `bg-*`, `text-*` and `border-*` only, not `ring-*`, `fill-*`, `outline-*`, and so on (Histoire's rule).
 - Generic design tokens for projects without Tailwind (plain CSS custom properties). That would be a separate feature.
 - Editing tokens from the catalog.
+- Dark-mode values (`.dark { … }`, `@custom-variant dark`) in this version. They are a planned follow-up.
 
 ## Anti-goals (a failure even if it works)
 
@@ -67,7 +68,7 @@ Following Histoire's `v4.ts`:
 - A "Tailwind" item in the sidebar and a page of its own, with the categories as tabs or a sub-list, plus "Full config" (all theme variables).
 - Each token: a live sample (color swatch, padded box, sized bar, text sample, shadowed square, …, as in Histoire's `render.ts`), the class name and the CSS variable, each with a copy button.
 - A filter box per page that matches class names and values. Text categories have a sample-text field.
-- The page itself follows the catalog's light/dark theme. Samples and values are the theme's base values: `theme.entries()` has no dark-mode values (`.dark { --color-… }`, `@custom-variant dark`), so dark values are out of scope for this version. Sample CSS is the `candidatesToCss()` output for the listed classes and the theme variables, scoped to the token page so it neither leaks out nor picks up catalog styles.
+- The page itself follows the catalog's light/dark theme. Samples and values are the theme's base values: `theme.entries()` has no dark-mode values (`.dark { --color-… }`, `@custom-variant dark`), so dark values are out of scope for this version. The maintainer wants them later, as a follow-up: keep the data shape open to a second set of values per token (do not bake "one value per token" into names or the `catalog.json` contract in a way that would need a breaking change). Sample CSS is the `candidatesToCss()` output for the listed classes and the theme variables, scoped to the token page so it neither leaks out nor picks up catalog styles.
 - The route must never collide with a component ID (IDs are `<group>/<path>`, and group names come from package names or the `groups` keys).
 
 ### Agents
