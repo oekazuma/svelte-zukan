@@ -24,17 +24,19 @@ Below the cards, a folded list shows the `.svelte` files in the scanned director
 
 The theme button at the top of the sidebar switches the catalog and every preview between light and dark. It starts from your system's setting, and your choice is remembered in this browser. Each preview gets the theme as its `color-scheme`, so `light-dark()` and `prefers-color-scheme` in your components follow it.
 
+To show one theme only, set the [`theme` option](/options) to `'light'` or `'dark'`. The catalog and every preview then always use it, and the theme button and the <kbd>T</kbd> shortcut go away.
+
 ## Keyboard shortcuts
 
-| Key                         | Action                                        |
-| --------------------------- | --------------------------------------------- |
-| <kbd>/</kbd>                | Jump to the search box                        |
-| <kbd>J</kbd> / <kbd>K</kbd> | Next / previous component                     |
-| <kbd>T</kbd>                | Switch between light and dark                 |
-| <kbd>F</kbd>                | Expand the preview in view, or leave it       |
-| <kbd>Esc</kbd>              | Leave the expanded preview                    |
-| <kbd>↑</kbd> <kbd>↓</kbd>   | Move through the component list               |
-| <kbd>←</kbd> <kbd>→</kbd>   | Close and open a folder in the component list |
-| <kbd>?</kbd>                | Show the shortcuts                            |
+| Key                         | Action                                                          |
+| --------------------------- | --------------------------------------------------------------- |
+| <kbd>/</kbd>                | Jump to the search box                                          |
+| <kbd>J</kbd> / <kbd>K</kbd> | Next / previous component                                       |
+| <kbd>T</kbd>                | Switch between light and dark, unless the `theme` option is set |
+| <kbd>F</kbd>                | Expand the preview in view, or leave it                         |
+| <kbd>Esc</kbd>              | Leave the expanded preview                                      |
+| <kbd>↑</kbd> <kbd>↓</kbd>   | Move through the component list                                 |
+| <kbd>←</kbd> <kbd>→</kbd>   | Close and open a folder in the component list                   |
+| <kbd>?</kbd>                | Show the shortcuts                                              |
 
 The shortcuts do nothing while you type in the search box or another field.

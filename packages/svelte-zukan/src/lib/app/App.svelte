@@ -15,6 +15,7 @@
     wrapper,
     title,
     locale,
+    fixedTheme = null,
     searched,
     uncataloged = [],
     axe
@@ -24,6 +25,8 @@
     wrapper: (() => Promise<{ default: Component<{ children: Snippet }> }>) | null;
     title: string;
     locale: 'en' | 'ja';
+    /** the `theme` option: the only theme, with no way to switch */
+    fixedTheme?: Theme | null;
     searched: { group: string; dirs: string[] }[];
     /** `.svelte` files with no catalog file next to them, relative to the Vite root */
     uncataloged?: { group: string; file: string }[];
@@ -40,12 +43,16 @@
 
   let hash = $state(remembered() ?? location.hash);
 
+  // `fixedTheme` comes from the config, so its initial value is all there is
+  // svelte-ignore state_referenced_locally
   let theme = $state<Theme>(
-    themeOf(parseHash(remembered() ?? location.hash)) ??
+    fixedTheme ??
+      themeOf(parseHash(remembered() ?? location.hash)) ??
       readTheme() ??
       (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
   );
   function toggleTheme() {
+    if (fixedTheme) return;
     theme = theme === 'dark' ? 'light' : 'dark';
     writeTheme(theme);
   }
@@ -70,7 +77,12 @@
     const catalogUrl = new URL('catalog.json', location.href.split('#')[0]);
     import('./webmcp.js').then(({ buildTools, registerTools }) =>
       registerTools(
-        buildTools({ fetchCatalog: () => fetch(catalogUrl).then((r) => r.json()), axe, page: location.pathname }),
+        buildTools({
+          fetchCatalog: () => fetch(catalogUrl).then((r) => r.json()),
+          axe,
+          page: location.pathname,
+          themes: !fixedTheme
+        }),
         context
       )
     );
@@ -115,7 +127,7 @@
       return;
     }
     hash = next;
-    theme = themeOf(route) ?? theme;
+    theme = fixedTheme ?? themeOf(route) ?? theme;
     // the browser keeps the scroll position on a hash change; the previous page's position means nothing on the next
     if (route.view === 'list' || (route.view === 'detail' && route.section === null)) tick().then(() => scrollTo(0, 0));
   }
@@ -130,7 +142,7 @@
 {#if route.view === 'preview'}
   {#if entry}
     {#key hash}
-      <Preview {entry} section={route.section} theme={route.theme} {wrapper} {t} />
+      <Preview {entry} section={route.section} theme={fixedTheme ?? route.theme} {wrapper} {t} />
     {/key}
   {:else}
     <p>{t.notFound}</p>
@@ -143,7 +155,7 @@
       {logo}
       {title}
       {theme}
-      ontoggletheme={toggleTheme}
+      ontoggletheme={fixedTheme ? undefined : toggleTheme}
       onshortcuts={() => shortcuts?.showModal()}
       {t}
     />
@@ -176,8 +188,10 @@
         <dd>{t.shortcutNext}</dd>
         <dt><kbd>K</kbd></dt>
         <dd>{t.shortcutPrevious}</dd>
-        <dt><kbd>T</kbd></dt>
-        <dd>{t.shortcutTheme}</dd>
+        {#if !fixedTheme}
+          <dt><kbd>T</kbd></dt>
+          <dd>{t.shortcutTheme}</dd>
+        {/if}
         <dt><kbd>F</kbd></dt>
         <dd>{t.shortcutExpand}</dd>
         <dt><kbd>Esc</kbd></dt>

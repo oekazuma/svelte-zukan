@@ -26,7 +26,7 @@ The dev server serves `/__zukan/catalog.json`, and `vite build` with `build: tru
 | `components[].error`      | Why the catalog file does not compile, when it does not; its `sections` are then empty                     |
 | `uncataloged[]`           | `.svelte` files in the scanned directories with no catalog file next to them                               |
 
-`preview` is a hash on the catalog page: `/__zukan/#/preview/ui/Button?section=Primary` shows only that section, so it is a good page for a screenshot. Add `&theme=dark` for the dark theme. The page fills the window, so set the window's width for a phone or tablet layout.
+`preview` is a hash on the catalog page: `/__zukan/#/preview/ui/Button?section=Primary` shows only that section, so it is a good page for a screenshot. Add `&theme=dark` for the dark theme, unless the [`theme` option](/options) fixes it. The page fills the window, so set the window's width for a phone or tablet layout.
 
 ## WebMCP tools in the catalog
 

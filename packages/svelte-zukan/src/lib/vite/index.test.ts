@@ -148,6 +148,7 @@ describe('resolveOptions', () => {
       logo: bundled('logo.svg'),
       title: 'zukan',
       locale: 'en',
+      theme: null,
       build: false
     });
   });
@@ -165,6 +166,8 @@ describe('resolveOptions', () => {
     const { root } = await makeApp();
     // @ts-expect-error unknown locale
     expect(() => resolveOptions(root, { locale: 'fr' })).toThrow(/locale "fr"/);
+    // @ts-expect-error unknown theme
+    expect(() => resolveOptions(root, { theme: 'blue' })).toThrow('unknown theme "blue" (use "light" or "dark")');
     expect(() => resolveOptions(root, { wrapper: 'Nope.svelte' })).toThrow(`wrapper not found: ${root}/Nope.svelte`);
     expect(() => resolveOptions(root, { logo: 'nope.svg' })).toThrow(`logo not found: ${root}/nope.svg`);
     // directories are not files

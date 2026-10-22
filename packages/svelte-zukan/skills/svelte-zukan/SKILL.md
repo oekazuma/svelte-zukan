@@ -45,7 +45,7 @@ Put `<Name>.zukan.svelte` next to `<Name>.svelte` (the suffix can differ: check 
 ## Check the result
 
 - Reload `/__zukan/catalog.json`: the component is listed, has no `error`, and its sections are the ones you wrote
-- Open a section alone: `/__zukan/#/preview/<id>?section=<title>` (add `&theme=dark` for the dark theme). The page has only the component and fills the window, so set the window width for a phone or tablet layout. It makes a good target for a screenshot
+- Open a section alone: `/__zukan/#/preview/<id>?section=<title>` (add `&theme=dark` for the dark theme; ignored when the `theme` option fixes the theme). The page has only the component and fills the window, so set the window width for a phone or tablet layout. It makes a good target for a screenshot
 - On the detail page, `/__zukan/#/<id>?section=<title>&width=375` opens that section's preview at 375px inside the catalog
 - Run the accessibility check (axe-core) on the sections you wrote: the button in each preview's toolbar, or, in a browser with WebMCP, the catalog page's `check_accessibility` tool (`list_components`, `get_component` and `open_component` are there too)
 - A `vite build` with `build: true` fails on the same catalog file errors, with the file and line

@@ -16,6 +16,8 @@ export type ZukanOptions = {
   title?: string;
   /** UI language (default 'en') */
   locale?: 'en' | 'ja';
+  /** fixes the catalog and every preview to one theme and hides the switch (default: both, starting from the system's) */
+  theme?: 'light' | 'dark';
   /** write the catalog as a static site on `vite build` (default false; outDir defaults to 'zukan-dist') */
   build?: boolean | { outDir?: string };
 };
@@ -27,6 +29,8 @@ export const appFile = (name: string) => normalizePath(fileURLToPath(new URL(`..
 export const libDir = normalizePath(fileURLToPath(new URL('..', import.meta.url))).replace(/\/$/, '');
 
 const LOCALES = ['en', 'ja'];
+const THEMES = ['light', 'dark'];
+const quoted = (values: string[]) => values.map((v) => `"${v}"`).join(' or ');
 
 const file = (root: string, key: string, rel: string) => {
   const abs = normalizePath(resolve(root, rel));
@@ -35,15 +39,17 @@ const file = (root: string, key: string, rel: string) => {
 };
 
 export function resolveOptions(root: string, options: ZukanOptions) {
-  const { suffix = 'zukan', locale = 'en', wrapper, logo, build } = options;
-  if (!LOCALES.includes(locale))
-    throw new Error(`svelte-zukan: unknown locale "${locale}" (use ${LOCALES.map((l) => `"${l}"`).join(' or ')})`);
+  const { suffix = 'zukan', locale = 'en', theme, wrapper, logo, build } = options;
+  if (!LOCALES.includes(locale)) throw new Error(`svelte-zukan: unknown locale "${locale}" (use ${quoted(LOCALES)})`);
+  if (theme !== undefined && !THEMES.includes(theme))
+    throw new Error(`svelte-zukan: unknown theme "${theme}" (use ${quoted(THEMES)})`);
   return {
     suffix,
     wrapper: wrapper === undefined ? null : file(root, 'wrapper', wrapper),
     logo: logo === false ? null : logo === undefined ? appFile('logo.svg') : file(root, 'logo', logo),
     title: options.title ?? 'zukan',
     locale,
+    theme: theme ?? null,
     /** outDir of the static catalog, or false when it is not built */
     build: build ? normalizePath(resolve(root, (build !== true && build.outDir) || 'zukan-dist')) : (false as const)
   };

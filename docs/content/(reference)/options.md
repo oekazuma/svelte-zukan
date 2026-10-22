@@ -12,6 +12,7 @@ zukan({
   logo: '.zukan/logo.svg',
   title: 'zukan',
   locale: 'en',
+  theme: 'dark',
   build: { outDir: 'zukan-dist' }
 });
 ```
@@ -24,10 +25,11 @@ zukan({
 | `logo`    | `string \| false`                    | bundled logo   | Path to the sidebar logo image. `false` hides the logo and shows the `title` text instead                                                                   |
 | `title`   | `string`                             | `'zukan'`      | The sidebar logo's `alt` and the page `<title>`                                                                                                             |
 | `locale`  | `'en' \| 'ja'`                       | `'en'`         | UI language. `<html lang>` follows it                                                                                                                       |
+| `theme`   | `'light' \| 'dark'`                  | none           | Fixes the catalog and every preview to this [theme](/catalog-ui) and removes the theme switch. Without it, viewers switch between light and dark            |
 | `build`   | `boolean \| { outDir?: string }`     | `false`        | [Write the catalog statically](/static-export) during `vite build`. With `true`, `outDir` is `'zukan-dist'`                                                 |
 
 - All paths are relative to Vite's root, and can point outside `src`, such as `.zukan/`
-- Invalid values (a `suffix` that does not match the rule, an unknown `locale`, a file or directory that does not exist) cause an error when the config is loaded
+- Invalid values (a `suffix` that does not match the rule, an unknown `locale` or `theme`, a file or directory that does not exist) cause an error when the config is loaded
 - If a `groups` key consists only of digits, JavaScript orders it numerically instead of in declaration order. Include a non-digit character in group names
 
 ## UI language
