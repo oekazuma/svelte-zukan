@@ -973,6 +973,37 @@ describe('Tailwind CSS', () => {
     expect(JSON.parse(res.body!).tailwind).toBeNull();
   });
 
+  it('keeps a failed generation out of hotUpdate and out of the cache', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    const server = fakeServer(root);
+    p.configureServer(server);
+    const list = { id: '\0virtual:svelte-zukan/tailwind' };
+    const ctx = {
+      environment: {
+        config: { consumer: 'client' },
+        logger: { warn: vi.fn() },
+        hot: { send: vi.fn() },
+        moduleGraph: {
+          getModuleById: vi.fn((id: string) => (id === list.id ? list : undefined)),
+          idToModuleMap: new Map([[list.id, list]]),
+          invalidateModule: vi.fn()
+        }
+      }
+    };
+    vi.mocked(loadTailwind).mockClear();
+    vi.mocked(loadTailwind).mockRejectedValueOnce(new Error('boom'));
+    const result = p.hotUpdate.call(ctx, { type: 'create', file: `${root}/src/new.css`, modules: [], timestamp: 1 });
+    expect(result).toBeUndefined();
+    await vi.waitFor(() =>
+      expect(ctx.environment.logger.warn).toHaveBeenCalledWith(expect.stringMatching(/^svelte-zukan: .*boom/))
+    );
+    expect(ctx.environment.hot.send).not.toHaveBeenCalled();
+    const res = await request(server.middlewares.use.mock.calls[0][0], '/__zukan/catalog.json');
+    expect(JSON.parse(res.body!).tailwind).toBeNull();
+    expect(loadTailwind).toHaveBeenCalledTimes(2);
+  });
+
   it('writes catalog.json with tailwind null without Tailwind', async () => {
     const { root } = await makeApp();
     mkdirSync(`${root}/zukan-dist`);

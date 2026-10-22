@@ -347,8 +347,8 @@ describe('Tailwind CSS', () => {
       { environment: server.environments.client },
       { type: 'update', file: join(tmp, 'app/src/app.css'), modules: [], timestamp: Date.now() }
     );
-    expect(Array.isArray(result)).toBe(false);
-    expect(await result).toBeUndefined();
+    // synchronously: Vite's own update of the file is not held back by the regeneration
+    expect(result).toBeUndefined();
     send.mockClear();
     writeFileSync(join(tmp, 'app/src/app.css'), brand.replace('#ff3e00', '#000'));
     await waitForReload();

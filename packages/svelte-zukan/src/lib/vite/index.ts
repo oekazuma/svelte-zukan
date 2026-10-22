@@ -133,34 +133,44 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   // Tailwind's dependencies are added to the dev server's watcher, not with `addWatchFile`: that would make each one an
   // import of the Tailwind modules, whose chain up to the entry accepts no update, so Vite would answer with `full-reload`
   let watcher: FSWatcher | null = null;
-  const tailwindData = (env: () => Environment) =>
-    (tailwind ??= (async () => {
-      const css = viteResolver(
-        env,
-        (config) => ({
-          ...config.resolve,
-          extensions: ['.css'],
-          mainFields: ['style'],
-          conditions: ['style', 'development|production'],
-          tryIndex: false,
-          preferRelative: true
-        }),
-        (file) => file.endsWith('.css')
-      );
-      const js = viteResolver(
-        env,
-        (config) => config.resolve,
-        (file) => !file.endsWith('.css')
-      );
-      const data = await loadTailwind(root, cssDirs(), { css, js });
-      // Vite does not watch node_modules; a reinstall restarts the dev server anyway
-      const watch = data.watch.filter((file) => !file.includes('/node_modules/'));
-      tailwindWatch = new Set(watch);
-      // the root is watched already
-      const outside = watch.filter((file) => !isInside(file, root));
-      if (outside.length) watcher?.add(outside);
-      return { sources: data.sources, watch };
-    })());
+  const generateTailwind = async (env: () => Environment) => {
+    const css = viteResolver(
+      env,
+      (config) => ({
+        ...config.resolve,
+        extensions: ['.css'],
+        mainFields: ['style'],
+        conditions: ['style', 'development|production'],
+        tryIndex: false,
+        preferRelative: true
+      }),
+      (file) => file.endsWith('.css')
+    );
+    const js = viteResolver(
+      env,
+      (config) => config.resolve,
+      (file) => !file.endsWith('.css')
+    );
+    const data = await loadTailwind(root, cssDirs(), { css, js });
+    // Vite does not watch node_modules; a reinstall restarts the dev server anyway
+    const watch = data.watch.filter((file) => !file.includes('/node_modules/'));
+    tailwindWatch = new Set(watch);
+    // the root is watched already
+    const outside = watch.filter((file) => !isInside(file, root));
+    if (outside.length) watcher?.add(outside);
+    return { sources: data.sources, watch };
+  };
+  const tailwindData = (env: () => Environment) => {
+    if (!tailwind) {
+      const pending = generateTailwind(env);
+      tailwind = pending;
+      // a failed generation is not kept: the next demand tries again
+      pending.catch(() => {
+        if (tailwind === pending) tailwind = null;
+      });
+    }
+    return tailwind;
+  };
   const uncataloged = (all: CatalogItem[]) =>
     listUncataloged(groups, resolved.suffix, new Set(all.map((i) => normalizePath(componentFileOf(i.file)))));
   const catalogData = async (env: () => Environment) => {
@@ -502,16 +512,25 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         tailwind = null;
         if (!moduleGraph.getModuleById('\0' + TAILWIND)) return;
         const env = this.environment;
-        // undefined, never []: the app's own handling of the file (e.g. `@tailwindcss/vite`'s CSS update) goes on
-        return tailwindData(() => env).then(({ sources }) => {
-          const json = JSON.stringify(sources);
-          if (json === served) return;
-          served = json;
-          for (const mod of moduleGraph.idToModuleMap.values())
-            if (mod.id === '\0' + TAILWIND || mod.id?.startsWith('\0' + TAILWIND_SOURCE))
-              moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
-          env.hot.send({ type: 'custom', event: 'zukan:reload' });
-        });
+        // in the background, so that the app's own handling of the file (e.g. `@tailwindcss/vite`'s CSS update) is
+        // neither delayed nor shown a failure of ours
+        tailwindData(() => env)
+          .then(({ sources }) => {
+            const json = JSON.stringify(sources);
+            if (json === served) return;
+            served = json;
+            for (const mod of moduleGraph.idToModuleMap.values())
+              if (mod.id === '\0' + TAILWIND || mod.id?.startsWith('\0' + TAILWIND_SOURCE))
+                moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
+            env.hot.send({ type: 'custom', event: 'zukan:reload' });
+          })
+          .catch((e) =>
+            env.logger.warn(
+              `svelte-zukan: could not read the Tailwind CSS entries: ${e instanceof Error ? e.message : e}`
+            )
+          );
+        // undefined, never []
+        return;
       }
       if (isDocFile(file)) {
         targets = metas();
