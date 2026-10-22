@@ -1,6 +1,45 @@
 <!-- mounted into the sample iframe: injected styles land in the document it is mounted in, not the catalog's -->
 <svelte:options css="injected" />
 
+<script lang="ts" module>
+  import type { TailwindCategoryId, TailwindToken } from '../types.js';
+
+  /** the categories drawn as one row per token, to compare sizes at a glance */
+  const ROWS: TailwindCategoryId[] = [
+    'padding',
+    'margin',
+    'spacing',
+    'width',
+    'height',
+    'breakpoints',
+    'border-width',
+    'border-radius',
+    'opacity',
+    'z-index'
+  ];
+
+  /** the property whose computed value is shown next to a token's value */
+  const MEASURED: Partial<Record<TailwindCategoryId, string>> = {
+    padding: 'padding-top',
+    margin: 'margin-top',
+    spacing: 'width',
+    width: 'width',
+    height: 'height',
+    'font-size': 'font-size',
+    'letter-spacing': 'letter-spacing',
+    'line-height': 'line-height',
+    'border-radius': 'border-top-left-radius',
+    'border-width': 'border-top-width',
+    breakpoints: 'width'
+  };
+
+  const LENGTH = /\d(?:r?em|px|r?ch|r?ex|r?lh|pt|pc|in|cm|mm|q)\b/i;
+  // these follow the frame, whose height follows its content (`h-screen` would never settle); `infinity` is `rounded-full`
+  const RELATIVE = /%|infinity|\d(?:[sld]?v(?:[hwib]|min|max)|cq(?:[hwib]|min|max))\b/i;
+
+  const key = (token: TailwindToken) => token.class ?? token.cssVariable;
+</script>
+
 <script lang="ts">
   import type { Theme } from '../components/PreviewFrame/storage.js';
   import type { TailwindCategory } from '../types.js';
@@ -19,7 +58,41 @@
 
   const tokens = $derived(filterTokens(category.tokens, query));
   const text = $derived(kind === 'text' || kind === 'text-color');
-  const wide = $derived(['text', 'width', 'padding', 'margin'].includes(kind));
+  const rows = $derived(ROWS.includes(category.id));
+  const sampled = $derived(category.id !== 'z-index');
+
+  /** px by token, for the values that do not depend on the frame */
+  let measured = $state.raw<Record<string, number>>({});
+  const widest = $derived(Math.max(0, ...Object.values(measured)));
+
+  // every token of the category, not only the filtered ones: the breakpoint bars keep their scale under a filter
+  function measure(root: HTMLElement) {
+    const property = MEASURED[category.id];
+    const out: Record<string, number> = {};
+    if (property) {
+      const doc = root.ownerDocument;
+      const probe = doc.createElement('div');
+      // a border width computes to 0 without a style
+      probe.style.cssText = 'position:absolute;visibility:hidden;border:0 solid';
+      root.append(probe);
+      const style = doc.defaultView!.getComputedStyle(probe);
+      for (const token of category.tokens) {
+        if (!LENGTH.test(token.value) || RELATIVE.test(token.value)) continue;
+        probe.style.setProperty(property, token.value);
+        const px = parseFloat(style.getPropertyValue(property));
+        if (Number.isFinite(px)) out[key(token)!] = px;
+      }
+      probe.remove();
+    }
+    measured = out;
+  }
+
+  function computed(token: TailwindToken): string | null {
+    const px = measured[key(token)!];
+    if (px === undefined) return null;
+    const shown = `${Math.round(px * 100) / 100}px`;
+    return shown === token.value ? null : shown;
+  }
 
   let copied = $state<{ text: string; ok: boolean } | null>(null);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -73,43 +146,90 @@
   </button>
 {/snippet}
 
+{#snippet names(token: TailwindToken)}
+  {#if token.class}
+    {@render copyButton(t.copyClass, token.class)}
+  {/if}
+  {#if token.cssVariable}
+    {@render copyButton(t.copyVariable, token.cssVariable)}
+  {/if}
+{/snippet}
+
+{#snippet value(token: TailwindToken)}
+  {@const px = computed(token)}
+  <code class="zukan-raw">{token.value}</code>
+  {#if px}
+    <span class="zukan-px"
+      ><span aria-hidden="true">·</span> <span class="zukan-sr-only">{t.computedSize}:</span> <code>{px}</code></span
+    >
+  {/if}
+{/snippet}
+
+{#snippet rowSample(token: TailwindToken)}
+  {@const px = measured[key(token)!]}
+  {#if category.id === 'padding'}
+    <div class={['zukan-pad', token.class]}><div class="zukan-block"></div></div>
+  {:else if category.id === 'margin'}
+    <div class="zukan-margin-area"><div class={['zukan-block', token.class]}></div></div>
+  {:else if category.id === 'breakpoints'}
+    {#if px !== undefined && widest > 0}
+      <div class="zukan-bar" style:width="{(px / widest) * 100}%"></div>
+    {/if}
+  {:else if category.id === 'border-width'}
+    <div class={['zukan-shape zukan-outline', token.class]}></div>
+  {:else if category.id === 'border-radius' || category.id === 'opacity'}
+    <div class={['zukan-shape', token.class]}></div>
+  {:else if px !== undefined}
+    <!-- Width, Height and Spacing draw the length as a bar; a value that follows the frame has none -->
+    <div class="zukan-bar" style:width={token.value}></div>
+  {/if}
+{/snippet}
+
 <!-- class names are prefixed: the entry's own CSS is in this document and may style `.card` or `.sample` -->
-<div class="zukan-tokens" data-theme={theme}>
-  {#if tokens.length}
-    <ul class="zukan-cards">
-      {#each tokens as token (token.class ?? token.cssVariable)}
-        <li class={['zukan-card', wide && 'zukan-wide']} data-token={token.class ?? token.cssVariable}>
-          {#if kind !== 'value'}
-            <div class="zukan-sample zukan-{kind}">
-              <!-- Spacing shows the padding value as a bar, as the class would pad instead of size it -->
-              <div
-                class={['zukan-value', category.id !== 'spacing' && token.class]}
-                style:width={category.id === 'spacing' ? token.value : undefined}
-              >
-                {#if kind === 'padding' || kind === 'margin'}
-                  <div class="zukan-inner"></div>
-                {:else if text}
-                  {sampleText}
-                {/if}
-              </div>
-            </div>
+<div class="zukan-tokens" data-theme={theme} {@attach measure}>
+  <!-- first: at the end, its static position would put it 1px below the content the frame is sized to -->
+  <p class="zukan-sr-only" aria-live="polite">{copied ? (copied.ok ? t.copied : t.copyFailed) : ''}</p>
+  {#if !tokens.length}
+    <p class="zukan-empty">{t.noTokens}</p>
+  {:else if rows}
+    <ul class={['zukan-rows', !sampled && 'zukan-bare']}>
+      {#each tokens as token (key(token))}
+        <li class="zukan-row" data-token={key(token)}>
+          {#if sampled}
+            <div class="zukan-sample zukan-{category.id}">{@render rowSample(token)}</div>
           {/if}
-          <div class="zukan-names">
-            {#if token.class}
-              {@render copyButton(t.copyClass, token.class)}
-            {/if}
-            {#if token.cssVariable}
-              {@render copyButton(t.copyVariable, token.cssVariable)}
-            {/if}
-            <code class="zukan-raw">{token.value}</code>
-          </div>
+          <div class="zukan-names">{@render names(token)}</div>
+          <div class="zukan-values">{@render value(token)}</div>
         </li>
       {/each}
     </ul>
   {:else}
-    <p class="zukan-empty">{t.noTokens}</p>
+    <ul class="zukan-cards">
+      {#each tokens as token (key(token))}
+        <li class={['zukan-card', kind === 'text' && 'zukan-wide']} data-token={key(token)}>
+          <div class="zukan-sample zukan-{kind} zukan-{category.id}">
+            {#if category.id === 'drop-shadow'}
+              <!-- a filter shadow follows the shape it is drawn around -->
+              <svg class={token.class} viewBox="0 0 24 24" width="64" height="64" aria-hidden="true">
+                <path
+                  fill="#fff"
+                  d="M12 2l2.9 6.26 6.85.71-5.12 4.6 1.45 6.73L12 16.9l-6.08 3.4 1.45-6.73-5.12-4.6 6.85-.71z"
+                />
+              </svg>
+            {:else}
+              <div class={['zukan-value', token.class]}>
+                {#if text}{sampleText}{/if}
+              </div>
+            {/if}
+          </div>
+          <div class="zukan-names">
+            {@render names(token)}
+            <span class="zukan-values">{@render value(token)}</span>
+          </div>
+        </li>
+      {/each}
+    </ul>
   {/if}
-  <p class="zukan-sr-only" aria-live="polite">{copied ? (copied.ok ? t.copied : t.copyFailed) : ''}</p>
 </div>
 
 <style>
@@ -141,13 +261,17 @@
     --_danger: #ff7b72;
   }
 
+  .zukan-cards,
+  .zukan-rows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
   .zukan-cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 12px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
   }
 
   .zukan-card {
@@ -164,15 +288,20 @@
     grid-column: 1 / -1;
   }
 
-  /* always light, like the rest of the sample document */
+  /* an inset panel, always light like the rest of the sample document */
   .zukan-sample {
     min-width: 0;
-    max-width: 100%;
-    overflow: auto;
-    padding: 8px;
-    border-bottom: 1px solid var(--_border);
+    border: 1px solid var(--_border);
+    border-radius: 6px;
     background: #fff;
     color: #000;
+    overflow: hidden;
+  }
+
+  .zukan-card .zukan-sample {
+    margin: 8px 8px 0;
+    padding: 8px;
+    overflow: auto;
   }
 
   .zukan-value {
@@ -200,62 +329,132 @@
     overflow-wrap: anywhere;
   }
 
-  .zukan-box,
-  .zukan-border {
-    padding: 24px;
+  /* a white shape on grey, with room below for the largest shadows */
+  .zukan-card .zukan-box-shadow,
+  .zukan-card .zukan-drop-shadow {
+    display: flex;
+    justify-content: center;
+    padding: 24px 24px 40px;
+    background: #f1f3f5;
+    overflow: hidden;
   }
 
-  .zukan-box .zukan-value,
-  .zukan-border .zukan-value {
-    width: 96px;
-    height: 96px;
-    background: rgb(113 113 122 / 0.5);
-  }
-
-  .zukan-border .zukan-value {
-    border-style: solid;
-  }
-
-  .zukan-width .zukan-value {
-    height: 32px;
-    background: rgb(113 113 122 / 0.5);
-  }
-
-  /* `h-screen` is 100vh of this frame, and the frame grows with its content */
-  .zukan-height {
-    max-height: 240px;
-  }
-
-  .zukan-height .zukan-value {
+  .zukan-box-shadow .zukan-value {
     width: 64px;
-    background: rgb(113 113 122 / 0.5);
+    height: 64px;
+    border-radius: 6px;
+    background: #fff;
   }
 
-  .zukan-padding .zukan-value {
-    width: fit-content;
-    background: rgb(113 113 122 / 0.15);
+  .zukan-drop-shadow svg {
+    display: block;
   }
 
-  .zukan-margin {
-    border: 1px dashed rgb(113 113 122 / 0.5);
+  .zukan-rows {
+    border: 1px solid var(--_border);
+    border-radius: 8px;
+    background: var(--_bg);
   }
 
-  .zukan-margin .zukan-value {
+  .zukan-row {
+    display: grid;
+    grid-template-columns: minmax(0, 4fr) minmax(0, 5fr) minmax(0, 4fr);
+    grid-template-areas: 'sample names value';
+    align-items: center;
+    gap: 6px 16px;
+    padding: 6px 12px;
+  }
+
+  .zukan-row + .zukan-row {
+    border-top: 1px solid var(--_border);
+  }
+
+  .zukan-bare .zukan-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: 'names value';
+  }
+
+  /* the frame's own width */
+  @media (width < 560px) {
+    .zukan-row {
+      grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+      grid-template-areas: 'sample names' 'sample value';
+    }
+  }
+
+  /* one height for every row; larger samples are clipped, their size is in the value column */
+  .zukan-row .zukan-sample {
+    grid-area: sample;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 40px;
+    padding: 0 12px;
+  }
+
+  .zukan-row .zukan-sample > * {
+    flex: none;
+  }
+
+  /* drawn like the browser's box model: padding green, margin orange, content blue */
+  .zukan-pad {
+    display: flex;
+    background: #bbf7d0;
+  }
+
+  .zukan-margin-area {
     display: flow-root;
+    background: #fed7aa;
   }
 
-  .zukan-inner {
-    width: 48px;
-    height: 48px;
-    background: rgb(113 113 122 / 0.5);
+  .zukan-block {
+    width: 16px;
+    height: 16px;
+    background: #3b82f6;
+  }
+
+  .zukan-bar {
+    height: 16px;
+    border-radius: 2px;
+    background: #3b82f6;
+  }
+
+  .zukan-shape {
+    width: 64px;
+    height: 28px;
+    background: #3b82f6;
+  }
+
+  /* taller than the row, so that only the top corners show and large radii stay apart */
+  .zukan-border-radius .zukan-shape {
+    align-self: flex-start;
+    width: 96px;
+    height: 80px;
+    margin-top: 8px;
+  }
+
+  .zukan-outline {
+    border-style: solid;
+    border-color: #1f2328;
+    background: #dbeafe;
   }
 
   .zukan-names {
+    grid-area: names;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 4px 8px;
+    min-width: 0;
+  }
+
+  .zukan-card .zukan-names {
     padding: 8px 10px;
+  }
+
+  .zukan-values {
+    grid-area: value;
+    min-width: 0;
   }
 
   code {
@@ -303,8 +502,13 @@
     color: var(--_muted);
   }
 
-  .zukan-raw {
+  .zukan-raw,
+  .zukan-px {
     color: var(--_muted);
+  }
+
+  .zukan-px code {
+    color: var(--_text);
   }
 
   .zukan-empty {

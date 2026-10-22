@@ -71,13 +71,18 @@ const tailwind: TailwindListItem[] = [
               tokens: [{ class: 'text-brand', cssVariable: '--color-brand', value: '#ff3e00' }]
             },
             {
+              id: 'padding',
+              title: 'Padding',
+              tokens: [{ class: 'p-4', cssVariable: null, value: 'calc(0.25rem * 4)' }]
+            },
+            {
               id: 'breakpoints',
               title: 'Breakpoints',
               tokens: [{ class: null, cssVariable: '--breakpoint-sm', value: '40rem' }]
             }
           ],
           variables: { '--color-brand': '#ff3e00', '--breakpoint-sm': '40rem' },
-          css: '.text-brand { color: #ff3e00 }'
+          css: '.text-brand { color: #ff3e00 } .p-4 { padding: 1rem }'
         }
       })
   }
@@ -158,6 +163,13 @@ describe.each(['light', 'dark'] as const)('the catalog UI in %s has no axe viola
   it('on the Tailwind CSS page and in its sample frame', async () => {
     await page.viewport(1280, 800);
     const screen = await render(App, { props: { ...props('#/tailwind', theme), tailwind } });
+    expect(await frameViolations(screen.container)).toEqual([]);
+    expect(await violations()).toEqual([]);
+  });
+
+  it('on the size rows of the Tailwind CSS page', async () => {
+    await page.viewport(1280, 800);
+    const screen = await render(App, { props: { ...props('#/tailwind?category=padding', theme), tailwind } });
     expect(await frameViolations(screen.container)).toEqual([]);
     expect(await violations()).toEqual([]);
   });

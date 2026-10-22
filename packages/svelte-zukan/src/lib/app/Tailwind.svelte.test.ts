@@ -46,6 +46,36 @@ const source: TailwindSource = {
   ].join('\n')
 };
 
+/** sizes drawn as rows, with the CSS their samples need */
+const sizes: TailwindSource = {
+  ...source,
+  categories: [
+    source.categories[0],
+    {
+      id: 'padding',
+      title: 'Padding',
+      tokens: [
+        { class: 'p-0', cssVariable: null, value: '0px' },
+        { class: 'p-4', cssVariable: null, value: 'calc(0.25rem * 4)' }
+      ]
+    },
+    {
+      id: 'breakpoints',
+      title: 'Breakpoints',
+      tokens: [
+        { class: null, cssVariable: '--breakpoint-sm', value: '40rem' },
+        { class: null, cssVariable: '--breakpoint-md', value: '48rem' }
+      ]
+    }
+  ],
+  css: [
+    source.css,
+    ':root { --spacing: 0.25rem }',
+    '.p-0 { padding: calc(var(--spacing) * 0) }',
+    '.p-4 { padding: calc(var(--spacing) * 4) }'
+  ].join('\n')
+};
+
 const item = (data: TailwindSource, error: string | null = null): TailwindListItem => ({
   id: data.id,
   file: data.file,
@@ -221,6 +251,59 @@ describe('the Tailwind CSS page', () => {
     await expect
       .poll(() => tokenTexts(screen.container.querySelector('iframe')!.contentDocument!))
       .toEqual(['--breakpoint-sm']);
+  });
+
+  it('draws the padding of a padding token around a block', async () => {
+    const screen = await render(App, { props: props('#/tailwind?category=padding', [item(sizes)]) });
+    const { doc } = await frame(screen.container);
+    const p4 = doc.querySelector<HTMLElement>('.p-4')!;
+    const p0 = doc.querySelector<HTMLElement>('.p-0')!;
+    await expect.poll(() => getComputedStyle(p4).paddingTop).toBe('16px');
+    expect(getComputedStyle(p0).paddingTop).toBe('0px');
+    // the tinted box is larger than its block by the padding
+    expect(p4.getBoundingClientRect().width - p0.getBoundingClientRect().width).toBe(32);
+  });
+
+  it('shows the computed px next to a value that is not px already', async () => {
+    const screen = await render(App, { props: props('#/tailwind?category=padding', [item(sizes)]) });
+    const { doc } = await frame(screen.container);
+    const row = (token: string) => doc.querySelector(`[data-token="${token}"]`)!;
+    await expect.poll(() => row('p-4').querySelector('.zukan-px')?.textContent).toContain('16px');
+    expect(row('p-4').textContent).toContain('calc(0.25rem * 4)');
+    expect(row('p-4').querySelector('.zukan-px')!.textContent).toContain('Computed size:');
+    expect(row('p-0').querySelector('.zukan-px')).toBeNull();
+  });
+
+  it('draws sizes as rows and colours as cards', async () => {
+    const screen = await render(App, { props: props('#/tailwind?category=padding', [item(sizes)]) });
+    const { doc } = await frame(screen.container);
+    expect(
+      [...doc.querySelectorAll('ul.zukan-rows > li.zukan-row')].map((li) => li.getAttribute('data-token'))
+    ).toEqual(['p-0', 'p-4']);
+    expect(doc.querySelector('.zukan-card')).toBeNull();
+    await setHash('#/tailwind?category=background-color');
+    await expect.poll(() => doc.querySelectorAll('ul.zukan-cards > li.zukan-card').length).toBe(2);
+    expect(doc.querySelector('.zukan-rows')).toBeNull();
+  });
+
+  it('draws breakpoints as bars in proportion to the largest, also under a filter', async () => {
+    const screen = await render(App, { props: props('#/tailwind?category=breakpoints', [item(sizes)]) });
+    const { doc } = await frame(screen.container);
+    const width = (token: string) =>
+      doc.querySelector(`[data-token="${token}"] .zukan-bar`)?.getBoundingClientRect().width ?? 0;
+    const track = () => {
+      const sample = doc.querySelector<HTMLElement>('[data-token="--breakpoint-md"] .zukan-sample')!;
+      const style = getComputedStyle(sample);
+      return sample.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    };
+    await expect.poll(() => width('--breakpoint-md')).toBeGreaterThan(0);
+    expect(width('--breakpoint-md')).toBeCloseTo(track(), 0);
+    expect(width('--breakpoint-sm') / width('--breakpoint-md')).toBeCloseTo(40 / 48, 2);
+    expect(doc.querySelector('[data-token="--breakpoint-sm"]')!.textContent).toContain('640px');
+    const full = width('--breakpoint-sm');
+    await screen.getByRole('searchbox', { name: 'Filter tokens' }).fill('sm');
+    await expect.poll(() => tokenTexts(doc)).toEqual(['--breakpoint-sm']);
+    expect(width('--breakpoint-sm')).toBeCloseTo(full, 0);
   });
 
   it('filters by class name and value', async () => {

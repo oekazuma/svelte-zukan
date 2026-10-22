@@ -104,6 +104,7 @@ export type Messages = {
   tailwindError: string;
   tokenVariable: string;
   tokenValue: string;
+  computedSize: string;
   tailwindCategories: string;
   groupColors: string;
   groupSizing: string;
@@ -219,6 +220,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     tailwindError: 'Could not load the Tailwind CSS data:',
     tokenVariable: 'Variable',
     tokenValue: 'Value',
+    computedSize: 'Computed size',
     tailwindCategories: 'Tailwind CSS categories',
     groupColors: 'Colors',
     groupSizing: 'Spacing & sizing',
@@ -332,6 +334,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     tailwindError: 'Tailwind CSS のデータを読み込めませんでした:',
     tokenVariable: '変数',
     tokenValue: '値',
+    computedSize: '計算後のサイズ',
     tailwindCategories: 'Tailwind CSS のカテゴリー',
     groupColors: '色',
     groupSizing: '余白とサイズ',
