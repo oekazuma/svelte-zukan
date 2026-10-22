@@ -81,6 +81,16 @@ export type Messages = {
   uncataloged: string;
   uncatalogedHint: string;
   openInEditor: string;
+  searchCatalog: string;
+  searchPlaceholder: string;
+  searchResults: string;
+  searchGroups: string;
+  searchAllGroups: string;
+  searchComponents: string;
+  searchSections: string;
+  searchProps: string;
+  searchDescriptions: string;
+  shortcutSearchCatalog: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -167,7 +177,17 @@ export const messages: Record<'en' | 'ja', Messages> = {
     uncataloged: 'Components without a catalog file',
     uncatalogedHint:
       'These .svelte files have no catalog file next to them. Add one to show a component in the catalog.',
-    openInEditor: 'Open in editor'
+    openInEditor: 'Open in editor',
+    searchCatalog: 'Search the catalog',
+    searchPlaceholder: 'Names, sections, props and descriptions',
+    searchResults: 'Results',
+    searchGroups: 'Groups',
+    searchAllGroups: 'All',
+    searchComponents: 'Components',
+    searchSections: 'Sections',
+    searchProps: 'Props',
+    searchDescriptions: 'Descriptions',
+    shortcutSearchCatalog: 'Search names, sections, props and descriptions'
   },
   ja: {
     nav: 'コンポーネント',
@@ -252,6 +272,16 @@ export const messages: Record<'en' | 'ja', Messages> = {
     uncataloged: 'カタログファイルがないコンポーネント',
     uncatalogedHint:
       '次の .svelte ファイルには、隣にカタログファイルがありません。カタログファイルを置くと、カタログに加わります。',
-    openInEditor: 'エディターで開く'
+    openInEditor: 'エディターで開く',
+    searchCatalog: 'カタログを検索',
+    searchPlaceholder: '名前・セクション・Props・説明',
+    searchResults: '検索結果',
+    searchGroups: 'グループ',
+    searchAllGroups: 'すべて',
+    searchComponents: 'コンポーネント',
+    searchSections: 'セクション',
+    searchProps: 'Props',
+    searchDescriptions: '説明',
+    shortcutSearchCatalog: '名前・セクション・Props・説明から探す'
   }
 };

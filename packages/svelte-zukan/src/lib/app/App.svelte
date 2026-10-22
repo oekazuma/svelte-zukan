@@ -7,6 +7,7 @@
   import { messages } from './i18n.js';
   import List from './List.svelte';
   import Preview from './Preview.svelte';
+  import SearchDialog, { modifier } from './SearchDialog.svelte';
   import Sidebar from './Sidebar.svelte';
 
   let {
@@ -89,13 +90,24 @@
   });
 
   let shortcuts: HTMLDialogElement | undefined = $state();
+  let searchDialog: ReturnType<typeof SearchDialog> | undefined = $state();
   let main: HTMLElement | undefined = $state();
   let detail: ReturnType<typeof Detail> | undefined = $state();
 
   function onkeydown(e: KeyboardEvent) {
-    if (route.view === 'preview' || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (route.view === 'preview') return;
+    // works while typing too, the sidebar's search box included
+    const mod = modifier === '⌘' ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+    if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      searchDialog?.open();
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
     const target = e.target as HTMLElement;
     if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+    // a key pressed on a dialog's button must not act on the page behind it
+    if (target.closest('dialog')) return;
     if (e.key === '?') {
       e.preventDefault();
       shortcuts?.showModal();
@@ -167,6 +179,7 @@
       {theme}
       ontoggletheme={fixedTheme ? undefined : toggleTheme}
       onshortcuts={() => shortcuts?.showModal()}
+      onsearch={() => searchDialog?.open()}
       {t}
     />
     <main id="zukan-main" tabindex="-1" bind:this={main}>
@@ -194,6 +207,8 @@
       <dl>
         <dt><kbd>/</kbd></dt>
         <dd>{t.shortcutSearch}</dd>
+        <dt><kbd>{modifier}</kbd> <kbd>K</kbd></dt>
+        <dd>{t.shortcutSearchCatalog}</dd>
         <dt><kbd>J</kbd></dt>
         <dd>{t.shortcutNext}</dd>
         <dt><kbd>K</kbd></dt>
@@ -213,6 +228,7 @@
       </dl>
       <form method="dialog"><button>{t.close}</button></form>
     </dialog>
+    <SearchDialog bind:this={searchDialog} entries={catalog} {t} />
   </div>
 {/if}
 

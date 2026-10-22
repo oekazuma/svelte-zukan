@@ -1,10 +1,11 @@
 import axe from 'axe-core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import type { ZukanMeta } from '../types.js';
 import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
+import { modifier } from './SearchDialog.svelte';
 
 const meta: ZukanMeta = {
   sections: [
@@ -77,6 +78,16 @@ describe.each(['light', 'dark'] as const)('the catalog UI in %s has no axe viola
     await expect.element(check).toBeEnabled();
     await check.click();
     await expect.element(screen.getByText('Accessibility issues (1)')).toBeInTheDocument();
+    expect(await violations()).toEqual([]);
+  });
+
+  it('with the search dialog showing results', async () => {
+    await page.viewport(1280, 800);
+    const screen = await render(App, { props: props('#/ui/Card', theme) });
+    await userEvent.keyboard(modifier === '⌘' ? '{Meta>}k{/Meta}' : '{Control>}k{/Control}');
+    // matches names, section titles, a prop and the doc
+    await screen.getByRole('combobox').fill('t');
+    await expect.element(screen.getByRole('option').first()).toBeInTheDocument();
     expect(await violations()).toEqual([]);
   });
 

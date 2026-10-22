@@ -371,7 +371,8 @@
   onkeydown={(e) => {
     if (e.key !== 'Escape') return;
     hideTip();
-    if (expanded) toggleExpanded();
+    // Escape in a dialog over the expanded preview closes the dialog only
+    if (expanded && !(e.target as Element).closest('dialog')) toggleExpanded();
   }}
 />
 
