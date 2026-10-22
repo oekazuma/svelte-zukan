@@ -266,8 +266,16 @@ export function extractTokens(
           : '';
       tokens.push([themeIndex.get(key) ?? -1, t]);
     }
-    // stable: tokens outside the theme (`p-4`, `rounded-full`, `shadow-none`) stay first, in class-list order
-    const sorted = tokens.sort((a, b) => a[0] - b[0]).map(([, t]) => t);
+    // stable: tokens outside the theme (`p-4`, `shadow`) stay first, in class-list order
+    const themed = tokens.sort((a, b) => a[0] - b[0]).map(([, t]) => t);
+    // a scale reads small to large: zero sizes lead and the unbounded `rounded-full` ends it
+    const zero = (t: TailwindToken) => /^(0|0px|none)$/.test(t.value);
+    const full = (t: TailwindToken) => t.value === 'calc(infinity * 1px)';
+    const sorted = [
+      ...themed.filter(zero),
+      ...themed.filter((t) => !zero(t) && !full(t)),
+      ...themed.filter((t) => !zero(t) && full(t))
+    ];
     // `current`, `inherit` and `transparent` are no theme colors: they go after the palette
     const keyword = (t: TailwindToken) => /^(currentcolor|inherit|transparent)$/i.test(t.value);
     byCategory.set(

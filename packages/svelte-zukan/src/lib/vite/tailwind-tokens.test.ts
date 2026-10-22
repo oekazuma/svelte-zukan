@@ -137,9 +137,10 @@ describe('extractTokens', () => {
         'leading-relaxed',
         'leading-loose'
       ]);
-      expect(classes(result, 'border-radius').filter((c) => c !== 'rounded-full' && c !== 'rounded-none')).toEqual(
-        ['xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl'].map((size) => `rounded-${size}`)
+      expect(classes(result, 'border-radius')).toEqual(
+        ['none', 'xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', 'full'].map((size) => `rounded-${size}`)
       );
+      expect(classes(result, 'border-width').slice(0, 3)).toEqual(['border-0', 'border', 'border-2']);
       expect(classes(result, 'box-shadow').slice(0, 7)).toEqual([
         'shadow',
         'shadow-none',
