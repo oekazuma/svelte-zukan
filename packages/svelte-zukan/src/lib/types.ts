@@ -35,3 +35,42 @@ export type Entry = Omit<CatalogItem, 'file'> & {
   load: () => Promise<ZukanModule>;
   meta: () => Promise<{ default: ZukanMeta }>;
 };
+
+export type TailwindCategoryId =
+  | 'background-color'
+  | 'text-color'
+  | 'border-color'
+  | 'padding'
+  | 'margin'
+  | 'font-size'
+  | 'font-weight'
+  | 'font-family'
+  | 'letter-spacing'
+  | 'line-height'
+  | 'drop-shadow'
+  | 'border-radius'
+  | 'border-width'
+  | 'width'
+  | 'height'
+  | 'box-shadow'
+  | 'opacity'
+  | 'breakpoints'
+  | 'z-index'
+  | 'spacing';
+
+/** `class` is null for Breakpoints and the `--spacing` base; one `value` now, a dark value may be added later */
+export type TailwindToken = { class: string | null; cssVariable: string | null; value: string };
+
+export type TailwindCategory = { id: TailwindCategoryId; title: string; tokens: TailwindToken[] };
+
+/** one entry; `file` is relative to the Vite root; `css` is the sample stylesheet for the iframe */
+export type TailwindSource = {
+  id: string;
+  file: string;
+  version: string;
+  prefix: string | null;
+  categories: TailwindCategory[];
+  variables: Record<string, string>;
+  css: string;
+  error?: string;
+};
