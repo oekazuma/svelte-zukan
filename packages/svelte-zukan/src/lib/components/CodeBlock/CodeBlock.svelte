@@ -36,42 +36,41 @@
 <div class="code-block">
   <details bind:open>
     <summary>{labels.code}</summary>
-    <!-- inside <details> but not <summary> (which may not hold interactive content), so it exists only while the code is shown -->
-    <div class="code">
-      {#if open}
-        <button type="button" class={['copy', status]} onclick={copy} aria-live="polite">
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            {#if status === 'copied'}
-              <path d="M5 12.5l4.5 4.5L19 7" />
-            {:else}
-              <path d="M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1z" />
-              <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
-            {/if}
-          </svg>
-          {status === 'copied' ? labels.copied : status === 'failed' ? labels.copyFailed : labels.copy}
-        </button>
-      {/if}
-      <!-- the copy button copies `code` itself, not these parts -->
-      <pre><code
-          >{#each parts as part, i (i)}{#if part.kind}<span class={part.kind}>{part.text}</span
-              >{:else}{part.text}{/if}{/each}</code
-        ></pre>
-    </div>
+    <!-- after <summary>, which may not hold interactive content, and drawn on its row: it exists only while the code is shown, and the code starts right below the row -->
+    {#if open}
+      <button type="button" class={['copy', status]} onclick={copy} aria-live="polite">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          {#if status === 'copied'}
+            <path d="M5 12.5l4.5 4.5L19 7" />
+          {:else}
+            <path d="M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1z" />
+            <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+          {/if}
+        </svg>
+        {status === 'copied' ? labels.copied : status === 'failed' ? labels.copyFailed : labels.copy}
+      </button>
+    {/if}
+    <!-- the copy button copies `code` itself, not these parts -->
+    <pre><code
+        >{#each parts as part, i (i)}{#if part.kind}<span class={part.kind}>{part.text}</span
+            >{:else}{part.text}{/if}{/each}</code
+      ></pre>
   </details>
 </div>
 
 <style>
   .code-block {
+    position: relative;
     border: 1px solid var(--_border);
     border-radius: 6px;
     font-family: var(--_font);
@@ -88,10 +87,6 @@
 
   summary:hover {
     color: var(--_text);
-  }
-
-  .code {
-    position: relative;
   }
 
   .copy {
@@ -166,8 +161,7 @@
 
   pre {
     margin: 0;
-    /* the code starts below the copy button: a long first line scrolls under its corner, so side padding could not keep it clear */
-    padding: 40px 10px 10px;
+    padding: 10px;
     border-top: 1px solid var(--_border);
     border-radius: 0 0 6px 6px;
     background: var(--_code-bg);
