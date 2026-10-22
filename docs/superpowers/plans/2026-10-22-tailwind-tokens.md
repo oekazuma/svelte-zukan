@@ -159,7 +159,7 @@ it('resolves var() chains and survives cycles', ...);              // { '--a': '
   - `export function hasTailwind(dirs: string[], root: string): boolean` — synchronous, no resolver: some CSS file in `dirs` passes the entry test (partials ignored) and `resolveTailwindNode([dirname(file), root])` is not null. Used for the entry module.
   - `export async function loadTailwind(root: string, dirs: string[], resolvers?: { css?: Resolver; js?: Resolver }): Promise<{ sources: TailwindSource[]; watch: string[] }>` — never rejects for one entry; `watch` is absolute and never serialized.
 
-- [ ] **Step 1: Write the failing tests.** Fixtures are temp dirs. A Tailwind-positive one gets `node_modules/tailwindcss`, `node_modules/@tailwindcss/node` (or, where stated, only `node_modules/@tailwindcss/vite`) as symlinks (`junction` on Windows) to the library's own installed packages (located with the same lookup as `resolveTailwindNode`); a bare one gets none. No `vi.doMock`: a fake `@tailwindcss/node` is a temp `node_modules/@tailwindcss/node/{package.json,index.mjs}` that re-exports a subset of the real module.
+- [ ] **Step 1: Write the failing tests.** Fixtures are temp dirs. A Tailwind-positive one gets `node_modules/tailwindcss`, `node_modules/@tailwindcss/node` (or, where stated, only `node_modules/@tailwindcss/vite`) as symlinks (`junction` on Windows) to the library's own installed packages (located with the same lookup as `resolveTailwindNode`); a bare one gets none. No `vi.doMock`: a fake `@tailwindcss/node` is a temp `node_modules/@tailwindcss/node/{package.json,index.mjs}` whose `package.json` has `name` and `exports` pointing at `index.mjs`, and which re-exports a subset of the real module. The bare-dir test assumes no global `@tailwindcss/node` (in `~/.node_modules` and the like), which CI never has.
 
 ```ts
 it('finds an entry that imports tailwindcss and one with only @theme', ...);
@@ -214,19 +214,19 @@ it('uses the given CSS resolver before Node resolution', ...);     // a resolver
   - `virtual.ts`: `TAILWIND = 'virtual:svelte-zukan/tailwind'`, `TAILWIND_SOURCE = 'virtual:svelte-zukan/tailwind/'`; `generateTailwindModule(sources: TailwindSource[]): string` exporting `tailwind: TailwindListItem[]`; `generateEntryModule` gains `tailwind?: boolean` (default `false`) and, only when true, imports `TAILWIND` with the catalog and passes its `tailwind` to `App` (`[]` otherwise). The plugin decides it when it loads `ENTRY`, synchronously, with `hasTailwind(cssDirs(), root)`; `load(ENTRY)` stays synchronous.
   - `types.ts`: `export type TailwindListItem = { id: string; file: string; error: string | null; load: () => Promise<{ default: TailwindSource }> }`.
   - `CatalogJson.tailwind: Omit<TailwindSource, 'id' | 'css'>[] | null`; `catalogJson` takes `tailwind: TailwindSource[]`; the plugin's `catalogData()` is async.
-  - In `index.ts`: `tailwindData(env: Environment): Promise<{ sources: TailwindSource[]; watch: string[] }>`, the one cached entry point used by `load` (`this.environment`), the dev `catalog.json` middleware (`server.environments.client`) and `buildApp` (`builder.environments.zukan`); its resolvers are built from the given environment's config.
+  - In `index.ts`: `tailwindData(env: () => Environment): Promise<{ sources: TailwindSource[]; watch: string[] }>`, the one cached entry point used by `load` (`() => this.environment`), the dev `catalog.json` middleware (`() => server.environments.client`) and `buildApp` (`() => builder.environments.zukan`). The environment is read, and the Vite resolvers built from its config, only on the first resolver call, so a project with no entry never touches it (and the existing fake servers and builders keep working).
 
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
-// index.test.ts (fakes)
-it('resolves and loads the Tailwind list and one entry\'s data', ...);
+// index.test.ts (fakes, no Tailwind entry: the environment is never read)
 it('does not load Tailwind until the list module is loaded', ...);       // configResolved + configureServer do not call loadTailwind
 it('leaves the Tailwind import out of the entry module without an entry', ...); // generateEntryModule({ tailwind: false, ... }) has no 'virtual:svelte-zukan/tailwind'
 it('serves catalog.json with tailwind null without Tailwind', ...);
-it('serves catalog.json when an entry fails', ...);
-it('keeps absolute paths and the sample CSS out of catalog.json', ...);
 // hmr.test.ts (real createServer on a temp app with Tailwind symlinked as in Task 2)
+it('resolves and loads the Tailwind list and one entry\'s data', ...);
+it('serves catalog.json when an entry fails', ...);
+it('keeps absolute paths and the sample CSS out of catalog.json', ...);   // includes an entry with an unresolvable @import
 it('resolves CSS imports through Vite aliases', ...);                    // resolve.alias { $lib: src/lib }; entry '@import "$lib/theme.css"' loads; theme.css is no entry
 it('reloads the catalog when a watched file changes the data', ...);     // hotUpdate on the entry with the TAILWIND module in the graph → zukan:reload
 it('does not reload when the data did not change', ...);                 // a comment added to the entry → no hot.send
@@ -240,7 +240,7 @@ it('reloads on a change to an imported file outside the root', ...);   // ../tok
 - [ ] **Step 2: Run them to verify they fail** — `pnpm --filter svelte-zukan exec vitest run --project server src/lib/vite/index.test.ts src/lib/vite/hmr.test.ts src/lib/vite/virtual.test.ts`. Expected: FAIL.
 
 - [ ] **Step 3: Implement**
-  - `index.ts`: `cssDirs()` = searched dirs plus `<root>/src` when it exists, deduplicated. `tailwindData(env)` builds its resolvers from `env.config`: `createIdResolver(env.config, { ...env.config.resolve, extensions: ['.css'], mainFields: ['style'], conditions: ['style', 'development|production'], tryIndex: false, preferRelative: true })` for CSS and `createIdResolver(env.config, env.config.resolve)` for JS, each wrapped like `@tailwindcss/vite`'s helper (importer `join(base, '__placeholder__.ts')`, alias-only first, a relative result made absolute, CSS results must end in `.css`). `let tailwind: Promise<{ sources; watch }> | null`, cleared in `config`; `served` = JSON of the last served sources. `load` for `TAILWIND` / `TAILWIND_SOURCE` (unknown id throws like a missing catalog file) calls `this.addWatchFile(f)` for every path in `watch`, so files outside the root are watched too. The dev middleware and `buildApp` await `catalogData()`; `buildApp` warns `svelte-zukan: Tailwind CSS entry <file>: <error>` per failing entry.
+  - `index.ts`: `cssDirs()` = searched dirs plus `<root>/src` when it exists, deduplicated. `tailwindData(env)` builds its resolvers lazily from `env().config`, on the first call of either resolver: `createIdResolver(env.config, { ...env.config.resolve, extensions: ['.css'], mainFields: ['style'], conditions: ['style', 'development|production'], tryIndex: false, preferRelative: true })` for CSS and `createIdResolver(env.config, env.config.resolve)` for JS, each wrapped like `@tailwindcss/vite`'s helper (importer `join(base, '__placeholder__.ts')`, alias-only first, a relative result made absolute, CSS results must end in `.css`). `let tailwind: Promise<{ sources; watch }> | null`, cleared in `config`; `served` = JSON of the last served sources. `load` for `TAILWIND` / `TAILWIND_SOURCE` (unknown id throws like a missing catalog file) calls `this.addWatchFile(f)` for every path in `watch`, so files outside the root are watched too. The dev middleware and `buildApp` await `catalogData()`; `buildApp` warns `svelte-zukan: Tailwind CSS entry <file>: <error>` per failing entry.
   - `hotUpdate` stays synchronous for every existing branch. New first branch: `normalizePath(file)` is in the last `watch`, or a `.css` file created/deleted inside `cssDirs()`. Always set `tailwind = null` (so `catalog.json` is fresh). Then, only when the `\0`+`TAILWIND` module is in the graph and the consumer is `client`, return a promise that regenerates and, when the JSON differs from `served`, invalidates `\0`+`TAILWIND` and every `\0`+`TAILWIND_SOURCE` module and sends `zukan:reload`, resolving to `undefined`. Otherwise return `undefined`. Never `[]`.
 
 - [ ] **Step 4: Run the tests** — `pnpm --filter svelte-zukan exec vitest run --project server`, then `pnpm --filter svelte-zukan run check`. Expected: PASS, 0 errors (existing synchronous assertions in `index.test.ts` and the `generateEntryModule` callers in `virtual.test.ts` unchanged).
