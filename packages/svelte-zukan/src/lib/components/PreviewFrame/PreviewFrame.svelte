@@ -315,6 +315,8 @@
   }
 
   function tooltips(toolbar: HTMLElement) {
+    // Firefox before 125 has no popover; the controls keep their aria-label and go without a tip
+    if (!('showPopover' in HTMLElement.prototype)) return;
     const target = (e: Event) => (e.target as Element).closest<HTMLElement>(TIP_TARGETS);
     const over = (e: PointerEvent) => {
       const el = target(e);
@@ -557,7 +559,9 @@
     white-space: nowrap;
   }
 
+  /* without popover support, the :popover-open rule is dropped and the tip stays hidden */
   .tip {
+    display: none;
     inset: auto;
     margin: 0;
     padding: 3px 8px;
@@ -568,6 +572,10 @@
     font: 12px/1.4 var(--_font);
     white-space: nowrap;
     pointer-events: none;
+  }
+
+  .tip:popover-open {
+    display: block;
   }
 
   .preview {
