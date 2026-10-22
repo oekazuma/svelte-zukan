@@ -68,7 +68,12 @@
         : `linear-gradient(to right, ${mark} 1px, transparent 1px), linear-gradient(to bottom, ${mark} 1px, transparent 1px)`;
     return `html{background:${base} ${image} 0 0/16px 16px !important}body{background:transparent !important}`;
   };
-  const A11Y_ICON = ['M12 4.5a1.5 1.5 0 1 0 0-.01', 'M5 8.5l7 1.5 7-1.5', 'M12 10v4.5', 'M8.5 20l3.5-5.5 3.5 5.5'];
+  const A11Y_ICON = [
+    'M10.5 4.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0',
+    'M5 8.5l7 1.5 7-1.5',
+    'M12 10v4.5',
+    'M8.5 20l3.5-5.5 3.5 5.5'
+  ];
   const MEASURE_ICON = ['M3 8h18v8H3z', 'M7 8v3', 'M11 8v4', 'M15 8v3', 'M19 8v4'];
   const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'];
   const MIN_WIDTH = 200;
