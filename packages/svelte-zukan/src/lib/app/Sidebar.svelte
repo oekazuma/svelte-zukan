@@ -4,6 +4,7 @@
   import type { Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
   import type { Messages } from './i18n.js';
+  import { modifier } from './SearchDialog.svelte';
 
   let {
     entries,
@@ -13,6 +14,7 @@
     theme,
     ontoggletheme,
     onshortcuts,
+    onsearch,
     t
   }: {
     entries: Entry[];
@@ -23,6 +25,7 @@
     /** left out when the `theme` option fixes the theme */
     ontoggletheme?: () => void;
     onshortcuts: () => void;
+    onsearch: () => void;
     t: Messages;
   } = $props();
 
@@ -86,6 +89,7 @@
     const target = e.target as HTMLElement;
     if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
     if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+    if (target.closest('dialog')) return;
     e.preventDefault();
     open = true;
     // on narrow screens the panel is display: none until `open` is applied
@@ -106,6 +110,21 @@
       {/if}
     </a>
     <div class="actions">
+      <button type="button" class="theme" title="{t.searchCatalog} ({modifier} K)" onclick={onsearch}>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-4-4" stroke-linecap="round" />
+        </svg>
+        <span class="sr-only">{t.searchCatalog}</span>
+      </button>
       <button type="button" class="theme keys" title="{t.shortcuts} (?)" onclick={onshortcuts}>
         <svg
           width="16"

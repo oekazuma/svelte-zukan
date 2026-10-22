@@ -291,7 +291,8 @@
 
 <svelte:window
   onkeydown={(e) => {
-    if (expanded && e.key === 'Escape') toggleExpanded();
+    // Escape in a dialog over the expanded preview closes the dialog only
+    if (expanded && e.key === 'Escape' && !(e.target as Element).closest('dialog')) toggleExpanded();
   }}
 />
 

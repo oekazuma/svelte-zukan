@@ -16,6 +16,7 @@ Below the cards, a folded list shows the `.svelte` files in the scanned director
 
 - The sidebar lists the components by group and by directory. Folders open and close, and the arrow keys move through the list
 - Type in the search box to filter by ID and by section title. Matching section titles are listed under each component and link straight to that section
+- Press <kbd>⌘</kbd> <kbd>K</kbd> (<kbd>Ctrl</kbd> <kbd>K</kbd> on Windows and Linux), or click the magnifier at the top of the sidebar, to search more widely: component names and IDs, section titles, the text of each [`.md` file](/catalog-files#markdown-description), and prop names and descriptions. Results are grouped by what matched, with a snippet of the description where the match is; the buttons above them limit the search to one group. <kbd>↑</kbd> <kbd>↓</kbd> pick a result, <kbd>Enter</kbd> opens it, and <kbd>Esc</kbd> closes the search
 - On a detail page with several sections, a table of contents sits beside the content when the window is wide enough, with a link to the props table. Links to the previous and next components are at the bottom
 - On the dev server, the detail page has buttons under its title that open the catalog file and the component in your editor. They use Vite's own open-in-editor endpoint, so the `LAUNCH_EDITOR` environment variable picks the editor. A static build has no such buttons
 - On a narrow screen, the component list folds under the menu button
@@ -31,6 +32,7 @@ To show one theme only, set the [`theme` option](/options) to `'light'` or `'dar
 | Key                         | Action                                                          |
 | --------------------------- | --------------------------------------------------------------- |
 | <kbd>/</kbd>                | Jump to the search box                                          |
+| <kbd>⌘</kbd> <kbd>K</kbd>   | Search names, sections, props and descriptions (or Ctrl K)      |
 | <kbd>J</kbd> / <kbd>K</kbd> | Next / previous component                                       |
 | <kbd>T</kbd>                | Switch between light and dark, unless the `theme` option is set |
 | <kbd>F</kbd>                | Expand the preview in view, or leave it                         |
@@ -39,6 +41,6 @@ To show one theme only, set the [`theme` option](/options) to `'light'` or `'dar
 | <kbd>←</kbd> <kbd>→</kbd>   | Close and open a folder in the component list                   |
 | <kbd>?</kbd>                | Show the shortcuts                                              |
 
-The shortcuts do nothing while you type in the search box or another field.
+The shortcuts do nothing while you type in the search box or another field, except <kbd>⌘</kbd> <kbd>K</kbd>.
 
 The first <kbd>Tab</kbd> on the page reaches a "Skip to content" link, which moves the focus past the sidebar to the page.
