@@ -156,7 +156,7 @@ it('scopes rules to the scope class and keeps @property global', () => {
 - Produces:
   - `export function findTailwindEntries(dirs: string[]): string[]` — absolute normalized paths, sorted, deduplicated (dirs may overlap).
   - `export function resolveTailwindNode(from: string[]): { entry: string; version: string } | null` — `entry` is the resolved `@tailwindcss/node` module, `version` is the `tailwindcss` version that package loads; `from` is the list of directories to try in order.
-  - `export async function loadTailwind(root: string, dirs: string[]): Promise<TailwindSource[]>` — never rejects for one entry's failure.
+  - `export async function loadTailwind(root: string, dirs: string[]): Promise<{ sources: TailwindSource[]; watch: string[] }>` — never rejects for one entry's failure. `watch` (absolute, normalized, never serialized) is every entry plus, recursively, the local files its `@import`, `@plugin` and `@config` name by relative path.
 
 - [ ] **Step 1: Write the failing tests** (temp dirs under `os.tmpdir()`; for resolution, pass the library's own directory as `root` so its dev dependencies resolve):
 
@@ -178,6 +178,7 @@ it('loads an entry with the root fallback and relative paths only', async () => 
 it('adds the defaults to an @theme-only entry', ...);                                 // has bg-red-500 and the project's token
 it('reports an unsupported API as the entry\'s error', ...);                           // vi.doMock the loaded module to lack __unstable__loadDesignSystem → error contains 'does not expose the design-system API'
 it('reports invalid CSS as the entry\'s error and keeps the other entries', ...);
+it('watches the entry, its relative imports and its @plugin file', ...); // watch has the entry, ../tokens.css outside dirs, ./plugin.js
 ```
 
 - [ ] **Step 2: Run them to verify they fail** — `pnpm --filter svelte-zukan exec vitest run --project server src/lib/vite/tailwind-load.test.ts`. Expected: FAIL.
@@ -202,7 +203,7 @@ it('reports invalid CSS as the entry\'s error and keeps the other entries', ...)
 
 **Interfaces:**
 
-- Consumes: `loadTailwind` (Task 2), `TailwindSource` (Task 1).
+- Consumes: `loadTailwind` (Task 2, `{ sources, watch }`), `TailwindSource` (Task 1).
 - Produces:
   - `virtual.ts`: `export const TAILWIND = 'virtual:svelte-zukan/tailwind'`, `export const TAILWIND_SOURCE = 'virtual:svelte-zukan/tailwind/'`, `export function generateTailwindModule(sources: TailwindSource[]): string` — exports `tailwind: { id: string; file: string; error: string | null; load: () => Promise<{ default: TailwindSource }> }[]`.
   - `generateEntryModule` imports `TAILWIND` alongside the catalog and passes `tailwind` to `App`.
@@ -218,6 +219,7 @@ it('serves catalog.json with tailwind null without Tailwind', ...); // tmp root 
 it('serves catalog.json when an entry fails', ...);                 // the failing entry has `error`, components unaffected
 it('keeps absolute paths out of catalog.json tailwind', ...);
 it('invalidates the Tailwind modules and sends zukan:reload on a CSS change', ...); // hotUpdate on src/app.css with the TAILWIND module in the graph
+it('reloads on a change to a watched @plugin file', ...);
 it('does not swallow the app\'s CSS update', ...);                  // hotUpdate returns undefined for a CSS file, never []
 it('ignores CSS changes when no Tailwind module is loaded', ...);   // hot.send not called
 ```
@@ -225,8 +227,8 @@ it('ignores CSS changes when no Tailwind module is loaded', ...);   // hot.send 
 - [ ] **Step 2: Run them to verify they fail** — `pnpm --filter svelte-zukan exec vitest run --project server src/lib/vite/index.test.ts src/lib/vite/catalog-json.test.ts`. Expected: FAIL.
 
 - [ ] **Step 3: Implement**
-  - `index.ts`: `const cssDirs = () => [...new Set([...scanned(), ...(isDir(root/src) ? [normalizePath(join(root, 'src'))] : [])])]`; `let tailwind: Promise<TailwindSource[]> | null = null` reset in `config` and on CSS changes; `loadTw = () => (tailwind ??= loadTailwind(root, cssDirs()).catch((e) => (logger warn, [])))`. `resolveId`/`load` for `TAILWIND` and `TAILWIND_SOURCE` (`export default ${JSON.stringify(source)}`; an unknown id throws like a missing catalog file). The dev middleware awaits `catalogData()`; `buildApp` awaits it and logs `svelte-zukan: Tailwind CSS entry <file>: <error>` once per failing entry.
-  - `hotUpdate`: first branch — a `.css` file inside `cssDirs()`: if the `\0`+`TAILWIND` module is in the graph and the consumer is `client`, set `tailwind = null`, invalidate it and every `\0`+`TAILWIND_SOURCE` module, send `zukan:reload`; return `undefined` in every case.
+  - `index.ts`: `const cssDirs = () => [...new Set([...scanned(), ...(isDir(root/src) ? [normalizePath(join(root, 'src'))] : [])])]`; `let tailwind: Promise<{ sources: TailwindSource[]; watch: string[] }> | null = null` reset in `config` and on relevant changes; `loadTw = () => (tailwind ??= loadTailwind(root, cssDirs()).catch((e) => (logger warn, { sources: [], watch: [] })))`; keep the last resolved `watch` in a `Set` for `hotUpdate`. `resolveId`/`load` for `TAILWIND` and `TAILWIND_SOURCE` (`export default ${JSON.stringify(source)}`; an unknown id throws like a missing catalog file). The dev middleware awaits `catalogData()`; `buildApp` awaits it and logs `svelte-zukan: Tailwind CSS entry <file>: <error>` once per failing entry.
+  - `hotUpdate`: first branch — a file in the last `watch` set, or a `.css` file inside `cssDirs()` (a new or deleted entry): if the `\0`+`TAILWIND` module is in the graph and the consumer is `client`, set `tailwind = null`, invalidate it and every `\0`+`TAILWIND_SOURCE` module, send `zukan:reload`; return `undefined` in every case.
   - `server.fs.allow` needs nothing new (`root/src` is inside the root).
 
 - [ ] **Step 4: Run the tests** — same command plus the whole `server` project: `pnpm --filter svelte-zukan exec vitest run --project server`. Expected: PASS.
