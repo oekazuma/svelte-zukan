@@ -10,6 +10,9 @@ export type DesignSystemLike = {
 /** `atRules` are the preludes of the at-rules around the rule, outermost first */
 export type CssRule = { selector: string; atRules: string[]; declarations: [property: string, value: string][] };
 
+// Tailwind serializes multi-line values (font stacks, shadows) with line breaks and indentation.
+const collapse = (value: string) => value.replace(/\s+/g, ' ').trim();
+
 function stringEnd(css: string, start: number): number {
   for (let i = start + 1; i < css.length; i++) {
     if (css[i] === '\\') i++;
@@ -33,7 +36,7 @@ export function scanCss(css: string): CssRule[] {
     buf = '';
     const colon = text.indexOf(':');
     const rule = stack.at(-1)?.rule;
-    if (rule && colon > 0) rule.declarations.push([text.slice(0, colon).trim(), text.slice(colon + 1).trim()]);
+    if (rule && colon > 0) rule.declarations.push([text.slice(0, colon).trim(), collapse(text.slice(colon + 1))]);
   };
 
   for (let i = 0; i < css.length; i++) {
@@ -182,7 +185,7 @@ export function extractTokens(
   // a prefixed design system accepts only `tw:p-4`, while its class list and the stems stay unprefixed
   const classPrefix = prefix ? `${prefix}:` : '';
   const variablePrefix = prefix ? `--${prefix}-` : '--';
-  const variables = Object.fromEntries([...system.theme.entries()].map(([key, { value }]) => [key, value]));
+  const variables = Object.fromEntries([...system.theme.entries()].map(([key, { value }]) => [key, collapse(value)]));
   const values = { ...variables, ...known };
   const matches = (name: string, stem: string) => name === stem || name.startsWith(`${stem}-`);
 

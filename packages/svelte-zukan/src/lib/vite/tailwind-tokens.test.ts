@@ -66,6 +66,13 @@ describe('extractTokens', () => {
     expect(drop?.value).not.toContain('var(--tw-blur');
   });
 
+  it('collapses line breaks and indentation in values', async () => {
+    const { result, token } = await load('@import "tailwindcss";');
+    const family = token('font-family', 'font-mono');
+    expect(family?.value).toContain('"Courier New"');
+    for (const value of [family?.value, ...Object.values(result.variables)]) expect(value).not.toMatch(/\n|\s{2}/);
+  });
+
   it('lists breakpoints and the spacing base without a class', async () => {
     const { result, token } = await load('@import "tailwindcss";');
     expect(token('breakpoints', null)).toEqual({ class: null, cssVariable: '--breakpoint-sm', value: '40rem' });
