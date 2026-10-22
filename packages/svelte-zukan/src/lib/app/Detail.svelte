@@ -164,9 +164,17 @@
                           {#if p.required}<span class="flag">{t.required}</span>{/if}
                           {#if p.bindable}<span class="flag">{t.bindable}</span>{/if}
                         </td>
+                        <!-- a union wraps between its members, never inside one such as `() => void` -->
+                        <!-- the separator is a mustache because Svelte trims the spaces of plain text at the edges of a block, and those spaces are where the union wraps -->
+                        <!-- eslint-disable svelte/no-useless-mustaches -->
                         <td
-                          >{#if p.type}<code>{p.type}</code>{/if}</td
+                          >{#if p.type}<code
+                              >{#each p.type.split(' | ') as part, i (i)}{#if i}{' | '}{/if}<span class="type-part"
+                                  >{part}</span
+                                >{/each}</code
+                            >{/if}</td
                         >
+                        <!-- eslint-enable svelte/no-useless-mustaches -->
                         <td
                           >{#if p.default}<code>{p.default}</code>{/if}</td
                         >
@@ -394,6 +402,10 @@
     background: var(--_code-bg);
     font-family: var(--_mono);
     font-size: 0.9em;
+  }
+
+  .type-part {
+    white-space: nowrap;
   }
 
   .props .name {

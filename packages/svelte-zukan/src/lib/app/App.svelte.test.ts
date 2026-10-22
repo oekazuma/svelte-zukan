@@ -475,6 +475,12 @@ describe('App', () => {
       "'md'",
       'The size'
     ]);
+    // each member is kept on one line; the table wraps only between them
+    expect([...document.querySelectorAll('.props .type-part')].map((e) => e.textContent)).toEqual([
+      'string',
+      "'sm'",
+      "'md'"
+    ]);
   });
 
   it('a file without sections says so', async () => {
