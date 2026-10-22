@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { normalizePath } from 'vite';
@@ -37,8 +37,11 @@ function link(name: string, root: string) {
 type Fixture = { tmp: string; root: string; src: string; entry: string };
 
 /** `root/src/app.css` holds `css`; Tailwind is linked into `root/node_modules` unless `tailwind` is false */
-function fixture(css: string, { tailwind = true }: { tailwind?: boolean } = {}): Fixture {
-  const tmp = realpathSync.native(mkdtempSync(join(tmpdir(), 'zukan-tailwind-')));
+function fixture(
+  css: string,
+  { tailwind = true, name = 'zukan-tailwind-' }: { tailwind?: boolean; name?: string } = {}
+): Fixture {
+  const tmp = realpathSync.native(mkdtempSync(join(tmpdir(), name)));
   temps.push(tmp);
   const root = join(tmp, 'root');
   const src = join(root, 'src');
@@ -102,6 +105,32 @@ describe('findTailwindEntries', () => {
     const { src } = fixture('body { margin: 0; }');
     write(join(src, 'node_modules/pkg/index.css'), '@import "tailwindcss";');
     expect(await findTailwindEntries([src, join(src, 'missing')], noResolver)).toEqual([]);
+  });
+});
+
+describe('unreadable CSS files', () => {
+  /** a directory named `*.css`, and where symlinks are allowed, a dangling `*.css` link */
+  function withUnreadable() {
+    const f = fixture('@import "tailwindcss";');
+    mkdirSync(join(f.src, 'dir.css'));
+    try {
+      symlinkSync(join(f.tmp, 'nowhere.css'), join(f.src, 'dangling.css'), 'file');
+    } catch {
+      // creating a file symlink needs a privilege on Windows
+    }
+    return f;
+  }
+
+  it('are skipped when finding entries', async () => {
+    const { src, entry } = withUnreadable();
+    expect(await findTailwindEntries([src], noResolver)).toEqual([entry]);
+  });
+
+  it('do not stop loadTailwind or hasTailwind', async () => {
+    const { root, src } = withUnreadable();
+    expect(hasTailwind([src], root)).toBe(true);
+    const { sources } = await loadTailwind(root, [src]);
+    expect(sources.map((s) => [s.file, s.error])).toEqual([['src/app.css', undefined]]);
   });
 });
 
@@ -252,6 +281,20 @@ describe('loadTailwind', () => {
     expect(s.error).toContain('src/a.css');
     expect(s.error).not.toContain(root);
     expect(s.error).not.toMatch(/[A-Za-z]:[\\/]/);
+  });
+
+  it('keeps paths with spaces out of errors', async () => {
+    const { tmp, root, src } = fixture('@import "tailwindcss";\n@import "./missing.css";', { name: 'zukan tailwind-' });
+    write(join(src, 'second.css'), '@import "tailwindcss";\n@plugin "./throws.js";');
+    write(join(src, 'throws.js'), `throw new Error('failed at ' + ${JSON.stringify(root)} + '/src/a.css for good');\n`);
+    const { sources } = await loadTailwind(root, [src]);
+    const [missing, thrown] = sources.map((s) => s.error);
+    expect(missing).toContain("from 'src'");
+    expect(thrown).toContain('failed at src/a.css for good');
+    for (const message of [missing, thrown]) {
+      for (const leaked of [basename(tmp), 'zukan tailwind', tmp, normalizePath(tmp)])
+        expect(message).not.toContain(leaked);
+    }
   });
 
   it("reports invalid CSS as the entry's error and keeps the other entries", async () => {

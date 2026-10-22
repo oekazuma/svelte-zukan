@@ -3,7 +3,7 @@ import { existsSync, globSync, readFileSync, realpathSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { normalizePath } from 'vite';
 import type { TailwindSource } from '../types.js';
 import { extractTokens, rootVariables, type DesignSystemLike } from './tailwind-tokens.js';
@@ -35,7 +35,13 @@ function cssFiles(dirs: string[]): string[] {
 function readCandidates(dirs: string[]): Map<string, string> {
   const out = new Map<string, string>();
   for (const file of cssFiles(dirs)) {
-    const css = readFileSync(file, 'utf8');
+    let css: string;
+    try {
+      css = readFileSync(file, 'utf8');
+    } catch {
+      // the glob also returns dangling symlinks and directories named `*.css`
+      continue;
+    }
     if (isCandidate(css)) out.set(file, css);
   }
   return out;
@@ -122,19 +128,40 @@ function tooOld(version: string): boolean {
   return a === x && (b < y || (b === y && c < z));
 }
 
-/** absolute paths in `message` (POSIX, drive-letter or `file:` form), relative to `root` */
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Absolute paths in `message` (POSIX, drive-letter or `file:` form), relative to `root`. Quoted paths and the root
+ * itself match through spaces, which the generic pass cannot tell from the end of a path.
+ */
 function relativize(message: string, root: string): string {
+  const relative = (absolute: string) => {
+    const lib = /^[A-Za-z]:/.test(absolute) ? path.win32 : path.posix;
+    const rel = lib.relative(root, absolute);
+    // another drive, or a Windows path seen from POSIX: keep the file name only
+    return lib.isAbsolute(rel) ? lib.basename(absolute) : normalizePath(rel) || '.';
+  };
+  const withTrailing = (match: string) => {
+    const trailing = /[.,;)\]]*$/.exec(match)![0];
+    return relative(match.slice(0, match.length - trailing.length)) + trailing;
+  };
+  const roots = [...new Set([root, normalizePath(root)])].map(escapeRegExp).join('|');
+  const start = String.raw`(?<![\w.:/\\-])`;
+  const rest = String.raw`[^\s'"\`<>|?*:]*`;
   return message
-    .replace(/file:\/\/\/(?=[A-Za-z]:)/g, '')
-    .replace(/file:\/\/(?=\/)/g, '')
-    .replace(/(?<![\w.:/\\-])(?:[A-Za-z]:[\\/]|\/)[^\s'"`<>|?*:]*/g, (match) => {
-      const trailing = /[.,;)\]]*$/.exec(match)![0];
-      const absolute = match.slice(0, match.length - trailing.length);
-      const lib = /^[A-Za-z]:/.test(absolute) ? path.win32 : path.posix;
-      const relative = lib.relative(root, absolute);
-      // another drive, or a Windows path seen from POSIX: keep the file name only
-      return (lib.isAbsolute(relative) ? lib.basename(absolute) : normalizePath(relative) || '.') + trailing;
-    });
+    .replace(/file:\/\/\/?[^\s'"`<>]*/g, (url) => {
+      try {
+        return fileURLToPath(url);
+      } catch {
+        return url;
+      }
+    })
+    .replace(
+      /(['"`])((?:[A-Za-z]:[\\/]|\/)[^'"`\r\n]*)\1/g,
+      (_, quote: string, quoted: string) => quote + relative(quoted) + quote
+    )
+    .replace(new RegExp(`${start}(?:${roots})${rest}`, 'g'), withTrailing)
+    .replace(new RegExp(`${start}(?:[A-Za-z]:[\\\\/]|/)${rest}`, 'g'), withTrailing);
 }
 
 type Api = Record<string, unknown>;
