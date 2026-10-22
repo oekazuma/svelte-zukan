@@ -1,5 +1,12 @@
 # svelte-zukan
 
+## 0.9.1
+
+### Patch Changes
+
+- f49f433: fix: centre the head of the accessibility check's icon on its body.
+- bcaf992: fix: a shared link's theme now reaches the previews when it differs from the theme stored in the browser; list thumbnails are centred vertically again; on a narrow toolbar the wrapped row of tools is evenly spaced.
+
 ## 0.9.0
 
 ### Minor Changes
