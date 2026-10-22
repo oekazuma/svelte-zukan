@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { highlight, tokenize } from './tokenize.js';
+import { highlight } from './tokenize.js';
 
-const kinds = (code: string) => tokenize(code).map((t) => `${t.kind}:${code.slice(t.start, t.end)}`);
+const kinds = (code: string) =>
+  highlight(code)
+    .filter((p) => p.kind)
+    .map((p) => `${p.kind}:${p.text}`);
 
-describe('tokenize', () => {
+describe('highlight', () => {
   it('finds tags, attributes, strings and blocks in markup', () => {
     expect(kinds('<Button variant="primary" {disabled}>Go</Button>\n{#if open}<p>a</p>{/if}')).toEqual([
       'tag:<Button',
@@ -50,9 +53,7 @@ describe('tokenize', () => {
       'keyword:const'
     ]);
   });
-});
 
-describe('highlight', () => {
   it('covers every character exactly once', () => {
     const code = '<script lang="ts">\n  let a = 1; // one\n</script>\n\n<p class="x">{a}</p>';
     expect(

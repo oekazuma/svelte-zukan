@@ -1,5 +1,4 @@
-export type Kind = 'comment' | 'string' | 'tag' | 'attr' | 'keyword' | 'block' | 'op';
-export type Token = { start: number; end: number; kind: Kind };
+type Kind = 'comment' | 'string' | 'tag' | 'attr' | 'keyword' | 'block' | 'op';
 
 const KEYWORDS =
   /\b(?:import|from|export|default|const|let|var|function|return|if|else|for|of|in|new|type|interface|class|extends|async|await|true|false|null|undefined)\b/y;
@@ -17,34 +16,23 @@ const RULES: [RegExp, Kind][] = [
 ];
 
 /** a rough tokenizer for Svelte markup, HTML, JS and TS: enough for colour, not a parser */
-export function tokenize(code: string): Token[] {
-  const tokens: Token[] = [];
-  for (let i = 0; i < code.length;) {
-    let matched = false;
-    for (const [re, kind] of RULES) {
-      re.lastIndex = i;
-      const m = re.exec(code);
-      if (m && m[0].length) {
-        tokens.push({ start: i, end: i + m[0].length, kind });
-        i += m[0].length;
-        matched = true;
-        break;
-      }
-    }
-    // skip a whole word, so that keywords are only found at word starts
-    if (!matched) i = /\w/.test(code[i]) ? code.slice(i).match(/^\w+/)![0].length + i : i + 1;
-  }
-  return tokens;
-}
-
 export function highlight(code: string): { text: string; kind: Kind | null }[] {
   const parts: { text: string; kind: Kind | null }[] = [];
-  let at = 0;
-  for (const token of tokenize(code)) {
-    if (token.start > at) parts.push({ text: code.slice(at, token.start), kind: null });
-    parts.push({ text: code.slice(token.start, token.end), kind: token.kind });
-    at = token.end;
+  /** where the text no rule matched starts; it becomes one part */
+  let plain = 0;
+  for (let i = 0; i < code.length;) {
+    const rule = RULES.find(([re]) => {
+      re.lastIndex = i;
+      return re.test(code) && re.lastIndex > i;
+    });
+    if (rule) {
+      if (plain < i) parts.push({ text: code.slice(plain, i), kind: null });
+      parts.push({ text: code.slice(i, rule[0].lastIndex), kind: rule[1] });
+      i = plain = rule[0].lastIndex;
+    }
+    // skip a whole word, so that keywords are only found at word starts
+    else i = /\w/.test(code[i]) ? code.slice(i).match(/^\w+/)![0].length + i : i + 1;
   }
-  if (at < code.length) parts.push({ text: code.slice(at), kind: null });
+  if (plain < code.length) parts.push({ text: code.slice(plain), kind: null });
   return parts;
 }
