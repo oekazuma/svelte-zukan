@@ -58,33 +58,7 @@
     axe: () => Promise<string>;
     /** to scroll the catalog page to an element inside the preview */
     frame: HTMLIFrameElement | undefined;
-    labels: Pick<
-      Messages,
-      | 'a11yChecking'
-      | 'a11yPassed'
-      | 'a11yIssues'
-      | 'a11yFailed'
-      | 'a11yLearnMore'
-      | 'a11yRerun'
-      | 'a11yHighlight'
-      | 'impactCritical'
-      | 'impactSerious'
-      | 'impactModerate'
-      | 'impactMinor'
-      | 'vision'
-      | 'visionNone'
-      | 'visionBlurred'
-      | 'visionProtanopia'
-      | 'visionDeuteranopia'
-      | 'visionTritanopia'
-      | 'visionAchromatopsia'
-      | 'visionHintBlurred'
-      | 'visionHintProtanopia'
-      | 'visionHintDeuteranopia'
-      | 'visionHintTritanopia'
-      | 'visionHintAchromatopsia'
-      | 'close'
-    >;
+    labels: Messages;
     onclose: () => void;
   } = $props();
 
