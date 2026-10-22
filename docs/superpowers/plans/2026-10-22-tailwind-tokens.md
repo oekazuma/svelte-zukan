@@ -15,7 +15,7 @@
 - Tailwind CSS v4.0.0 or later only (nothing newer is required: `candidatesToAst`, 4.1.18+, is not used). No `@tailwindcss/node` or an older `tailwindcss` → the entry is skipped silently; no entry loaded → no page and `tailwind: null` in `catalog.json` (never `[]`).
 - No new runtime or peer dependency: `tailwindcss` and `@tailwindcss/node` go to `devDependencies` (library, `tests/build`) through the pnpm `catalog:` only, at a version older than `minimumReleaseAge`.
 - No new `zukan()` option.
-- Everything that touches Tailwind's API lives in `vite/tailwind-load.ts` behind a shape check (`__unstable__loadDesignSystem`, `compile`, `loadModule`, `theme.entries`, `theme.prefix`, `getClassList`, `candidatesToCss`); a mismatch is that entry's `error`: `Tailwind CSS <version> does not expose the design-system API svelte-zukan uses`.
+- Everything that touches Tailwind's API lives in `vite/tailwind-load.ts` behind a shape check (`__unstable__loadDesignSystem`, `compile`, `theme.entries`, `theme.prefix`, `getClassList`, `candidatesToCss`); a mismatch is that entry's `error`: `Tailwind CSS <version> does not expose the design-system API svelte-zukan uses`.
 - A failing entry never breaks the catalog, the dev server or the build: it becomes `error` in its data, and `vite build` logs one warning per failing entry.
 - Generation is lazy (first load of the Tailwind list module) and cached; never at dev-server start.
 - `catalog.json` and the static build carry no absolute paths. The sample CSS is not in `catalog.json`.
@@ -176,9 +176,10 @@ it('loads an entry through the root fallback with relative paths', async () => {
   expect(watch).toContain(entryPath);
 });
 it('adds the defaults to an @theme-only entry', ...);
-it('loads a TypeScript @plugin', ...);                            // plugin.ts adds a utility; no error
+it('loads a TypeScript @plugin', ...);
+it('explains @plugin on a @tailwindcss/node without loadModule', ...); // vi.doMock without loadModule: an entry without @plugin loads, one with it gets the 4.1.0 error                            // plugin.ts adds a utility; no error
 it('watches relative imports outside the searched dirs', ...);     // ../tokens.css is in watch
-it('reports an unsupported API as the entry\'s error', ...);      // vi.doMock the @tailwindcss/node module without loadModule → error matches /does not expose the design-system API/
+it('reports an unsupported API as the entry\'s error', ...);      // vi.doMock the @tailwindcss/node module without compile → error matches /does not expose the design-system API/
 it('reports invalid CSS as the entry\'s error and keeps the other entries', ...);
 it('uses the given CSS resolver before Node resolution', ...);     // a resolver mapping '$lib/x.css' is called and its file loaded
 ```
@@ -188,7 +189,7 @@ it('uses the given CSS resolver before Node resolution', ...);     // a resolver
 - [ ] **Step 3: Implement `tailwind-load.ts`.**
   - `findTailwindEntries`: `fs.globSync('**/*.css', { cwd: dir, exclude: ['**/node_modules/**'] })`; candidate = a non-`@reference` `@import` naming `tailwindcss` or `tailwindcss/…`, or any `@theme`; drop candidates another candidate imports (ids resolved with `resolveCss`, then relative path).
   - `resolveTailwindNode`: per directory, `createRequire(join(dir, 'noop.js'))`; `@tailwindcss/node` directly, else through the package directory of `@tailwindcss/vite`, `@tailwindcss/postcss` or `@tailwindcss/cli`; `tailwindcss` resolved from `@tailwindcss/node`'s directory; null when nothing resolves or the major version is below 4.
-  - `loadTailwind`: per entry `resolveTailwindNode([dirname(entry), root])`; import both with `pathToFileURL` (use `default` when the named export is missing); guard; prepend `@import "tailwindcss";\n` when the entry has no Tailwind import; `loadStylesheet(id, base)` = `resolvers.css` then Node resolution of a package's `style` export / a relative path, read the file, report it to `watch`; `loadModule(id, base)` = `node.loadModule(id, base, onDependency, resolvers.js)`; `compile(css, { base, onDependency, customCssResolver, customJsResolver })` then `build(classes)` for `css`; `known` = theme variables + `rootVariables(build([]))`. `id` = first 12 hex of sha256 of the relative path. A thrown error becomes `{ id, file, version, prefix: null, categories: [], variables: {}, css: '', error }`.
+  - `loadTailwind`: per entry `resolveTailwindNode([dirname(entry), root])`; import both with `pathToFileURL` (use `default` when the named export is missing); guard; prepend `@import "tailwindcss";\n` when the entry has no Tailwind import; `loadStylesheet(id, base)` = `resolvers.css` then Node resolution of a package's `style` export / a relative path, read the file, report it to `watch`; `loadModule(id, base)` = `node.loadModule(id, base, onDependency, resolvers.js)`, or, when `@tailwindcss/node` does not export it (4.0.x), a function that throws "`@plugin` and `@config` need Tailwind CSS 4.1.0 or later in svelte-zukan"; `compile(css, { base, onDependency, customCssResolver, customJsResolver })` then `build(classes)` for `css`; `known` = theme variables + `rootVariables(build([]))`. `id` = first 12 hex of sha256 of the relative path. A thrown error becomes `{ id, file, version, prefix: null, categories: [], variables: {}, css: '', error }`.
 
 - [ ] **Step 4: Run the tests** — same command. Expected: PASS.
 
