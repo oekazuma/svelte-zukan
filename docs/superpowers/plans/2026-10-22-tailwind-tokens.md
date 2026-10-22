@@ -6,14 +6,14 @@
 
 **Architecture:** The plugin finds Tailwind CSS entries in the searched `src` directories and loads each one with the project's own `@tailwindcss/node` and the `tailwindcss` it depends on: `__unstable__loadDesignSystem` for the theme and the class list, `compile().build(classes)` for the sample stylesheet and the files to watch. CSS imports resolve through Vite's resolver the way `@tailwindcss/vite` does. The data reaches the catalog through lazily loaded JS virtual modules, the page renders the samples inside a same-origin iframe, and agents read the same data from `catalog.json` and one WebMCP tool.
 
-**Tech Stack:** Vite 8 plugin (`createIdResolver`, `hotUpdate`, Environment API), Svelte 5 runes, Vitest (`server` and `client` projects), Tailwind CSS v4 (`tailwindcss`, `@tailwindcss/node`) as dev dependencies only.
+**Tech Stack:** Vite 8 plugin (`createIdResolver`, `hotUpdate`, Environment API), Svelte 5 runes, Vitest (`server` and `client` projects), Tailwind CSS v4 (`tailwindcss`, `@tailwindcss/node`, `@tailwindcss/vite`) as dev dependencies only.
 
 **Spec:** `docs/superpowers/specs/2026-10-22-tailwind-tokens-design.md`
 
 ## Global Constraints
 
 - Tailwind CSS v4.0.0 or later only (nothing newer is required: `candidatesToAst`, 4.1.18+, is not used). No `@tailwindcss/node` or an older `tailwindcss` → the entry is skipped silently; no entry loaded → no page and `tailwind: null` in `catalog.json` (never `[]`).
-- No new runtime or peer dependency: `tailwindcss` and `@tailwindcss/node` go to `devDependencies` (library, `tests/build`) through the pnpm `catalog:` only, at a version older than `minimumReleaseAge`.
+- No new runtime or peer dependency: `tailwindcss`, `@tailwindcss/node` and `@tailwindcss/vite` go to `devDependencies` (library; `tests/build` takes `tailwindcss` and `@tailwindcss/vite`) through the pnpm `catalog:` only, at a version older than `minimumReleaseAge`.
 - No new `zukan()` option.
 - Everything that touches Tailwind's API lives in `vite/tailwind-load.ts` behind a shape check (`__unstable__loadDesignSystem`, `compile`, `theme.entries`, `theme.prefix`, `getClassList`, `candidatesToCss`); a mismatch is that entry's `error`: `Tailwind CSS <version> does not expose the design-system API svelte-zukan uses`.
 - A failing entry never breaks the catalog, the dev server or the build: it becomes `error` in its data, and `vite build` logs one warning per failing entry.
@@ -54,7 +54,7 @@
 **Files:**
 
 - Create: `packages/svelte-zukan/src/lib/vite/tailwind-tokens.ts`
-- Modify: `packages/svelte-zukan/src/lib/types.ts`, `pnpm-workspace.yaml` (catalog: `tailwindcss`, `@tailwindcss/node`, one 4.x version), `packages/svelte-zukan/package.json` (`devDependencies`)
+- Modify: `packages/svelte-zukan/src/lib/types.ts`, `pnpm-workspace.yaml` (catalog: `tailwindcss`, `@tailwindcss/node`, `@tailwindcss/vite`, one 4.x version), `packages/svelte-zukan/package.json` (`devDependencies`)
 - Test: `packages/svelte-zukan/src/lib/vite/tailwind-tokens.test.ts`
 
 **Interfaces:**
@@ -122,9 +122,9 @@ it('keeps text colors and font sizes apart', ...);                  // text-red-
 it('leaves out side-specific border colors', ...);                  // no border-t-red-500
 it('lists breakpoints and the spacing base without a class', ...);  // { class: null, cssVariable: '--breakpoint-sm', value: '40rem' }, first spacing token { class: null, cssVariable: '--spacing', value: '0.25rem' }
 it('drops empty categories', ...);
-it('prefixes classes', ...);                                        // '@import "tailwindcss" prefix(tw);' → 'tw:bg-red-500', prefix 'tw'
+it('prefixes classes and variables', ...);                         // '@import "tailwindcss" prefix(tw);' → prefix 'tw'; 'tw:bg-red-500' with cssVariable '--tw-color-red-500'; 'tw:p-4' → 'calc(0.25rem * 4)'; { class: null, cssVariable: '--tw-breakpoint-sm', value: '40rem' }; spacing base '--tw-spacing'
 it('scans real Tailwind output', ...);                              // scanCss(system.candidatesToCss(['shadow-lg'])[0]) has one rule '.shadow-lg' with box-shadow; the @property blocks yield no rule
-it('reads :root variables from real compile() output', ...);     // compile('@import "tailwindcss"; :root { --primary: red; }').build([]) → rootVariables has '--primary': 'red' and '--color-red-500'
+it('reads :root variables from real compile() output', ...);     // compile('@import "tailwindcss"; :root { --primary: red; }').build(['bg-red-500']) → rootVariables has '--primary': 'red' and '--color-red-500'; build([]) has '--primary' but no '--color-red-500' (only used theme variables are emitted)
 it('reads :root variables only from unconditional rules', () => {
   expect(rootVariables(':root{--a:1}\n@layer base{:root,:host{--b:2}}\n@media (x){:root{--c:3}}\n.dark{--d:4}\nhtml{--e:5}'))
     .toEqual({ '--a': '1', '--b': '2', '--e': '5' });
@@ -134,7 +134,7 @@ it('resolves var() chains and survives cycles', ...);              // { '--a': '
 
 - [ ] **Step 3: Run them to verify they fail** — `pnpm --filter svelte-zukan exec vitest run --project server src/lib/vite/tailwind-tokens.test.ts`. Expected: FAIL, module not found.
 
-- [ ] **Step 4: Implement `tailwind-tokens.ts`.** Declarations come from `scanCss(candidatesToCss([class])[0])`, the rule whose selector is the class (escaped) with no at-rule around it. `cssVariable`: the declaration is exactly `var(--x)` or `var(--x, …)` with `--x` a theme key; otherwise the theme key whose value equals the declaration and whose name ends with `-<class suffix>` (`@theme inline`); otherwise `null`. `rootVariables` is a small brace-matching walker (strings and comments skipped).
+- [ ] **Step 4: Implement `tailwind-tokens.ts`.** With a prefix `p`: `getClassList()` returns unprefixed names and `candidatesToCss` only accepts `${p}:${name}` (it returns `null` for the bare name); theme keys and the `var()`s in the output are `--${p}-…`. So the stem match and the `@theme inline` suffix rule use the unprefixed name, the candidate and `class` are `${p}:${name}`, and Breakpoints and the spacing base read `--${p}-breakpoint-*` and `--${p}-spacing`. Declarations come from `scanCss(candidatesToCss([class])[0])`, the rule whose selector is the class (escaped) with no at-rule around it. `cssVariable`: the declaration is exactly `var(--x)` or `var(--x, …)` with `--x` a theme key; otherwise the theme key whose value equals the declaration and whose name ends with `-<class suffix>` (`@theme inline`); otherwise `null`. `rootVariables` is a small brace-matching walker (strings and comments skipped).
 
 - [ ] **Step 5: Run the tests** — same command. Expected: PASS.
 
@@ -155,21 +155,23 @@ it('resolves var() chains and survives cycles', ...);              // { '--a': '
 - Produces:
   - `export type Resolver = (id: string, base: string) => Promise<string | false | undefined>` — `@tailwindcss/node`'s shape; `base` is a directory.
   - `export function findTailwindEntries(dirs: string[], resolveCss: Resolver): Promise<string[]>` — absolute, normalized, sorted, deduplicated.
-  - `export function resolveTailwindNode(from: string[]): { node: string; tailwind: string; version: string } | null` — resolved module paths of `@tailwindcss/node` and of the `tailwindcss` it depends on.
+  - `export function resolveTailwindNode(from: string[]): { node: string; tailwind: string; version: string } | null` — resolved module paths of `@tailwindcss/node` and of the `tailwindcss` it depends on. Synchronous, no import.
+  - `export function hasTailwind(dirs: string[], root: string): boolean` — synchronous, no resolver: some CSS file in `dirs` passes the entry test (partials ignored) and `resolveTailwindNode([dirname(file), root])` is not null. Used for the entry module.
   - `export async function loadTailwind(root: string, dirs: string[], resolvers?: { css?: Resolver; js?: Resolver }): Promise<{ sources: TailwindSource[]; watch: string[] }>` — never rejects for one entry; `watch` is absolute and never serialized.
 
-- [ ] **Step 1: Write the failing tests** (temp dirs; pass the library's own directory as `root` where Tailwind must resolve, a bare temp dir where it must not):
+- [ ] **Step 1: Write the failing tests.** Fixtures are temp dirs. A Tailwind-positive one gets `node_modules/tailwindcss`, `node_modules/@tailwindcss/node` (or, where stated, only `node_modules/@tailwindcss/vite`) as symlinks (`junction` on Windows) to the library's own installed packages (located with the same lookup as `resolveTailwindNode`); a bare one gets none. No `vi.doMock`: a fake `@tailwindcss/node` is a temp `node_modules/@tailwindcss/node/{package.json,index.mjs}` that re-exports a subset of the real module.
 
 ```ts
 it('finds an entry that imports tailwindcss and one with only @theme', ...);
 it('treats a file imported by another entry as a partial', ...);
 it('ignores @reference imports and unrelated CSS', ...);
 it('skips node_modules', ...);
+it('finds @tailwindcss/node through @tailwindcss/vite', ...);       // only node_modules/@tailwindcss/vite (with its own node_modules/@tailwindcss/node), as pnpm lays it out
 it('finds no Tailwind without @tailwindcss/node', async () => {
   expect(await loadTailwind(bareTmp, [bareTmpSrc])).toEqual({ sources: [], watch: [] });
 });
-it('loads an entry through the root fallback with relative paths', async () => {
-  const { sources: [s], watch } = await loadTailwind(libRoot, [tmpSrc]);
+it('loads an entry with relative paths', async () => {
+  const { sources: [s], watch } = await loadTailwind(tmpRoot, [tmpSrc]);
   expect(s.file).not.toMatch(/^([A-Za-z]:)?\//);
   expect(s.version).toMatch(/^4\./);
   expect(s.css).toContain('.bg-red-500');
@@ -177,9 +179,10 @@ it('loads an entry through the root fallback with relative paths', async () => {
 });
 it('adds the defaults to an @theme-only entry', ...);
 it('loads a TypeScript @plugin', ...);
-it('explains @plugin on a @tailwindcss/node without loadModule', ...); // vi.doMock without loadModule: an entry without @plugin loads, one with it gets the 4.1.0 error                            // plugin.ts adds a utility; no error
+it('explains @plugin on a @tailwindcss/node without loadModule', ...); // fake @tailwindcss/node without loadModule: an entry without @plugin loads, one with it gets the 4.1.0 error
 it('watches relative imports outside the searched dirs', ...);     // ../tokens.css is in watch
-it('reports an unsupported API as the entry\'s error', ...);      // vi.doMock the @tailwindcss/node module without compile → error matches /does not expose the design-system API/
+it('reports an unsupported API as the entry\'s error', ...);      // fake @tailwindcss/node without compile → error matches /does not expose the design-system API/
+it('keeps absolute paths out of errors', ...);                      // '@import "./missing.css"' → error does not contain the temp root
 it('reports invalid CSS as the entry\'s error and keeps the other entries', ...);
 it('uses the given CSS resolver before Node resolution', ...);     // a resolver mapping '$lib/x.css' is called and its file loaded
 ```
@@ -188,8 +191,8 @@ it('uses the given CSS resolver before Node resolution', ...);     // a resolver
 
 - [ ] **Step 3: Implement `tailwind-load.ts`.**
   - `findTailwindEntries`: `fs.globSync('**/*.css', { cwd: dir, exclude: ['**/node_modules/**'] })`; candidate = a non-`@reference` `@import` naming `tailwindcss` or `tailwindcss/…`, or any `@theme`; drop candidates another candidate imports (ids resolved with `resolveCss`, then relative path).
-  - `resolveTailwindNode`: per directory, `createRequire(join(dir, 'noop.js'))`; `@tailwindcss/node` directly, else through the package directory of `@tailwindcss/vite`, `@tailwindcss/postcss` or `@tailwindcss/cli`; `tailwindcss` resolved from `@tailwindcss/node`'s directory; null when nothing resolves or the major version is below 4.
-  - `loadTailwind`: per entry `resolveTailwindNode([dirname(entry), root])`; import both with `pathToFileURL` (use `default` when the named export is missing); guard; prepend `@import "tailwindcss";\n` when the entry has no Tailwind import; `loadStylesheet(id, base)` = `resolvers.css` then Node resolution of a package's `style` export / a relative path, read the file, report it to `watch`; `loadModule(id, base)` = `node.loadModule(id, base, onDependency, resolvers.js)`, or, when `@tailwindcss/node` does not export it (4.0.x), a function that throws "`@plugin` and `@config` need Tailwind CSS 4.1.0 or later in svelte-zukan"; `compile(css, { base, onDependency, customCssResolver, customJsResolver })` then `build(classes)` for `css`; `known` = theme variables + `rootVariables(build([]))`. `id` = first 12 hex of sha256 of the relative path. A thrown error becomes `{ id, file, version, prefix: null, categories: [], variables: {}, css: '', error }`.
+  - `resolveTailwindNode`: these packages export no `./package.json`, so find a package directory with `createRequire(join(dir, 'noop.js')).resolve.paths(name)` and the first `<p>/<name>/package.json` that exists, then `realpathSync`. Try `@tailwindcss/node` from each directory; else find `@tailwindcss/vite`, `@tailwindcss/postcss` or `@tailwindcss/cli` the same way and look for `@tailwindcss/node` from that package's directory. `tailwindcss` is found the same way from `@tailwindcss/node`'s directory; the module paths come from `createRequire(<pkg dir>/package.json).resolve(name)`. Null when nothing is found or the major version is below 4.
+  - `loadTailwind`: per entry `resolveTailwindNode([dirname(entry), root])`; import both with `pathToFileURL` (use `default` when the named export is missing); guard; prepend `@import "tailwindcss";\n` when the entry has no Tailwind import; `loadStylesheet(id, base)` = `resolvers.css`, then `enhanced-resolve` loaded from `@tailwindcss/node`'s directory (`createRequire(nodePath)('enhanced-resolve')`, `ResolverFactory` / `create.sync` with `extensions: ['.css'], mainFields: ['style'], conditionNames: ['style']`) from `base` only; read the file, report it to `watch`. No resolve-from-root fallback: an import resolves where the app's build resolves it; `loadModule(id, base)` = `node.loadModule(id, base, onDependency, resolvers.js)`, or, when `@tailwindcss/node` does not export it (4.0.x), a function that throws "`@plugin` and `@config` need Tailwind CSS 4.1.0 or later in svelte-zukan"; `compile(css, { base, onDependency, customCssResolver, customJsResolver })` then `build(classes)` for `css`; `known` = theme variables + `rootVariables(build([]))`. `id` = first 12 hex of sha256 of the relative path. A thrown error becomes `{ id, file, version, prefix: null, categories: [], variables: {}, css: '', error }`, with every occurrence of `root + '/'` (normalized, and the OS form) removed from the message as `catalog-json.ts` does. `watch` paths go through `normalizePath`.
 
 - [ ] **Step 4: Run the tests** — same command. Expected: PASS.
 
@@ -202,40 +205,45 @@ it('uses the given CSS resolver before Node resolution', ...);     // a resolver
 **Files:**
 
 - Modify: `packages/svelte-zukan/src/lib/vite/virtual.ts`, `vite/index.ts`, `vite/catalog-json.ts`, `types.ts`
-- Test: `packages/svelte-zukan/src/lib/vite/index.test.ts`, the existing `catalogJson` tests
+- Test: `packages/svelte-zukan/src/lib/vite/index.test.ts` (fakes: module ids, sync behaviour), `vite/hmr.test.ts` (real `createServer`: resolver, HMR, catalog.json), `vite/virtual.test.ts`, the existing `catalogJson` tests
 
 **Interfaces:**
 
 - Consumes: `loadTailwind`, `Resolver` (Task 2); `TailwindSource` (Task 1).
 - Produces:
-  - `virtual.ts`: `TAILWIND = 'virtual:svelte-zukan/tailwind'`, `TAILWIND_SOURCE = 'virtual:svelte-zukan/tailwind/'`; `generateTailwindModule(sources: TailwindSource[]): string` exporting `tailwind: TailwindListItem[]`; `generateEntryModule` gains `tailwind: boolean` and, only when true, imports `TAILWIND` with the catalog and passes its `tailwind` to `App` (`[]` otherwise). The plugin decides `tailwind` when it loads `ENTRY`: some entry from `findTailwindEntries(cssDirs())` resolves with `resolveTailwindNode` (no Tailwind import, no compile).
+  - `virtual.ts`: `TAILWIND = 'virtual:svelte-zukan/tailwind'`, `TAILWIND_SOURCE = 'virtual:svelte-zukan/tailwind/'`; `generateTailwindModule(sources: TailwindSource[]): string` exporting `tailwind: TailwindListItem[]`; `generateEntryModule` gains `tailwind?: boolean` (default `false`) and, only when true, imports `TAILWIND` with the catalog and passes its `tailwind` to `App` (`[]` otherwise). The plugin decides it when it loads `ENTRY`, synchronously, with `hasTailwind(cssDirs(), root)`; `load(ENTRY)` stays synchronous.
   - `types.ts`: `export type TailwindListItem = { id: string; file: string; error: string | null; load: () => Promise<{ default: TailwindSource }> }`.
   - `CatalogJson.tailwind: Omit<TailwindSource, 'id' | 'css'>[] | null`; `catalogJson` takes `tailwind: TailwindSource[]`; the plugin's `catalogData()` is async.
+  - In `index.ts`: `tailwindData(env: Environment): Promise<{ sources: TailwindSource[]; watch: string[] }>`, the one cached entry point used by `load` (`this.environment`), the dev `catalog.json` middleware (`server.environments.client`) and `buildApp` (`builder.environments.zukan`); its resolvers are built from the given environment's config.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
+// index.test.ts (fakes)
 it('resolves and loads the Tailwind list and one entry\'s data', ...);
 it('does not load Tailwind until the list module is loaded', ...);       // configResolved + configureServer do not call loadTailwind
 it('leaves the Tailwind import out of the entry module without an entry', ...); // generateEntryModule({ tailwind: false, ... }) has no 'virtual:svelte-zukan/tailwind'
 it('serves catalog.json with tailwind null without Tailwind', ...);
 it('serves catalog.json when an entry fails', ...);
 it('keeps absolute paths and the sample CSS out of catalog.json', ...);
+// hmr.test.ts (real createServer on a temp app with Tailwind symlinked as in Task 2)
 it('resolves CSS imports through Vite aliases', ...);                    // resolve.alias { $lib: src/lib }; entry '@import "$lib/theme.css"' loads; theme.css is no entry
 it('reloads the catalog when a watched file changes the data', ...);     // hotUpdate on the entry with the TAILWIND module in the graph → zukan:reload
 it('does not reload when the data did not change', ...);                 // a comment added to the entry → no hot.send
 it('picks up a CSS entry created in a searched dir', ...);
 it('does not swallow the app\'s CSS update', ...);                       // hotUpdate returns undefined, never []
-it('ignores CSS changes when no Tailwind module is loaded', ...);
+it('ignores CSS changes when no Tailwind module is loaded', ...);      // no hot.send
+it('serves an edit in catalog.json when the list module was never loaded', ...);
+it('reloads on a change to an imported file outside the root', ...);   // ../tokens.css outside the Vite root
 ```
 
-- [ ] **Step 2: Run them to verify they fail** — `pnpm --filter svelte-zukan exec vitest run --project server src/lib/vite/index.test.ts`. Expected: FAIL.
+- [ ] **Step 2: Run them to verify they fail** — `pnpm --filter svelte-zukan exec vitest run --project server src/lib/vite/index.test.ts src/lib/vite/hmr.test.ts src/lib/vite/virtual.test.ts`. Expected: FAIL.
 
 - [ ] **Step 3: Implement**
-  - `index.ts`: `cssDirs()` = searched dirs plus `<root>/src` when it exists, deduplicated. Resolvers from the current environment in `load`: `createIdResolver(env.config, { ...env.config.resolve, extensions: ['.css'], mainFields: ['style'], conditions: ['style', 'development|production'], tryIndex: false, preferRelative: true })` for CSS and `createIdResolver(env.config, env.config.resolve)` for JS, each wrapped like `@tailwindcss/vite`'s helper (importer `join(base, '__placeholder__.ts')`, alias-only first, a relative result made absolute, CSS results must end in `.css`). `let tailwind: Promise<{ sources; watch }> | null`, cleared in `config`; `served` = JSON of the last served sources. `load` for `TAILWIND` / `TAILWIND_SOURCE` (unknown id throws like a missing catalog file). The dev middleware and `buildApp` await `catalogData()`; `buildApp` warns `svelte-zukan: Tailwind CSS entry <file>: <error>` per failing entry.
-  - `hotUpdate` (made `async`), first branch: a file in the last `watch`, or a `.css` file created/deleted inside `cssDirs()`. If the `\0`+`TAILWIND` module is not in the graph or the consumer is not `client`, return `undefined`. Otherwise regenerate; when the JSON differs from `served`, invalidate `\0`+`TAILWIND` and every `\0`+`TAILWIND_SOURCE` module and send `zukan:reload`. Always return `undefined`.
+  - `index.ts`: `cssDirs()` = searched dirs plus `<root>/src` when it exists, deduplicated. `tailwindData(env)` builds its resolvers from `env.config`: `createIdResolver(env.config, { ...env.config.resolve, extensions: ['.css'], mainFields: ['style'], conditions: ['style', 'development|production'], tryIndex: false, preferRelative: true })` for CSS and `createIdResolver(env.config, env.config.resolve)` for JS, each wrapped like `@tailwindcss/vite`'s helper (importer `join(base, '__placeholder__.ts')`, alias-only first, a relative result made absolute, CSS results must end in `.css`). `let tailwind: Promise<{ sources; watch }> | null`, cleared in `config`; `served` = JSON of the last served sources. `load` for `TAILWIND` / `TAILWIND_SOURCE` (unknown id throws like a missing catalog file) calls `this.addWatchFile(f)` for every path in `watch`, so files outside the root are watched too. The dev middleware and `buildApp` await `catalogData()`; `buildApp` warns `svelte-zukan: Tailwind CSS entry <file>: <error>` per failing entry.
+  - `hotUpdate` stays synchronous for every existing branch. New first branch: `normalizePath(file)` is in the last `watch`, or a `.css` file created/deleted inside `cssDirs()`. Always set `tailwind = null` (so `catalog.json` is fresh). Then, only when the `\0`+`TAILWIND` module is in the graph and the consumer is `client`, return a promise that regenerates and, when the JSON differs from `served`, invalidates `\0`+`TAILWIND` and every `\0`+`TAILWIND_SOURCE` module and sends `zukan:reload`, resolving to `undefined`. Otherwise return `undefined`. Never `[]`.
 
-- [ ] **Step 4: Run the tests** — `pnpm --filter svelte-zukan exec vitest run --project server`. Expected: PASS.
+- [ ] **Step 4: Run the tests** — `pnpm --filter svelte-zukan exec vitest run --project server`, then `pnpm --filter svelte-zukan run check`. Expected: PASS, 0 errors (existing synchronous assertions in `index.test.ts` and the `generateEntryModule` callers in `virtual.test.ts` unchanged).
 
 - [ ] **Step 5: Commit** — `feat: serve Tailwind CSS tokens to the catalog and catalog.json`.
 
@@ -322,7 +330,7 @@ it('links one Tailwind item per entry, with the file when there are several', ..
 
 **Files:**
 
-- Modify: `tests/build/package.json` (`tailwindcss`, `@tailwindcss/node` as `catalog:` dev dependencies), `tests/build/build.test.ts`
+- Modify: `tests/build/package.json` (`tailwindcss` and `@tailwindcss/vite` as `catalog:` dev dependencies, not `@tailwindcss/node`: pnpm does not hoist it, so the build test covers the real `@tailwindcss/vite` + pnpm lookup), `tests/build/build.test.ts`
 - Create: `tests/build/vite-svelte/src/app.css` (`@import "tailwindcss";`, `:root { --primary: #123456; }`, `@theme inline { --color-primary: var(--primary); }`, `@theme { --color-brand-500: #ff3e00; }`)
 - Create: `packages/svelte-zukan/src/tailwind.css` (`@import "tailwindcss";` and a few `@theme` tokens; outside `src/lib`, searched in both demo locales)
 
