@@ -16,7 +16,7 @@
   } = $props();
 
   const uid = $props.id();
-  const tabs: HTMLButtonElement[] = [];
+  const tabs: HTMLButtonElement[] = $state([]);
 
   function onkeydown(e: KeyboardEvent) {
     const index = items.findIndex((item) => item.id === selected);

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 412 128" role="img" aria-label="zukan">
-  <!-- the catalog UI follows the system theme, so the bundled logo does too (colors of .github/logo-dark.svg) -->
+  <!-- an <img> SVG's prefers-color-scheme follows the color-scheme of the page showing it, so the logo follows the catalog's theme (colors of .github/logo-dark.svg) -->
   <style>
     @media (prefers-color-scheme: dark) {
       .cover { fill: #333; stroke: #5a5a5a; stroke-width: 3px; }

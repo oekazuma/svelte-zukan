@@ -3,6 +3,7 @@ export type Messages = {
   listHeading: string;
   empty: string;
   notFound: string;
+  skipToContent: string;
   loadFailed: string;
   code: string;
   copy: string;
@@ -88,6 +89,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     listHeading: 'Components',
     empty: 'No catalog files found. Searched:',
     notFound: 'Not found',
+    skipToContent: 'Skip to content',
     loadFailed: 'Failed to load:',
     code: 'Code',
     copy: 'Copy',
@@ -172,6 +174,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     listHeading: 'コンポーネント一覧',
     empty: 'カタログファイルが見つかりません。探した場所:',
     notFound: '見つかりません',
+    skipToContent: '本文へスキップ',
     loadFailed: '読み込めませんでした:',
     code: 'コード',
     copy: 'コピー',
