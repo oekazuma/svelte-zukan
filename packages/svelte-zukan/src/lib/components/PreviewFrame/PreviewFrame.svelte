@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { flushSync } from 'svelte';
   import type { Messages } from '../../app/i18n.js';
   import A11yPanel from './A11yPanel.svelte';
   import { startMeasure } from './measure.js';
@@ -271,6 +272,81 @@
   $effect(() => () => clearTimeout(linkTimer));
 
   $effect(() => () => observer?.disconnect());
+
+  // a native `title` shows only after a long delay and never on keyboard focus
+  const TIP_TARGETS = 'button, a, [data-tip]';
+  const TIP_DELAY = 150;
+  const TIP_GAP = 6;
+  let tip: HTMLDivElement | undefined = $state();
+  let tipText = $state('');
+  let tipFor: HTMLElement | null = null;
+  let tipTimer: ReturnType<typeof setTimeout> | undefined;
+  // toggles rename themselves (expand, background, copy link) while the tip is shown
+  const tipLabel = new MutationObserver(() => placeTip());
+
+  function placeTip() {
+    if (!tip || !tipFor) return;
+    tipText = tipFor.getAttribute('aria-label') ?? tipFor.dataset.tip ?? '';
+    // measured below, so the new text must be in the DOM
+    flushSync();
+    if (!tip.matches(':popover-open')) tip.showPopover();
+    const r = tipFor.getBoundingClientRect();
+    const { clientWidth, clientHeight } = document.documentElement;
+    const centered = r.left + r.width / 2 - tip.offsetWidth / 2;
+    const below = r.bottom + TIP_GAP;
+    const top = below + tip.offsetHeight > clientHeight ? r.top - TIP_GAP - tip.offsetHeight : below;
+    tip.style.left = `${Math.max(TIP_GAP, Math.min(centered, clientWidth - tip.offsetWidth - TIP_GAP))}px`;
+    tip.style.top = `${top}px`;
+  }
+
+  function showTip(el: HTMLElement, delay: number) {
+    if (el === tipFor) return;
+    hideTip();
+    tipFor = el;
+    tipLabel.observe(el, { attributeFilter: ['aria-label', 'data-tip'] });
+    tipTimer = setTimeout(placeTip, delay);
+  }
+
+  function hideTip() {
+    clearTimeout(tipTimer);
+    tipLabel.disconnect();
+    tipFor = null;
+    if (tip?.matches(':popover-open')) tip.hidePopover();
+  }
+
+  function tooltips(toolbar: HTMLElement) {
+    // Firefox before 125 has no popover; the controls keep their aria-label and go without a tip
+    if (!('showPopover' in HTMLElement.prototype)) return;
+    const target = (e: Event) => (e.target as Element).closest<HTMLElement>(TIP_TARGETS);
+    const over = (e: PointerEvent) => {
+      const el = target(e);
+      if (el && e.pointerType !== 'touch') showTip(el, TIP_DELAY);
+    };
+    const out = (e: PointerEvent) => {
+      if (tipFor && !tipFor.contains(e.relatedTarget as Node | null) && !tipFor.matches(':focus-visible')) hideTip();
+    };
+    // a hover tip on another button stays when the previously clicked one loses focus
+    const focusout = (e: FocusEvent) => {
+      if (e.target === tipFor) hideTip();
+    };
+    const focusin = (e: FocusEvent) => {
+      const el = target(e);
+      if (el?.matches(':focus-visible')) showTip(el, 0);
+    };
+    toolbar.addEventListener('pointerover', over);
+    toolbar.addEventListener('pointerout', out);
+    toolbar.addEventListener('focusin', focusin);
+    toolbar.addEventListener('focusout', focusout);
+    return {
+      destroy() {
+        toolbar.removeEventListener('pointerover', over);
+        toolbar.removeEventListener('pointerout', out);
+        toolbar.removeEventListener('focusin', focusin);
+        toolbar.removeEventListener('focusout', focusout);
+        hideTip();
+      }
+    };
+  }
 </script>
 
 {#snippet icon(paths: readonly string[])}
@@ -290,9 +366,13 @@
 {/snippet}
 
 <svelte:window
+  onscroll={hideTip}
+  onresize={hideTip}
   onkeydown={(e) => {
+    if (e.key !== 'Escape') return;
+    hideTip();
     // Escape in a dialog over the expanded preview closes the dialog only
-    if (expanded && e.key === 'Escape' && !(e.target as Element).closest('dialog')) toggleExpanded();
+    if (expanded && !(e.target as Element).closest('dialog')) toggleExpanded();
   }}
 />
 
@@ -302,7 +382,7 @@
 {/if}
 
 <div class={['preview', { expanded }]}>
-  <div class="toolbar">
+  <div class="toolbar" use:tooltips>
     <div class="group" role="group" aria-label={labels.previewWidth}>
       {#each PRESETS as preset (preset.width)}
         {@const name = `${labels[preset.label]} (${preset.width}px)`}
@@ -310,7 +390,6 @@
           type="button"
           class="icon"
           aria-label={name}
-          title={name}
           aria-pressed={width === preset.width}
           onclick={() => (width = preset.width)}
         >
@@ -321,7 +400,6 @@
         type="button"
         class="icon"
         aria-label={labels.fullWidth}
-        title={labels.fullWidth}
         aria-pressed={width === null}
         onclick={() => (width = null)}
       >
@@ -346,11 +424,13 @@
         }}
       /><span class="unit" aria-hidden="true">px</span>
       {#if scale < 1}
-        <span class="zoom" title={labels.scaledToFit}>{Math.round(scale * 100)}%</span>
+        <span class="zoom" data-tip={labels.scaledToFit}>
+          {Math.round(scale * 100)}% <span class="sr-only">{labels.scaledToFit}</span>
+        </span>
       {/if}
     </label>
     <div class="group">
-      <button type="button" class="icon" aria-label={backgroundName} title={backgroundName} onclick={nextBackground}>
+      <button type="button" class="icon" aria-label={backgroundName} onclick={nextBackground}>
         {@render icon(BACKGROUND_ICONS[background])}
       </button>
       {#if axe}
@@ -358,7 +438,6 @@
           type="button"
           class="icon"
           aria-label={labels.checkA11y}
-          title={labels.checkA11y}
           aria-pressed={a11yOpen}
           disabled={!doc}
           onclick={() => (a11yOpen = !a11yOpen)}
@@ -370,7 +449,6 @@
         type="button"
         class="icon"
         aria-label={labels.measure}
-        title={labels.measure}
         aria-pressed={measuring}
         onclick={() => (measuring = !measuring)}
       >
@@ -380,7 +458,6 @@
         type="button"
         class="icon"
         aria-label={labels.outline}
-        title={labels.outline}
         aria-pressed={outlined}
         onclick={() => (outlined = !outlined)}
       >
@@ -391,7 +468,6 @@
         type="button"
         class="icon"
         aria-label={expanded ? labels.collapse : labels.expand}
-        title={expanded ? labels.collapse : labels.expand}
         aria-pressed={expanded}
         onclick={toggleExpanded}
       >
@@ -401,14 +477,14 @@
     {#if shareUrl}
       {@const name =
         linkStatus === 'copied' ? labels.copied : linkStatus === 'failed' ? labels.copyFailed : labels.copyLink}
-      <button type="button" class="icon" aria-label={name} title={name} onclick={copyLink}>
+      <button type="button" class="icon" aria-label={name} onclick={copyLink}>
         {@render icon(linkStatus === 'copied' ? CHECK_ICON : LINK_ICON)}
       </button>
       <span class="sr-only" aria-live="polite">{linkStatus === 'idle' ? '' : name}</span>
     {/if}
     <!-- the preview page of this catalog, not a SvelteKit route -->
     <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-    <a href={tabHref} target="_blank" rel="noopener" aria-label={labels.openInNewTab} title={labels.openInNewTab}>
+    <a href={tabHref} target="_blank" rel="noopener" aria-label={labels.openInNewTab}>
       {@render icon(OPEN_ICON)}<span class="label">{labels.openInNewTab}</span>
     </a>
   </div>
@@ -465,6 +541,8 @@
       ></div>
     </div>
   </div>
+  <!-- the top layer escapes the frame's overflow and the page's containment; the name is in aria-label -->
+  <div class="tip" popover="manual" aria-hidden="true" bind:this={tip}>{tipText}</div>
   {#if a11yOpen && axe && doc}
     {#key doc}
       <A11yPanel {doc} {axe} frame={iframe} {labels} onclose={() => (a11yOpen = false)} />
@@ -480,6 +558,25 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+
+  /* without popover support, the :popover-open rule is dropped and the tip stays hidden */
+  .tip {
+    display: none;
+    inset: auto;
+    margin: 0;
+    padding: 3px 8px;
+    border: 0;
+    border-radius: 4px;
+    background: var(--_text);
+    color: var(--_bg);
+    font: 12px/1.4 var(--_font);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .tip:popover-open {
+    display: block;
   }
 
   .preview {
