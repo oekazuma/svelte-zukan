@@ -21,7 +21,38 @@ zukan は日本語の「図鑑」のことです。
 npm install -D svelte-zukan
 ```
 
-`vite.config.ts` で `sveltekit()`（または `svelte()`）より前に `zukan()` を足し、`Button.svelte` の隣に `Button.zukan.svelte` を置いて、dev サーバーの `/__zukan/` を開きます。2 つのファイルの書き方は[クイックスタート](https://oekazuma.github.io/svelte-zukan/ja/quickstart/)にあります。
+`sveltekit()`（または `svelte()`）より前に `zukan()` を置きます。
+
+```ts
+// vite.config.ts
+import { sveltekit } from '@sveltejs/kit/vite';
+import { defineConfig } from 'vite';
+import { zukan } from 'svelte-zukan/vite';
+
+export default defineConfig({ plugins: [zukan(), sveltekit()] });
+```
+
+コンポーネントの隣にカタログファイルを置きます。
+
+```
+src/lib/Button/
+├── Button.svelte
+└── Button.zukan.svelte
+```
+
+```svelte
+<!-- Button.zukan.svelte -->
+<script lang="ts">
+  import { Section } from 'svelte-zukan';
+  import Button from './Button.svelte';
+</script>
+
+<Section title="Basic">
+  <Button>Click me</Button>
+</Section>
+```
+
+dev サーバーを起動して `/__zukan/` を開きます。詳しくは[クイックスタート](https://oekazuma.github.io/svelte-zukan/ja/quickstart/)を見てください。
 
 ## リンク
 
@@ -29,8 +60,6 @@ npm install -D svelte-zukan
 - [デモ](https://oekazuma.github.io/svelte-zukan/demo/ja/)
 - [AI エージェントと使う](https://oekazuma.github.io/svelte-zukan/ja/ai-agents/)
 - [コントリビューションガイド](CONTRIBUTING.md)（英語）
-
-> svelte-zukan は Svelte の公式プロジェクトではありません。Svelte チームとの提携や承認もありません。ロゴの S の図形は Svelte のロゴに由来します。
 
 ## ライセンス
 

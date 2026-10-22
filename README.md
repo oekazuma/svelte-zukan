@@ -21,7 +21,38 @@
 npm install -D svelte-zukan
 ```
 
-Add `zukan()` before `sveltekit()` (or `svelte()`) in `vite.config.ts`, put `Button.zukan.svelte` next to `Button.svelte`, and open `/__zukan/` on the dev server. The [quickstart](https://oekazuma.github.io/svelte-zukan/quickstart/) shows both files.
+Add `zukan()` before `sveltekit()` (or `svelte()`):
+
+```ts
+// vite.config.ts
+import { sveltekit } from '@sveltejs/kit/vite';
+import { defineConfig } from 'vite';
+import { zukan } from 'svelte-zukan/vite';
+
+export default defineConfig({ plugins: [zukan(), sveltekit()] });
+```
+
+Put a catalog file next to the component:
+
+```
+src/lib/Button/
+├── Button.svelte
+└── Button.zukan.svelte
+```
+
+```svelte
+<!-- Button.zukan.svelte -->
+<script lang="ts">
+  import { Section } from 'svelte-zukan';
+  import Button from './Button.svelte';
+</script>
+
+<Section title="Basic">
+  <Button>Click me</Button>
+</Section>
+```
+
+Start the dev server and open `/__zukan/`. See the [quickstart](https://oekazuma.github.io/svelte-zukan/quickstart/) for more.
 
 ## Links
 
@@ -29,8 +60,6 @@ Add `zukan()` before `sveltekit()` (or `svelte()`) in `vite.config.ts`, put `But
 - [Demo](https://oekazuma.github.io/svelte-zukan/demo/)
 - [Using it with AI agents](https://oekazuma.github.io/svelte-zukan/ai-agents/)
 - [Contribution Guide](CONTRIBUTING.md)
-
-> svelte-zukan is not an official Svelte project (not affiliated with or endorsed by the Svelte team). The S shape in the logo is derived from the Svelte logo.
 
 ## License
 
