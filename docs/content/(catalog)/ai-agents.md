@@ -34,14 +34,14 @@ The dev server serves `/__zukan/catalog.json`, and `vite build` with `build: tru
 
 Each `tailwind` object has:
 
-| Field          | What it holds                                                                                                                                     |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `file`         | The entry, relative to Vite's root                                                                                                                |
-| `version`      | The Tailwind CSS version                                                                                                                          |
-| `prefix`       | The `prefix` of the theme, or `null`                                                                                                              |
-| `categories[]` | The utility classes by category: `id`, `title`, and `tokens[]` with `class` (with the prefix; `null` for a breakpoint), `cssVariable` and `value` |
-| `variables`    | Every theme variable and its value, as `{ "--color-brand-500": "#ff3e00" }`                                                                       |
-| `error`        | Set when the entry could not be loaded, with the message; `categories` and `variables` are then empty                                             |
+| Field          | What it holds                                                                                                                                                         |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `file`         | The entry, relative to Vite's root                                                                                                                                    |
+| `version`      | The Tailwind CSS version                                                                                                                                              |
+| `prefix`       | The `prefix` of the theme, or `null`                                                                                                                                  |
+| `categories[]` | The utility classes by category: `id`, `title`, and `tokens[]` with `class` (with the prefix; `null` for a breakpoint or the spacing base), `cssVariable` and `value` |
+| `variables`    | Every theme variable and its value, as `{ "--color-brand-500": "#ff3e00" }`                                                                                           |
+| `error`        | Set when the entry could not be loaded, with the message; `categories` and `variables` are then empty                                                                 |
 
 The classes in `categories` are the ones the theme defines, so an agent that styles a component should use only those. Dark-mode values, arbitrary values and variants are [not part of it](/tailwind#what-it-does-not-show).
 
