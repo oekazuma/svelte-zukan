@@ -80,6 +80,47 @@ describe('WebMCP tools', () => {
     expect(result.isError).toBe(true);
     expect(document.querySelectorAll('iframe').length).toBe(0);
   });
+
+  describe('check_accessibility', () => {
+    // a blob: page is same-origin, so the tool can reach into it as it does into a preview
+    const check = async (preview: string) => {
+      const page = URL.createObjectURL(new Blob([preview], { type: 'text/html' }));
+      const withAxe = buildTools({
+        fetchCatalog: () => Promise.resolve(catalog),
+        page,
+        axe: () =>
+          Promise.resolve(`window.axe = { run: async () => ({ violations: [{ id: 'image-alt', impact: 'critical',
+            help: 'Images must have alternative text', helpUrl: 'https://example.com/image-alt',
+            nodes: [{ target: ['img'] }] }] }) };`)
+      });
+      try {
+        return await tool(withAxe, 'check_accessibility').execute({ id: 'ui/Button', section: 'Primary' });
+      } finally {
+        URL.revokeObjectURL(page);
+      }
+    };
+
+    it('renders the section and returns what axe-core finds', async () => {
+      const result = await check('<div data-zukan-preview><img src=""></div>');
+      expect(result.isError).toBeUndefined();
+      expect(JSON.parse(body(result))).toEqual([
+        {
+          id: 'image-alt',
+          impact: 'critical',
+          help: 'Images must have alternative text',
+          helpUrl: 'https://example.com/image-alt',
+          targets: ['img']
+        }
+      ]);
+      expect(document.querySelectorAll('iframe').length).toBe(0);
+    });
+
+    it('reports a preview that failed to load instead of checking its error message', async () => {
+      const result = await check('<div data-zukan-preview><p data-zukan-error>Failed to load: boom</p></div>');
+      expect(result.isError).toBe(true);
+      expect(body(result)).toBe('The check could not run: Failed to load: boom');
+    });
+  });
 });
 
 describe('registerTools', () => {

@@ -41,7 +41,8 @@
       <mod.default />
     {/if}
   {:catch error}
-    <p>{t.loadFailed} {error instanceof Error ? error.message : String(error)}</p>
+    <!-- runAxe reports this instead of checking it -->
+    <p data-zukan-error>{t.loadFailed} {error instanceof Error ? error.message : String(error)}</p>
   {/await}
 </div>
 

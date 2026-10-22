@@ -17,6 +17,7 @@ zukan({ build: true });
 - `build` を有効にすると、`vite build` は Vite の builder モード（Environment API）で動き、全環境が 1 回の実行でビルドされます
 - カタログの CSS はアプリの `build.cssTarget` にかかわらず、`light-dark()` に対応したブラウザー（Chrome と Edge 123、Firefox 120、Safari 17.5）向けに出力します。そのため、コンポーネントの `light-dark()` もカタログのテーマボタンに従います
 - `vite preview` でも、書き出したカタログを `/__zukan/`（`base` を設定していればその下）で開けるので、公開する前に確かめられます
+- 再デプロイの前から開いたままのカタログのタブは、前のビルドのファイルを読みにいきます。そのファイルがもう無いときは、カタログを 1 回だけ読み込み直して新しいビルドに切り替えます（10 秒に 1 回まで。それ以上はプレビューにエラーを表示します）
 - `vite build --watch` ではカタログを書き出しません。警告を出して飛ばします
 - 出力先は Vite の root そのものや root を含むディレクトリにできません。アプリの `build.outDir`（既定は `dist`）や SvelteKit の `outDir`（`.svelte-kit`）と重なってもいけません。どれもビルドエラーになります
 - カタログを書き出すのは `vite build`（Vite の JavaScript API なら `createBuilder().buildApp()`）です。`vite build --ssr` と Vite の `build()` 関数は 1 つの環境だけをビルドするので、カタログは書き出しません
