@@ -18,7 +18,7 @@ export default defineConfig(({ command }) => ({
   plugins: [
     Inspect(),
     zukan({
-      groups: { ui: 'src/lib', examples: ja ? 'src/examples-ja' : 'src/examples' },
+      groups: ja ? { ui: 'src/ui-ja', examples: 'src/examples-ja' } : { ui: 'src/lib', examples: 'src/examples' },
       wrapper: '.zukan/Wrapper.svelte',
       locale: ja ? 'ja' : 'en',
       build: true

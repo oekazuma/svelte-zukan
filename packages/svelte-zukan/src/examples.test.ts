@@ -10,8 +10,8 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const { componentFileOf } = createMatchers('zukan');
 
 // CI never builds the ja demo (only the Pages deploy does), so a drifted or broken copy would surface only there
-function shape(dir: string) {
-  const items = listCatalog(discoverGroups(root, { examples: dir }), 'zukan');
+function shape(group: string, dir: string) {
+  const items = listCatalog(discoverGroups(root, { [group]: dir }), 'zukan');
   return Object.fromEntries(
     items.map((item) => {
       const component = componentFileOf(item.file);
@@ -28,9 +28,12 @@ function shape(dir: string) {
 }
 
 describe('demo examples', () => {
-  it('keeps src/examples-ja in step with src/examples', () => {
-    const en = shape('src/examples');
-    expect(Object.keys(en).length).toBeGreaterThan(0);
-    expect(shape('src/examples-ja')).toEqual(en);
+  it.each([
+    ['examples', 'src/examples', 'src/examples-ja'],
+    ['ui', 'src/lib', 'src/ui-ja']
+  ])('keeps the ja copy of %s in step', (group, en, ja) => {
+    const expected = shape(group, en);
+    expect(Object.keys(expected).length).toBeGreaterThan(0);
+    expect(shape(group, ja)).toEqual(expected);
   });
 });
