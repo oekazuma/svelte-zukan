@@ -187,7 +187,9 @@ describe('list_tailwind_tokens', () => {
     ]);
     // a value matches too, and Full config lists the theme variables
     expect((await run({ category: 'background-color', query: 'ff3e' })).json[0].tokens).toHaveLength(1);
-    expect((await run({ category: 'full-config', query: 'font' })).json[0].tokens).toEqual({ '--font-sans': 'Inter' });
+    expect((await run({ category: 'full-config', query: 'font' })).json[0].variables).toEqual({
+      '--font-sans': 'Inter'
+    });
   });
 
   it('answers an unknown category with an error result', async () => {

@@ -14,7 +14,7 @@ With the dev server running, read `/__zukan/catalog.json` (after `vite build` wi
 - `components[]`: `id`, `file` (the catalog file), `component` (the `.svelte` next to it), `doc` (its `.md`), `props` (read from the component's `$props()`), and `sections[]` with each `title`, `code` and `preview`
 - `components[].error`: why a catalog file does not compile. Fix these first
 - `uncataloged[]`: `.svelte` files with no catalog file next to them yet
-- `tailwind`: `null` when the project has no Tailwind CSS v4 entry, else one object per entry with `file`, `prefix`, `categories[]` (the utility classes by category, each token with its `class`, `cssVariable` and `value`), `variables` (every theme variable) and `error`. When styling a component, use only the classes listed here (with the entry's `prefix`, if any): they are the ones the theme defines
+- `tailwind`: `null` when the project has no Tailwind CSS v4 entry, else one object per entry with `file`, `version`, `prefix`, `categories[]` (the utility classes by category, each token with its `class`, `cssVariable` and `value`), `variables` (every theme variable) and `error`. When styling a component, use only the classes listed here (with the entry's `prefix`, if any): they are the ones the theme defines
 
 Paths are relative to the Vite root.
 

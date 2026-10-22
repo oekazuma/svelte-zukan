@@ -163,14 +163,14 @@ export function buildTools(opts: {
     tools.push({
       name: 'list_tailwind_tokens',
       description:
-        "Lists the Tailwind CSS v4 tokens of this project's CSS entries: the utility classes, theme variables and values that exist. Without a category it returns each entry's categories and their token counts; with one, that category's tokens. Use only the classes listed here.",
+        "Lists the Tailwind CSS v4 tokens of this project's CSS entries: the utility classes, theme variables and values that exist. Without a category it returns each entry's categories and their token counts; with one, that category's tokens (`tokens`), or with \"full-config\" every theme variable (`variables`). Use only the classes listed here.",
       inputSchema: {
         type: 'object',
         properties: {
           category: {
             type: 'string',
             enum: [...CATEGORIES.map((c) => c.id), 'full-config'],
-            description: '"full-config" lists every theme variable of the entry'
+            description: '"full-config" returns every theme variable of the entry, as `variables`'
           },
           query: {
             type: 'string',
@@ -195,13 +195,12 @@ export function buildTools(opts: {
                 ...err,
                 categories: categories.map((c) => ({ id: c.id, title: c.title, count: c.tokens.length }))
               };
+            if (category === 'full-config')
+              return { file, ...err, variables: Object.fromEntries(filterVariables(variables, query)) };
             return {
               file,
               ...err,
-              tokens:
-                category === 'full-config'
-                  ? Object.fromEntries(filterVariables(variables, query))
-                  : filterTokens(categories.find((c) => c.id === category)?.tokens ?? [], query)
+              tokens: filterTokens(categories.find((c) => c.id === category)?.tokens ?? [], query)
             };
           })
         );
