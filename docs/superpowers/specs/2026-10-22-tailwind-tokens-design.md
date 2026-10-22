@@ -136,7 +136,7 @@ Following Histoire's `v4.ts`, with two corrections.
 
 ### Dev and build
 
-- Generation is lazy. It first runs when the catalog page loads the Tailwind list (never at dev-server start, never for a project without an entry), and the result is cached.
+- Generation is lazy: it runs on the first demand for the data (the catalog page loading the Tailwind list, a `catalog.json` request, or the catalog build), never at dev-server start and never for a project without an entry, and the result is cached.
 - Dev:
   - The files to watch are each entry plus what `compile()` reports through `onDependency` and `loadModule` (imports, `@plugin`, `@config`, also outside the scanned directories).
   - A change to a watched file, or a `.css` file created or deleted in the searched directories, regenerates the data. Only when the data or the sample CSS actually changed, the catalog tab and its previews update through `zukan:reload` (compared like `servedProps` for props).
