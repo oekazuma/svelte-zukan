@@ -162,6 +162,13 @@ describe.each(['light', 'dark'] as const)('the catalog UI in %s has no axe viola
     expect(await violations()).toEqual([]);
   });
 
+  it('on the Tailwind CSS page on a narrow screen', async () => {
+    await page.viewport(400, 800);
+    const screen = await render(App, { props: { ...props('#/tailwind', theme), tailwind } });
+    await expect.element(screen.getByRole('combobox', { name: 'Tailwind CSS categories' })).toBeInTheDocument();
+    expect(await violations()).toEqual([]);
+  });
+
   it('on the Full config of the Tailwind CSS page', async () => {
     await page.viewport(1280, 800);
     const screen = await render(App, { props: { ...props('#/tailwind?category=full-config', theme), tailwind } });

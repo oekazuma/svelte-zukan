@@ -124,6 +124,64 @@ describe('the Tailwind CSS page', () => {
     expect(document.querySelector('.bg-brand-500')).toBeNull();
   });
 
+  it('lists the categories in groups, with their token counts', async () => {
+    const screen = await render(App, { props: props('#/tailwind') });
+    const nav = screen.getByRole('navigation', { name: 'Tailwind CSS categories' });
+    await expect.element(nav).toBeInTheDocument();
+    // Spacing & sizing, Borders and Effects have no category in the data
+    expect(
+      nav
+        .getByRole('heading')
+        .elements()
+        .map((h) => h.textContent)
+    ).toEqual(['Colors', 'Typography', 'Layout']);
+    // each list is named by its heading
+    await expect
+      .element(nav.getByRole('list', { name: 'Typography' }).getByRole('link', { name: 'Font Size' }))
+      .toBeInTheDocument();
+    // the count is shown but left out of the link's name
+    expect(
+      nav
+        .getByRole('link')
+        .elements()
+        .map((a) => [a.querySelector('span:not(.count)')!.textContent, a.querySelector('.count')!.textContent])
+    ).toEqual([
+      ['Background Color', '2'],
+      ['Font Size', '1'],
+      ['Breakpoints', '1'],
+      ['Full config', '4']
+    ]);
+    await expect.element(nav.getByRole('link', { name: 'Font Size', exact: true })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Tailwind CSS categories' }).query()).toBeNull();
+  });
+
+  it('switches category with a select on a narrow screen', async () => {
+    await page.viewport(390, 800);
+    const screen = await render(App, { props: props('#/tailwind') });
+    await frame(screen.container);
+    expect(screen.getByRole('navigation', { name: 'Tailwind CSS categories' }).query()).toBeNull();
+    const select = screen.getByRole('combobox', { name: 'Tailwind CSS categories' });
+    await expect.element(select).toHaveValue('background-color');
+    expect(
+      [...select.element().querySelectorAll('optgroup')].map((g) => [
+        g.label,
+        [...g.querySelectorAll('option')].map((o) => o.textContent)
+      ])
+    ).toEqual([
+      ['Colors', ['Background Color']],
+      ['Typography', ['Font Size']],
+      ['Layout', ['Breakpoints']]
+    ]);
+    await select.selectOptions('Font Size');
+    await expect.poll(() => location.hash).toBe('#/tailwind?source=app&category=font-size');
+    await expect
+      .poll(() => tokenTexts(screen.container.querySelector('iframe')!.contentDocument!))
+      .toEqual(['text-lg']);
+    await select.selectOptions('Full config');
+    await expect.element(screen.getByRole('table')).toBeInTheDocument();
+    await expect.element(select).toHaveValue('full-config');
+  });
+
   it('switches category through the hash', async () => {
     const screen = await render(App, { props: props('#/tailwind') });
     await frame(screen.container);

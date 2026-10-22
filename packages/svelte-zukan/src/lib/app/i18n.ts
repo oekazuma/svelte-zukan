@@ -104,6 +104,13 @@ export type Messages = {
   tailwindError: string;
   tokenVariable: string;
   tokenValue: string;
+  tailwindCategories: string;
+  groupColors: string;
+  groupSizing: string;
+  groupTypography: string;
+  groupBorders: string;
+  groupEffects: string;
+  groupLayout: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -211,7 +218,14 @@ export const messages: Record<'en' | 'ja', Messages> = {
     noTokens: 'No matching tokens',
     tailwindError: 'Could not load the Tailwind CSS data:',
     tokenVariable: 'Variable',
-    tokenValue: 'Value'
+    tokenValue: 'Value',
+    tailwindCategories: 'Tailwind CSS categories',
+    groupColors: 'Colors',
+    groupSizing: 'Spacing & sizing',
+    groupTypography: 'Typography',
+    groupBorders: 'Borders',
+    groupEffects: 'Effects',
+    groupLayout: 'Layout'
   },
   ja: {
     nav: 'コンポーネント',
@@ -317,7 +331,14 @@ export const messages: Record<'en' | 'ja', Messages> = {
     noTokens: '一致するトークンがありません',
     tailwindError: 'Tailwind CSS のデータを読み込めませんでした:',
     tokenVariable: '変数',
-    tokenValue: '値'
+    tokenValue: '値',
+    tailwindCategories: 'Tailwind CSS のカテゴリー',
+    groupColors: '色',
+    groupSizing: '余白とサイズ',
+    groupTypography: '文字',
+    groupBorders: '枠線と角丸',
+    groupEffects: '効果',
+    groupLayout: 'レイアウト'
   }
 };
 
@@ -370,3 +391,13 @@ export const categoryTitles: Record<'en' | 'ja', Record<TailwindCategoryId | 'fu
     'full-config': messages.ja.fullConfig
   }
 };
+
+/** the groups of the Tailwind CSS page's category list, in order */
+export const categoryGroups: { title: keyof Messages; ids: TailwindCategoryId[] }[] = [
+  { title: 'groupColors', ids: ['background-color', 'text-color', 'border-color'] },
+  { title: 'groupSizing', ids: ['padding', 'margin', 'spacing', 'width', 'height'] },
+  { title: 'groupTypography', ids: ['font-size', 'font-weight', 'font-family', 'letter-spacing', 'line-height'] },
+  { title: 'groupBorders', ids: ['border-width', 'border-radius'] },
+  { title: 'groupEffects', ids: ['box-shadow', 'drop-shadow', 'opacity'] },
+  { title: 'groupLayout', ids: ['breakpoints', 'z-index'] }
+];

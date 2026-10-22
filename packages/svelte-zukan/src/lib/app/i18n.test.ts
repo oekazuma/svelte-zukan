@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CATEGORIES } from '../vite/tailwind-tokens.js';
-import { categoryTitles, messages } from './i18n.js';
+import { categoryGroups, categoryTitles, messages } from './i18n.js';
 
 describe('messages', () => {
   it('en and ja have the same keys and no empty strings', () => {
@@ -16,5 +16,9 @@ describe('messages', () => {
       expect(Object.keys(titles).sort()).toEqual(ids);
       for (const value of Object.values(titles)) expect(value.trim()).not.toBe('');
     }
+  });
+
+  it('puts every category in exactly one group', () => {
+    expect(categoryGroups.flatMap((g) => g.ids).sort()).toEqual(CATEGORIES.map((c) => c.id).sort());
   });
 });

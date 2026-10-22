@@ -4,7 +4,7 @@
   import type { TailwindListItem, TailwindSource } from '../types.js';
   import { CATEGORIES } from '../vite/tailwind-tokens.js';
   import { formatTailwindHash } from './hash.js';
-  import { categoryTitles, type Messages } from './i18n.js';
+  import { categoryGroups, categoryTitles, type Messages } from './i18n.js';
   import { filterVariables } from './tailwind-filter.js';
   import TailwindTokens from './TailwindTokens.svelte';
 
@@ -59,6 +59,13 @@
   const selected = $derived(
     category === FULL ? undefined : (categories.find((c) => c.id === category) ?? categories[0])
   );
+  const groups = $derived(
+    categoryGroups
+      .map((g) => ({ title: t[g.title], categories: g.ids.flatMap((id) => categories.filter((c) => c.id === id)) }))
+      .filter((g) => g.categories.length)
+  );
+  const current = $derived(selected?.id ?? FULL);
+  const id = $props.id();
   const kind = $derived(CATEGORIES.find((c) => c.id === selected?.id)?.kind ?? 'value');
 
   let query = $state('');
@@ -111,50 +118,83 @@
 {#if error}
   <p class="error">{t.tailwindError} {error}</p>
 {:else if data}
-  <ul class="categories">
-    {#each [...categories.map((c) => c.id), FULL] as id (id)}
-      {@const active = id === (selected?.id ?? FULL)}
-      <li>
+  <div class="layout">
+    <div class="columns">
+      {#snippet link(category: keyof typeof titles, count: number)}
         <!-- the catalog is a hash-routed SPA outside SvelteKit, so resolve() does not apply -->
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-        <a href={formatTailwindHash(item.id, id)} aria-current={active ? 'page' : undefined}>
-          {titles[id as keyof typeof titles] ?? id}
+        <a href={formatTailwindHash(item.id, category)} aria-current={category === current ? 'page' : undefined}>
+          <span>{titles[category]}</span>
+          <!-- the link is named by its category alone -->
+          <span class="count" aria-hidden="true">{count}</span>
         </a>
-      </li>
-    {/each}
-  </ul>
-
-  <div class="controls">
-    <input
-      type="search"
-      bind:value={query}
-      placeholder={t.filterTokens}
-      aria-label={t.filterTokens}
-      autocomplete="off"
-    />
-    {#if kind === 'text' || kind === 'text-color'}
-      <input type="text" bind:value={sampleText} aria-label={t.sampleText} title={t.sampleText} />
-    {/if}
-  </div>
-
-  {#if selected}
-    {#key data}
-      <iframe title={titles[selected.id]} {srcdoc} style="color-scheme: light" {@attach samples(data.css)}></iframe>
-    {/key}
-  {:else}
-    <table>
-      <thead>
-        <tr><th scope="col">{t.tokenVariable}</th><th scope="col">{t.tokenValue}</th></tr>
-      </thead>
-      <tbody>
-        {#each variables as [name, value] (name)}
-          <tr><td><code>{name}</code></td><td><code>{value}</code></td></tr>
-        {:else}
-          <tr><td colspan="2">{t.noTokens}</td></tr>
+      {/snippet}
+      <nav aria-label={t.tailwindCategories}>
+        {#each groups as group, i (group.title)}
+          <h2 id="{id}-{i}">{group.title}</h2>
+          <ul aria-labelledby="{id}-{i}">
+            {#each group.categories as c (c.id)}
+              <li>{@render link(c.id, c.tokens.length)}</li>
+            {/each}
+          </ul>
         {/each}
-      </tbody>
-    </table>
-  {/if}
+        <ul class="full">
+          <li>{@render link(FULL, Object.keys(data.variables).length)}</li>
+        </ul>
+      </nav>
+
+      <div class="content">
+        <!-- replaces the list where it would squeeze the tokens -->
+        <select
+          aria-label={t.tailwindCategories}
+          value={current}
+          onchange={(e) => (location.hash = formatTailwindHash(item.id, e.currentTarget.value))}
+        >
+          {#each groups as group (group.title)}
+            <optgroup label={group.title}>
+              {#each group.categories as c (c.id)}
+                <option value={c.id}>{titles[c.id]}</option>
+              {/each}
+            </optgroup>
+          {/each}
+          <option value={FULL}>{titles[FULL]}</option>
+        </select>
+
+        <div class="controls">
+          <input
+            type="search"
+            bind:value={query}
+            placeholder={t.filterTokens}
+            aria-label={t.filterTokens}
+            autocomplete="off"
+          />
+          {#if kind === 'text' || kind === 'text-color'}
+            <input type="text" bind:value={sampleText} aria-label={t.sampleText} title={t.sampleText} />
+          {/if}
+        </div>
+
+        {#if selected}
+          {#key data}
+            <iframe title={titles[selected.id]} {srcdoc} style="color-scheme: light" {@attach samples(data.css)}
+            ></iframe>
+          {/key}
+        {:else}
+          <table>
+            <thead>
+              <tr><th scope="col">{t.tokenVariable}</th><th scope="col">{t.tokenValue}</th></tr>
+            </thead>
+            <tbody>
+              {#each variables as [name, value] (name)}
+                <tr><td><code>{name}</code></td><td><code>{value}</code></td></tr>
+              {:else}
+                <tr><td colspan="2">{t.noTokens}</td></tr>
+              {/each}
+            </tbody>
+          </table>
+        {/if}
+      </div>
+    </div>
+  </div>
 {/if}
 
 <style>
@@ -183,34 +223,105 @@
     color: var(--_text);
   }
 
-  .categories {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin: 0 0 16px;
+  .layout {
+    container-type: inline-size;
+  }
+
+  .columns > * {
+    min-width: 0;
+  }
+
+  nav {
+    display: none;
+  }
+
+  h2 {
+    margin: 16px 10px 4px;
+    color: var(--_muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  h2:first-child {
+    margin-top: 0;
+  }
+
+  nav ul {
+    margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  .categories a {
-    display: block;
+  .full {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--_border);
+  }
+
+  /* drawn like the sidebar's links */
+  nav a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     padding: 4px 10px;
-    border: 1px solid var(--_border);
-    border-radius: 999px;
+    border-radius: 6px;
     color: var(--_text);
-    font-size: 13px;
+    font-size: 14px;
     text-decoration: none;
   }
 
-  .categories a:hover {
+  nav a:hover {
     background: var(--_code-bg);
   }
 
-  .categories a[aria-current='page'] {
-    border-color: var(--_accent);
+  nav a[aria-current='page'] {
     background: var(--_code-bg);
     color: var(--_accent);
     font-weight: 600;
+  }
+
+  .count {
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--_code-bg);
+    color: var(--_muted);
+    font-size: 11px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  nav a:hover .count,
+  nav a[aria-current='page'] .count {
+    background: var(--_bg);
+  }
+
+  select {
+    display: block;
+    width: 100%;
+    margin-bottom: 12px;
+  }
+
+  /* the list takes a column only where the tokens keep room for two cards */
+  @container (min-width: 640px) {
+    .columns {
+      display: grid;
+      grid-template-columns: 200px minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    nav {
+      display: block;
+      position: sticky;
+      top: 24px;
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+    }
+
+    select {
+      display: none;
+    }
   }
 
   .controls {
@@ -220,7 +331,8 @@
     margin-bottom: 16px;
   }
 
-  input {
+  input,
+  select {
     box-sizing: border-box;
     min-width: 0;
     flex: 1 1 240px;
@@ -234,7 +346,8 @@
     font-size: 14px;
   }
 
-  input:focus-visible {
+  input:focus-visible,
+  select:focus-visible {
     outline: 2px solid var(--_accent);
     outline-offset: -1px;
   }
