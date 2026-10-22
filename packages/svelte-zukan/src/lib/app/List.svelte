@@ -1,19 +1,22 @@
 <script lang="ts">
   import type { Theme } from '../components/PreviewFrame/storage.js';
-  import type { Entry } from '../types.js';
+  import type { Entry, TailwindListItem } from '../types.js';
   import EntryCard from './EntryCard.svelte';
   import type { Messages } from './i18n.js';
+  import TailwindCard from './TailwindCard.svelte';
 
   let {
     entries,
     searched,
     uncataloged = [],
+    tailwind = [],
     theme,
     t
   }: {
     entries: Entry[];
     searched: { group: string; dirs: string[] }[];
     uncataloged?: { group: string; file: string }[];
+    tailwind?: TailwindListItem[];
     theme: Theme;
     t: Messages;
   } = $props();
@@ -25,6 +28,17 @@
 </script>
 
 <h1>{t.listHeading}</h1>
+<!-- first: below every group it would be as easy to miss as the sidebar's link -->
+{#if tailwind.length}
+  <section aria-labelledby="{id}-tailwind">
+    <h2 id="{id}-tailwind">{t.tailwind}</h2>
+    <ul>
+      {#each tailwind as item (item.id)}
+        <li><TailwindCard {item} {t} /></li>
+      {/each}
+    </ul>
+  </section>
+{/if}
 {#if entries.length}
   {#each groups as [group, items], i (group)}
     <section aria-labelledby="{id}-{i}">

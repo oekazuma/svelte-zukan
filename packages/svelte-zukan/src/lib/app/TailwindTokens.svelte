@@ -6,6 +6,7 @@
 
   /** the categories drawn as one row per token, to compare sizes at a glance */
   const ROWS: TailwindCategoryId[] = [
+    'border-color',
     'padding',
     'margin',
     'spacing',
@@ -194,6 +195,8 @@
     {#if px !== undefined && widest > 0}
       <div class="zukan-bar" style:width="{(px / widest) * 100}%"></div>
     {/if}
+  {:else if category.id === 'border-color'}
+    <div class={['zukan-ring', token.class]}></div>
   {:else if category.id === 'border-width'}
     <div class={['zukan-shape zukan-outline', token.class]}></div>
   {:else if category.id === 'border-radius' || category.id === 'opacity'}
@@ -338,14 +341,6 @@
     min-height: 80px;
   }
 
-  /* the token's class sets the colour, so no `border` shorthand here */
-  .zukan-border-color .zukan-value {
-    height: 80px;
-    border-width: 2px;
-    border-style: solid;
-    border-radius: 4px;
-  }
-
   .zukan-text .zukan-value {
     overflow-wrap: anywhere;
   }
@@ -478,6 +473,21 @@
     width: 96px;
     height: 80px;
     margin-top: 8px;
+  }
+
+  /* the token's class sets the colour, so no `border` shorthand here; the hairlines on both sides of the band keep
+     a near-white border such as `border-red-50` visible on the white panel */
+  .zukan-ring {
+    box-sizing: border-box;
+    width: 64px;
+    height: 28px;
+    border-width: 4px;
+    border-style: solid;
+    border-radius: 4px;
+    background: #fff;
+    box-shadow:
+      0 0 0 1px #d1d9e0,
+      inset 0 0 0 1px #d1d9e0;
   }
 
   .zukan-outline {

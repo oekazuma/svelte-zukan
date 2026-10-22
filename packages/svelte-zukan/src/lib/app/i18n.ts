@@ -112,6 +112,9 @@ export type Messages = {
   groupBorders: string;
   groupEffects: string;
   groupLayout: string;
+  otherVariables: string;
+  tokenCount: string;
+  variableCount: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -227,7 +230,10 @@ export const messages: Record<'en' | 'ja', Messages> = {
     groupTypography: 'Typography',
     groupBorders: 'Borders',
     groupEffects: 'Effects',
-    groupLayout: 'Layout'
+    groupLayout: 'Layout',
+    otherVariables: 'Other',
+    tokenCount: 'Tokens',
+    variableCount: 'Theme variables'
   },
   ja: {
     nav: 'コンポーネント',
@@ -341,7 +347,10 @@ export const messages: Record<'en' | 'ja', Messages> = {
     groupTypography: '文字',
     groupBorders: '枠線と角丸',
     groupEffects: '効果',
-    groupLayout: 'レイアウト'
+    groupLayout: 'レイアウト',
+    otherVariables: 'その他',
+    tokenCount: 'トークン',
+    variableCount: 'テーマ変数'
   }
 };
 

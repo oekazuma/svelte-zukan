@@ -5,7 +5,7 @@
   import { CATEGORIES } from '../vite/tailwind-tokens.js';
   import { formatTailwindHash } from './hash.js';
   import { categoryGroups, categoryTitles, type Messages } from './i18n.js';
-  import { filterVariables } from './tailwind-filter.js';
+  import { filterVariables, groupVariables, isColor } from './tailwind-filter.js';
   import TailwindTokens from './TailwindTokens.svelte';
 
   let {
@@ -74,7 +74,24 @@
   // svelte-ignore state_referenced_locally
   let sampleText = $state(t.sampleTextValue);
 
-  const variables = $derived(filterVariables(data?.variables ?? {}, query));
+  const variableGroups = $derived(groupVariables(filterVariables(data?.variables ?? {}, query), data?.prefix ?? null));
+
+  let copied = $state<{ text: string; ok: boolean } | null>(null);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  async function copy(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      copied = { text: value, ok: true };
+    } catch {
+      // clipboard unavailable (insecure context, denied)
+      copied = { text: value, ok: false };
+    }
+    clearTimeout(timer);
+    timer = setTimeout(() => (copied = null), 2000);
+  }
+
+  $effect(() => () => clearTimeout(timer));
 
   // mounted once per frame, so a filter or a category change updates the samples in place
   const tokenProps = $state<Partial<ComponentProps<typeof TailwindTokens>>>({});
@@ -180,18 +197,64 @@
             ></iframe>
           {/key}
         {:else}
-          <table>
-            <thead>
-              <tr><th scope="col">{t.tokenVariable}</th><th scope="col">{t.tokenValue}</th></tr>
-            </thead>
-            <tbody>
-              {#each variables as [name, value] (name)}
-                <tr><td><code>{name}</code></td><td><code>{value}</code></td></tr>
-              {:else}
-                <tr><td colspan="2">{t.noTokens}</td></tr>
-              {/each}
-            </tbody>
-          </table>
+          <p class="sr-only" aria-live="polite">{copied ? (copied.ok ? t.copied : t.copyFailed) : ''}</p>
+          {#each variableGroups as group, i (group.title)}
+            <h2 class="namespace" id="{id}-ns-{i}">
+              {#if group.title}<code>{group.title}</code>{:else}{t.otherVariables}{/if}
+            </h2>
+            <table aria-labelledby="{id}-ns-{i}">
+              <thead>
+                <tr><th scope="col">{t.tokenVariable}</th><th scope="col">{t.tokenValue}</th></tr>
+              </thead>
+              <tbody>
+                {#each group.variables as [name, value] (name)}
+                  {@const failed = copied?.text === name && !copied.ok}
+                  <tr>
+                    <td>
+                      <button
+                        type="button"
+                        class={['copy', failed && 'failed']}
+                        aria-label="{t.copyVariable}: {name}"
+                        title={t.copyVariable}
+                        onclick={() => copy(name)}
+                      >
+                        <code>{name}</code>
+                        {#if failed}
+                          <span class="status">{t.copyFailed}</span>
+                        {/if}
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          {#if copied?.text === name && copied.ok}
+                            <path d="M5 12.5l4.5 4.5L19 7" />
+                          {:else}
+                            <path d="M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1z" />
+                            <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+                          {/if}
+                        </svg>
+                      </button>
+                    </td>
+                    <td>
+                      <!-- a plain colour, not the entry's CSS, so it can be drawn in the catalog document -->
+                      {#if isColor(value)}<span class="swatch" style:background-color={value}></span>{/if}<code
+                        >{value}</code
+                      >
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {:else}
+            <p class="empty">{t.noTokens}</p>
+          {/each}
         {/if}
       </div>
     </div>
@@ -236,14 +299,14 @@
     display: none;
   }
 
-  h2 {
+  nav h2 {
     margin: 16px 10px 4px;
     color: var(--_muted);
     font-size: 12px;
     font-weight: 600;
   }
 
-  h2:first-child {
+  nav h2:first-child {
     margin-top: 0;
   }
 
@@ -360,8 +423,10 @@
     border: 0;
   }
 
+  /* fixed, so the columns line up from one namespace's table to the next */
   table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
     font-size: 13px;
   }
@@ -377,5 +442,85 @@
   th {
     color: var(--_muted);
     font-weight: 600;
+  }
+
+  .namespace {
+    margin: 24px 0 4px;
+    color: var(--_text);
+    font-size: 14px;
+  }
+
+  .namespace:first-of-type {
+    margin-top: 0;
+  }
+
+  .namespace code {
+    font-size: 13px;
+  }
+
+  .swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    border-radius: 3px;
+    /* white and black stay visible on either catalog theme */
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--_text) 25%, transparent);
+    vertical-align: -2px;
+  }
+
+  .copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0;
+    padding: 2px 6px;
+    border: 1px solid var(--_border);
+    border-radius: 6px;
+    background: var(--_code-bg);
+    color: var(--_text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .copy:hover {
+    border-color: var(--_accent);
+  }
+
+  .copy:focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: 1px;
+  }
+
+  .copy.failed {
+    border-color: var(--_danger);
+    color: var(--_danger);
+  }
+
+  .status {
+    font-size: 12px;
+  }
+
+  .copy svg {
+    flex: none;
+    color: var(--_muted);
+  }
+
+  .empty {
+    margin: 0;
+    color: var(--_muted);
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 </style>

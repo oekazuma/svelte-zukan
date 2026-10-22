@@ -160,6 +160,13 @@ describe.each(['light', 'dark'] as const)('the catalog UI in %s has no axe viola
     expect(await violations()).toEqual([]);
   });
 
+  it('on the list with a Tailwind CSS card', async () => {
+    await page.viewport(1280, 800);
+    const screen = await render(App, { props: { ...props('', theme), tailwind } });
+    await expect.element(screen.getByRole('definition').first()).toBeInTheDocument();
+    expect(await violations()).toEqual([]);
+  });
+
   it('on the Tailwind CSS page and in its sample frame', async () => {
     await page.viewport(1280, 800);
     const screen = await render(App, { props: { ...props('#/tailwind', theme), tailwind } });
@@ -184,7 +191,7 @@ describe.each(['light', 'dark'] as const)('the catalog UI in %s has no axe viola
   it('on the Full config of the Tailwind CSS page', async () => {
     await page.viewport(1280, 800);
     const screen = await render(App, { props: { ...props('#/tailwind?category=full-config', theme), tailwind } });
-    await expect.element(screen.getByRole('table')).toBeInTheDocument();
+    await expect.element(screen.getByRole('table', { name: '--color-*' })).toBeInTheDocument();
     expect(await violations()).toEqual([]);
   });
 });

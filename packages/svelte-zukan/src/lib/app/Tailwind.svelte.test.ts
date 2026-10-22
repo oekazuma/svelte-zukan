@@ -229,7 +229,7 @@ describe('the Tailwind CSS page', () => {
       .poll(() => tokenTexts(screen.container.querySelector('iframe')!.contentDocument!))
       .toEqual(['text-lg']);
     await select.selectOptions('Full config');
-    await expect.element(screen.getByRole('table')).toBeInTheDocument();
+    await expect.element(screen.getByRole('table').first()).toBeInTheDocument();
     await expect.element(select).toHaveValue('full-config');
   });
 
@@ -452,12 +452,104 @@ describe('the Tailwind CSS page', () => {
   it('lists every theme variable in Full config', async () => {
     const screen = await render(App, { props: props('#/tailwind?category=full-config') });
     await expect.element(screen.getByRole('link', { name: 'Full config' })).toHaveAttribute('aria-current', 'page');
-    const table = screen.getByRole('table');
     for (const [name, value] of Object.entries(source.variables)) {
-      await expect.element(table.getByRole('row', { name: `${name} ${value}` })).toBeInTheDocument();
+      const button = screen.getByRole('button', { name: `Copy variable: ${name}` });
+      await expect.element(button).toBeInTheDocument();
+      expect(button.element().closest('tr')!.textContent).toContain(value);
     }
-    await screen.getByRole('searchbox', { name: 'Filter tokens' }).fill('breakpoint');
-    await expect.poll(() => table.getByRole('row').elements().length).toBe(2);
+  });
+
+  it('groups Full config by namespace, with a swatch for colours only', async () => {
+    const grouped: TailwindSource = {
+      ...source,
+      variables: {
+        '--text-lg': '1.125rem',
+        '--color-brand-500': '#ff3e00',
+        '--brand-gap': '3px',
+        '--default-font-family': 'var(--font-sans)',
+        // Chromium parses a dashed function like `var()`
+        '--default-mono-font-family': '--theme(--font-mono, initial)',
+        '--color-white': '#fff',
+        '--shadow-sm': '0 1px 2px #0003',
+        '--color-current': 'currentcolor'
+      }
+    };
+    const screen = await render(App, { props: props('#/tailwind?category=full-config', [item(grouped)]) });
+    await expect.element(screen.getByRole('table', { name: '--color-*' })).toBeInTheDocument();
+    const headings = () => [...screen.container.querySelectorAll('h2.namespace')].map((h) => h.textContent!.trim());
+    expect(headings()).toEqual(['--color-*', '--text-*', '--shadow-*', '--default-*', 'Other']);
+    // Tailwind's order inside a group
+    expect(
+      screen
+        .getByRole('table', { name: '--color-*' })
+        .getByRole('button')
+        .elements()
+        .map((b) => b.textContent!.trim())
+    ).toEqual(['--color-brand-500', '--color-white', '--color-current']);
+    const swatches = Object.fromEntries(
+      [...screen.container.querySelectorAll('tbody tr')].map((tr) => [
+        tr.querySelector('button')!.textContent!.trim(),
+        tr.querySelector<HTMLElement>('.swatch') && getComputedStyle(tr.querySelector('.swatch')!).backgroundColor
+      ])
+    );
+    expect(swatches).toEqual({
+      '--color-brand-500': 'rgb(255, 62, 0)',
+      '--color-white': 'rgb(255, 255, 255)',
+      '--color-current': null,
+      '--text-lg': null,
+      '--shadow-sm': null,
+      '--default-font-family': null,
+      '--default-mono-font-family': null,
+      '--brand-gap': null
+    });
+
+    const filter = screen.getByRole('searchbox', { name: 'Filter tokens' });
+    await filter.fill('brand');
+    await expect.poll(headings).toEqual(['--color-*', 'Other']);
+    await filter.fill('nothing like this');
+    await expect.poll(headings).toEqual([]);
+    expect(screen.container.querySelector('table')).toBeNull();
+    await expect.element(screen.getByText('No matching tokens')).toBeInTheDocument();
+  });
+
+  it('copies a variable from Full config and shows a failure', async () => {
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    try {
+      const screen = await render(App, { props: props('#/tailwind?category=full-config') });
+      const live = () => screen.container.querySelector('[aria-live="polite"]')!.textContent;
+      await screen.getByRole('button', { name: 'Copy variable: --text-lg' }).click();
+      await expect.poll(() => writeText.mock.calls).toEqual([['--text-lg']]);
+      await expect.poll(live).toBe('Copied');
+      writeText.mockRejectedValue(new Error('denied'));
+      const button = screen.getByRole('button', { name: 'Copy variable: --color-white' });
+      await button.click();
+      await expect.poll(live).toBe('Copy failed');
+      expect(button.element().textContent).toContain('Copy failed');
+      expect(button.element().classList.contains('failed')).toBe(true);
+    } finally {
+      writeText.mockRestore();
+    }
+  });
+
+  it('draws border colours as rows with a thick border', async () => {
+    const borders: TailwindSource = {
+      ...source,
+      categories: [
+        {
+          id: 'border-color',
+          title: 'Border Color',
+          tokens: [{ class: 'border-red-50', cssVariable: '--color-red-50', value: '#fef2f2' }]
+        }
+      ],
+      css: '.border-red-50 { border-color: #fef2f2 }'
+    };
+    const screen = await render(App, { props: props('#/tailwind?category=border-color', [item(borders)]) });
+    const { doc } = await frame(screen.container);
+    expect(doc.querySelector('.zukan-card')).toBeNull();
+    const ring = doc.querySelector('li.zukan-row .border-red-50')!;
+    await expect.poll(() => getComputedStyle(ring).borderTopColor).toBe('rgb(254, 242, 242)');
+    expect(parseFloat(getComputedStyle(ring).borderTopWidth)).toBeGreaterThanOrEqual(3);
+    expect(getComputedStyle(ring).borderTopStyle).toBe('solid');
   });
 
   it("shows the entry's error instead of the tokens", async () => {
@@ -469,6 +561,38 @@ describe('the Tailwind CSS page', () => {
       .element(screen.getByText('Could not load the Tailwind CSS data:', { exact: false }))
       .toBeInTheDocument();
     expect(screen.container.querySelector('iframe')).toBeNull();
+  });
+
+  it('shows a card for each entry on the top page, linking to its page', async () => {
+    const other = { ...source, id: 'other', file: 'src/other.css' };
+    const screen = await render(App, { props: props('', [item(source), item(other)]) });
+    const section = screen.getByRole('region', { name: 'Tailwind CSS' });
+    await expect
+      .element(section.getByRole('link', { name: 'src/app.css' }))
+      .toHaveAttribute('href', '#/tailwind?source=app');
+    await expect
+      .element(section.getByRole('link', { name: 'src/other.css' }))
+      .toHaveAttribute('href', '#/tailwind?source=other');
+    await expect
+      .element(section.getByRole('link', { name: 'src/app.css' }))
+      .toHaveAccessibleDescription('Tailwind CSS v4.3.3');
+    await expect.element(section.getByText('Tokens').first()).toBeInTheDocument();
+    expect(
+      section
+        .getByRole('definition')
+        .elements()
+        .map((d) => d.textContent)
+    ).toEqual(['4', '4', '4', '4']);
+    // the colours are drawn inline; the entry's CSS stays out of the catalog document
+    const swatch = screen.container.querySelector<HTMLElement>('.thumb span')!;
+    expect(getComputedStyle(swatch).backgroundColor).toBe('rgb(255, 62, 0)');
+    expect([...document.querySelectorAll('style')].some((s) => s.textContent!.includes('.bg-brand-500'))).toBe(false);
+  });
+
+  it('shows no Tailwind CSS card on the top page without Tailwind data', async () => {
+    const screen = await render(App, { props: props('', []) });
+    await expect.element(screen.getByRole('heading', { level: 1, name: 'Components' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Tailwind CSS' }).query()).toBeNull();
   });
 
   it('shows the selected entry', async () => {

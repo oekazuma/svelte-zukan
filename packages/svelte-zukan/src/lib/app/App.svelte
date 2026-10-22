@@ -200,7 +200,7 @@
     />
     <main id="zukan-main" tabindex="-1" bind:this={main}>
       {#if route.view === 'list'}
-        <List entries={catalog} {searched} {uncataloged} {theme} {t} />
+        <List entries={catalog} {searched} {uncataloged} {tailwind} {theme} {t} />
       {:else if route.view === 'tailwind' && tailwind.length}
         <Tailwind sources={tailwind} source={route.source} category={route.category} {theme} {locale} {t} />
       {:else if entry}
