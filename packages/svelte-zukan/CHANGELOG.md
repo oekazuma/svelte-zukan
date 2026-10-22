@@ -1,5 +1,20 @@
 # svelte-zukan
 
+## 0.9.0
+
+### Minor Changes
+
+- 4d965bc: feat: add a search dialog, opened with ⌘K / Ctrl+K, that finds components by name, section title, description and prop, with a filter by group.
+- b187014: feat: add the `theme` option, which fixes the catalog and every preview to `'light'` or `'dark'` and removes the theme switch.
+
+### Patch Changes
+
+- b8afe7e: fix: show the code block's Copy button only while the code is open, at the right end of its "Code" row.
+- f774a5d: fix: reload the exported catalog once when a tab opened before a redeploy asks for a chunk that is gone, and report a preview that failed to load as an error in the accessibility check (and the `check_accessibility` WebMCP tool) instead of "no issues".
+- d8beaae: fix: in the props table, wrap a type only between the members of a union, so a type such as `() => void` is never split across lines.
+- 0dacdc6: fix: add a "Skip to content" link before the sidebar, and with the `theme` option set, give the catalog page that `color-scheme` from the start so it does not paint the other theme before it mounts.
+- 9abc0ac: feat: the preview toolbar's buttons show their name in a tooltip right away on hover and on keyboard focus, instead of the browser's delayed `title` tooltip.
+
 ## 0.8.0
 
 ### Minor Changes
