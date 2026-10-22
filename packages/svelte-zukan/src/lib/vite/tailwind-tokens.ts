@@ -169,6 +169,9 @@ export const CATEGORIES: readonly {
   { id: 'spacing', title: 'Spacing', stem: 'p', property: 'padding', kind: 'padding' }
 ];
 
+// The shadow declarations are chains of `--tw-*` helpers; the rule's own helper holds the readable value.
+const SHADOW_VALUE: Record<string, string> = { 'box-shadow': '--tw-shadow', filter: '--tw-drop-shadow' };
+
 const escapeClass = (name: string) => name.replace(/[^\w-]/g, '\\$&');
 
 export function extractTokens(
@@ -196,7 +199,7 @@ export function extractTokens(
     if (rule) declarations.set(name, rule.declarations);
   });
 
-  const token = (name: string, stem: string, value: string): TailwindToken => {
+  const token = (name: string, stem: string, value: string, shown = value): TailwindToken => {
     const variable = soleVar(value);
     let cssVariable: string | null = variable && Object.hasOwn(variables, variable) ? variable : null;
     // an `@theme inline` token puts its value into the class, so the variable is the one holding that value
@@ -205,7 +208,7 @@ export function extractTokens(
       cssVariable =
         Object.keys(variables).find((key) => variables[key] === value && key.endsWith(`-${suffix}`)) ?? null;
     }
-    return { class: classPrefix + name, cssVariable, value: resolveValue(value, values) };
+    return { class: classPrefix + name, cssVariable, value: resolveValue(shown, values) };
   };
 
   const byCategory = new Map<TailwindCategoryId, TailwindToken[]>();
@@ -213,8 +216,10 @@ export function extractTokens(
     const tokens: TailwindToken[] = [];
     for (const name of names) {
       if (!matches(name, stem)) continue;
-      const value = declarations.get(name)?.find(([p]) => p === property)?.[1];
-      if (value !== undefined) tokens.push(token(name, stem, value));
+      const rule = declarations.get(name);
+      const value = rule?.find(([p]) => p === property)?.[1];
+      const shown = rule?.find(([p]) => p === SHADOW_VALUE[property])?.[1];
+      if (value !== undefined) tokens.push(token(name, stem, value, shown));
     }
     byCategory.set(id, tokens);
   }

@@ -56,6 +56,16 @@ describe('extractTokens', () => {
     expect(classesOf('border-t-red-500')).toEqual([]);
   });
 
+  it("reads shadow values from the rule's own shadow variable", async () => {
+    const { token } = await load('@import "tailwindcss";');
+    const box = token('box-shadow', 'shadow-lg');
+    expect(box?.value).toContain('0 10px 15px');
+    expect(box?.value).not.toContain('var(--tw-inset-shadow)');
+    const drop = token('drop-shadow', 'drop-shadow-md');
+    expect(drop?.value).toContain('drop-shadow(0 3px 3px');
+    expect(drop?.value).not.toContain('var(--tw-blur');
+  });
+
   it('lists breakpoints and the spacing base without a class', async () => {
     const { result, token } = await load('@import "tailwindcss";');
     expect(token('breakpoints', null)).toEqual({ class: null, cssVariable: '--breakpoint-sm', value: '40rem' });
