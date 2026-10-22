@@ -336,6 +336,36 @@ describe('the Tailwind CSS page', () => {
     expect(doc.querySelector('[data-token="w-full"] .zukan-sample')).toBeNull();
   });
 
+  it('shows no px for a value the property rejects or that follows the frame', async () => {
+    const odd: TailwindSource = {
+      ...source,
+      categories: [
+        {
+          id: 'width',
+          title: 'Width',
+          tokens: [
+            { class: 'w-4', cssVariable: null, value: 'calc(0.25rem * 4)' },
+            // has a length in it, but is no width
+            { class: 'w-odd', cssVariable: null, value: '2rem banana' },
+            { class: 'w-screen', cssVariable: null, value: '100vw' },
+            { class: 'w-8', cssVariable: null, value: 'calc(0.25rem * 8)' }
+          ]
+        }
+      ]
+    };
+    const screen = await render(App, { props: props('#/tailwind', [item(odd)]) });
+    const { doc } = await frame(screen.container);
+    const row = (token: string) => doc.querySelector(`[data-token="${token}"]`)!;
+    await expect.poll(() => row('w-8').querySelector('.zukan-px')?.textContent).toContain('32px');
+    expect(row('w-4').querySelector('.zukan-px')!.textContent).toContain('16px');
+    for (const token of ['w-odd', 'w-screen']) {
+      expect(row(token).querySelector('.zukan-px')).toBeNull();
+      expect(row(token).querySelector('.zukan-sample')).toBeNull();
+      // no empty track for the bar under the names
+      expect(getComputedStyle(row(token)).gridTemplateRows.split(' ')).toHaveLength(1);
+    }
+  });
+
   it('filters by class name and value', async () => {
     const screen = await render(App, { props: props('#/tailwind') });
     const { doc } = await frame(screen.container);

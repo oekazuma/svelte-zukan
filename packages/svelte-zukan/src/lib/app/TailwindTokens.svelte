@@ -80,7 +80,10 @@
       const style = doc.defaultView!.getComputedStyle(probe);
       for (const token of category.tokens) {
         if (!LENGTH.test(token.value) || RELATIVE.test(token.value)) continue;
+        // an invalid value is dropped and would leave the previous token's in place
+        probe.style.removeProperty(property);
         probe.style.setProperty(property, token.value);
+        if (probe.style.getPropertyValue(property) === '') continue;
         const px = parseFloat(style.getPropertyValue(property));
         if (Number.isFinite(px)) out[key(token)!] = px;
       }
@@ -210,9 +213,10 @@
   {:else if rows}
     <ul class={['zukan-rows', !sampled && 'zukan-bare', bars && 'zukan-bars']}>
       {#each tokens as token (key(token))}
-        <li class="zukan-row" data-token={key(token)}>
-          <!-- a length that follows the frame has no bar, and so no panel to draw it in -->
-          {#if sampled && !(bars && measured[key(token)!] === undefined)}
+        <!-- a length that follows the frame has no bar, and so no panel to draw it in -->
+        {@const drawn = sampled && !(bars && measured[key(token)!] === undefined)}
+        <li class={['zukan-row', !drawn && 'zukan-unsampled']} data-token={key(token)}>
+          {#if drawn}
             <div class="zukan-sample zukan-{category.id}">{@render rowSample(token)}</div>
           {/if}
           <div class="zukan-names">{@render names(token)}</div>
@@ -403,6 +407,10 @@
   .zukan-bars .zukan-row {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas: 'names value' 'sample sample';
+  }
+
+  .zukan-bars .zukan-unsampled {
+    grid-template-areas: 'names value';
   }
 
   .zukan-bars .zukan-values {
