@@ -12,16 +12,18 @@
 
 ## Global Constraints
 
-- Tailwind CSS v4 or later only. No `@tailwindcss/node` or an older `tailwindcss` → the entry is skipped silently; no entry loaded → no page and `tailwind: null` in `catalog.json` (never `[]`).
+- Tailwind CSS v4.0.0 or later only (nothing newer is required: `candidatesToAst`, 4.1.18+, is not used). No `@tailwindcss/node` or an older `tailwindcss` → the entry is skipped silently; no entry loaded → no page and `tailwind: null` in `catalog.json` (never `[]`).
 - No new runtime or peer dependency: `tailwindcss` and `@tailwindcss/node` go to `devDependencies` (library, `tests/build`) through the pnpm `catalog:` only, at a version older than `minimumReleaseAge`.
 - No new `zukan()` option.
-- Everything that touches Tailwind's API lives in `vite/tailwind-load.ts` behind a shape check (`__unstable__loadDesignSystem`, `compile`, `loadModule`, `theme.entries`, `theme.prefix`, `getClassList`, `candidatesToAst`); a mismatch is that entry's `error`: `Tailwind CSS <version> does not expose the design-system API svelte-zukan uses`.
+- Everything that touches Tailwind's API lives in `vite/tailwind-load.ts` behind a shape check (`__unstable__loadDesignSystem`, `compile`, `loadModule`, `theme.entries`, `theme.prefix`, `getClassList`, `candidatesToCss`); a mismatch is that entry's `error`: `Tailwind CSS <version> does not expose the design-system API svelte-zukan uses`.
 - A failing entry never breaks the catalog, the dev server or the build: it becomes `error` in its data, and `vite build` logs one warning per failing entry.
 - Generation is lazy (first load of the Tailwind list module) and cached; never at dev-server start.
 - `catalog.json` and the static build carry no absolute paths. The sample CSS is not in `catalog.json`.
 - The data and sample CSS are strings in JS modules, never a CSS import.
 - HMR: `zukan:reload` only when the generated data or CSS changed; `hotUpdate` returns `undefined` for CSS and Tailwind dependencies (never `[]`, never `full-reload`).
-- Samples render in a same-origin iframe; no Tailwind CSS reaches the catalog document.
+- Samples render in a same-origin iframe pinned to `color-scheme: light` (element and document root); no Tailwind CSS reaches the catalog document.
+- No Tailwind entry → the generated entry module has no Tailwind import, so the build output gains no file.
+- No CSS parser dependency: one small scanner (`scanCss`) reads Tailwind's serialized output.
 - Dark-mode values are out of scope; the data keeps one `value` per token so a later optional field is additive.
 - Plugin messages in English; UI strings in `src/lib/app/i18n.ts` (en and ja); class names, variables, values, paths never translated. Svelte 5 runes; Prettier 120 cols, single quotes, no trailing commas; Conventional Commits.
 
@@ -37,7 +39,7 @@
 
 ## File Structure
 
-- Create `packages/svelte-zukan/src/lib/vite/tailwind-tokens.ts` — pure: category table, token extraction from a design system, `:root` variable extraction, `var()` resolution. No fs, no Tailwind import.
+- Create `packages/svelte-zukan/src/lib/vite/tailwind-tokens.ts` — pure: the CSS scanner, category table, token extraction from a design system, `:root` variable extraction, `var()` resolution. No fs, no Tailwind import.
 - Create `packages/svelte-zukan/src/lib/vite/tailwind-load.ts` — entry discovery, resolving `@tailwindcss/node`, loaders, the guard, per-entry errors, watch list.
 - Modify `packages/svelte-zukan/src/lib/types.ts` — shared data types.
 - Modify `packages/svelte-zukan/src/lib/vite/virtual.ts`, `vite/index.ts`, `vite/catalog-json.ts` — virtual modules, Vite resolver, catalog data, HMR.
@@ -50,30 +52,56 @@
 ### Task 1: Token extraction
 
 **Files:**
+
 - Create: `packages/svelte-zukan/src/lib/vite/tailwind-tokens.ts`
 - Modify: `packages/svelte-zukan/src/lib/types.ts`, `pnpm-workspace.yaml` (catalog: `tailwindcss`, `@tailwindcss/node`, one 4.x version), `packages/svelte-zukan/package.json` (`devDependencies`)
 - Test: `packages/svelte-zukan/src/lib/vite/tailwind-tokens.test.ts`
 
 **Interfaces:**
+
 - Produces (in `types.ts`):
   ```ts
   export type TailwindCategoryId =
-    | 'background-color' | 'text-color' | 'border-color' | 'padding' | 'margin' | 'font-size' | 'font-weight'
-    | 'font-family' | 'letter-spacing' | 'line-height' | 'drop-shadow' | 'border-radius' | 'border-width' | 'width'
-    | 'height' | 'box-shadow' | 'opacity' | 'breakpoints' | 'z-index' | 'spacing';
+    | 'background-color'
+    | 'text-color'
+    | 'border-color'
+    | 'padding'
+    | 'margin'
+    | 'font-size'
+    | 'font-weight'
+    | 'font-family'
+    | 'letter-spacing'
+    | 'line-height'
+    | 'drop-shadow'
+    | 'border-radius'
+    | 'border-width'
+    | 'width'
+    | 'height'
+    | 'box-shadow'
+    | 'opacity'
+    | 'breakpoints'
+    | 'z-index'
+    | 'spacing';
   /** `class` is null for Breakpoints and the `--spacing` base; one `value` now, a dark value may be added later */
   export type TailwindToken = { class: string | null; cssVariable: string | null; value: string };
   export type TailwindCategory = { id: TailwindCategoryId; title: string; tokens: TailwindToken[] };
   /** one entry; `file` is relative to the Vite root; `css` is the sample stylesheet for the iframe */
   export type TailwindSource = {
-    id: string; file: string; version: string; prefix: string | null;
-    categories: TailwindCategory[]; variables: Record<string, string>; css: string; error?: string;
+    id: string;
+    file: string;
+    version: string;
+    prefix: string | null;
+    categories: TailwindCategory[];
+    variables: Record<string, string>;
+    css: string;
+    error?: string;
   };
   ```
 - Produces (in `tailwind-tokens.ts`):
-  - `export type DesignSystemLike` — the members used: `theme: { prefix: string | null; entries(): Iterable<[string, { value: string }]> }`, `getClassList(): [string, ...unknown[]][]`, `candidatesToAst(classes: string[]): AstNodeLike[][]` with `AstNodeLike = { kind: string; property?: string; value?: string; nodes?: AstNodeLike[] }`.
+  - `export type DesignSystemLike` — the members used: `theme: { prefix: string | null; entries(): Iterable<[string, { value: string }]> }`, `getClassList(): [string, ...unknown[]][]`, `candidatesToCss(classes: string[]): (string | null)[]`.
+  - `export type CssRule = { selector: string; atRules: string[]; declarations: [property: string, value: string][] }` and `export function scanCss(css: string): CssRule[]` — brace matching over serialized CSS, strings and comments skipped; `atRules` is the at-rule preludes around the rule, outermost first (`['@layer base']`, `['@media (x)']`); at-rules without a block and `@property` blocks yield no rule.
   - `export const CATEGORIES: readonly { id: TailwindCategoryId; title: string; stem: string; property: string; kind: 'color' | 'text-color' | 'border-color' | 'padding' | 'margin' | 'text' | 'box' | 'border' | 'width' | 'height' | 'value' }[]` — the spec's table, same order; kinds as in Histoire's `categories.ts`.
-  - `export function rootVariables(css: string): Record<string, string>` — custom properties of rules whose selector list is only `:root`, `:host` and `html`, at the top level or inside `@layer` blocks; nothing inside `@media`, `@supports`, `@container` or under other selectors.
+  - `export function rootVariables(css: string): Record<string, string>` — via `scanCss`: custom properties of rules whose selector list is only `:root`, `:host` and/or `html` and whose `atRules` are all `@layer`; nothing inside `@media`, `@supports`, `@container` or under other selectors.
   - `export function resolveValue(value: string, known: Record<string, string>): string` — replaces `var(--x)` / `var(--x, fallback)` with known values recursively (cycle-safe), keeps unknown ones as written.
   - `export function extractTokens(system: DesignSystemLike, known: Record<string, string>): { prefix: string | null; categories: TailwindCategory[]; variables: Record<string, string>; classes: string[] }` — `known` is `variables` plus `rootVariables(...)`; `classes` are the prefixed classes of every token, for `compile().build()`.
 
@@ -95,6 +123,8 @@ it('leaves out side-specific border colors', ...);                  // no border
 it('lists breakpoints and the spacing base without a class', ...);  // { class: null, cssVariable: '--breakpoint-sm', value: '40rem' }, first spacing token { class: null, cssVariable: '--spacing', value: '0.25rem' }
 it('drops empty categories', ...);
 it('prefixes classes', ...);                                        // '@import "tailwindcss" prefix(tw);' → 'tw:bg-red-500', prefix 'tw'
+it('scans real Tailwind output', ...);                              // scanCss(system.candidatesToCss(['shadow-lg'])[0]) has one rule '.shadow-lg' with box-shadow; the @property blocks yield no rule
+it('reads :root variables from real compile() output', ...);     // compile('@import "tailwindcss"; :root { --primary: red; }').build([]) → rootVariables has '--primary': 'red' and '--color-red-500'
 it('reads :root variables only from unconditional rules', () => {
   expect(rootVariables(':root{--a:1}\n@layer base{:root,:host{--b:2}}\n@media (x){:root{--c:3}}\n.dark{--d:4}\nhtml{--e:5}'))
     .toEqual({ '--a': '1', '--b': '2', '--e': '5' });
@@ -104,7 +134,7 @@ it('resolves var() chains and survives cycles', ...);              // { '--a': '
 
 - [ ] **Step 3: Run them to verify they fail** — `pnpm --filter svelte-zukan exec vitest run --project server src/lib/vite/tailwind-tokens.test.ts`. Expected: FAIL, module not found.
 
-- [ ] **Step 4: Implement `tailwind-tokens.ts`.** Declarations come from `candidatesToAst([class])` (walk `nodes` for `kind: 'declaration'`); no CSS parser. `cssVariable`: the declaration is exactly `var(--x)` or `var(--x, …)` with `--x` a theme key; otherwise the theme key whose value equals the declaration and whose name ends with `-<class suffix>` (`@theme inline`); otherwise `null`. `rootVariables` is a small brace-matching walker (strings and comments skipped).
+- [ ] **Step 4: Implement `tailwind-tokens.ts`.** Declarations come from `scanCss(candidatesToCss([class])[0])`, the rule whose selector is the class (escaped) with no at-rule around it. `cssVariable`: the declaration is exactly `var(--x)` or `var(--x, …)` with `--x` a theme key; otherwise the theme key whose value equals the declaration and whose name ends with `-<class suffix>` (`@theme inline`); otherwise `null`. `rootVariables` is a small brace-matching walker (strings and comments skipped).
 
 - [ ] **Step 5: Run the tests** — same command. Expected: PASS.
 
@@ -115,10 +145,12 @@ it('resolves var() chains and survives cycles', ...);              // { '--a': '
 ### Task 2: Finding and loading entries
 
 **Files:**
+
 - Create: `packages/svelte-zukan/src/lib/vite/tailwind-load.ts`
 - Test: `packages/svelte-zukan/src/lib/vite/tailwind-load.test.ts`
 
 **Interfaces:**
+
 - Consumes: `extractTokens`, `rootVariables` (Task 1); `TailwindSource` (Task 1).
 - Produces:
   - `export type Resolver = (id: string, base: string) => Promise<string | false | undefined>` — `@tailwindcss/node`'s shape; `base` is a directory.
@@ -167,13 +199,15 @@ it('uses the given CSS resolver before Node resolution', ...);     // a resolver
 ### Task 3: Plugin wiring, catalog data and HMR
 
 **Files:**
+
 - Modify: `packages/svelte-zukan/src/lib/vite/virtual.ts`, `vite/index.ts`, `vite/catalog-json.ts`, `types.ts`
 - Test: `packages/svelte-zukan/src/lib/vite/index.test.ts`, the existing `catalogJson` tests
 
 **Interfaces:**
+
 - Consumes: `loadTailwind`, `Resolver` (Task 2); `TailwindSource` (Task 1).
 - Produces:
-  - `virtual.ts`: `TAILWIND = 'virtual:svelte-zukan/tailwind'`, `TAILWIND_SOURCE = 'virtual:svelte-zukan/tailwind/'`; `generateTailwindModule(sources: TailwindSource[]): string` exporting `tailwind: TailwindListItem[]`; `generateEntryModule` imports `TAILWIND` with the catalog and passes `tailwind` to `App`.
+  - `virtual.ts`: `TAILWIND = 'virtual:svelte-zukan/tailwind'`, `TAILWIND_SOURCE = 'virtual:svelte-zukan/tailwind/'`; `generateTailwindModule(sources: TailwindSource[]): string` exporting `tailwind: TailwindListItem[]`; `generateEntryModule` gains `tailwind: boolean` and, only when true, imports `TAILWIND` with the catalog and passes its `tailwind` to `App` (`[]` otherwise). The plugin decides `tailwind` when it loads `ENTRY`: some entry from `findTailwindEntries(cssDirs())` resolves with `resolveTailwindNode` (no Tailwind import, no compile).
   - `types.ts`: `export type TailwindListItem = { id: string; file: string; error: string | null; load: () => Promise<{ default: TailwindSource }> }`.
   - `CatalogJson.tailwind: Omit<TailwindSource, 'id' | 'css'>[] | null`; `catalogJson` takes `tailwind: TailwindSource[]`; the plugin's `catalogData()` is async.
 
@@ -182,6 +216,7 @@ it('uses the given CSS resolver before Node resolution', ...);     // a resolver
 ```ts
 it('resolves and loads the Tailwind list and one entry\'s data', ...);
 it('does not load Tailwind until the list module is loaded', ...);       // configResolved + configureServer do not call loadTailwind
+it('leaves the Tailwind import out of the entry module without an entry', ...); // generateEntryModule({ tailwind: false, ... }) has no 'virtual:svelte-zukan/tailwind'
 it('serves catalog.json with tailwind null without Tailwind', ...);
 it('serves catalog.json when an entry fails', ...);
 it('keeps absolute paths and the sample CSS out of catalog.json', ...);
@@ -208,11 +243,13 @@ it('ignores CSS changes when no Tailwind module is loaded', ...);
 ### Task 4: The Tailwind CSS page
 
 **Files:**
+
 - Modify: `packages/svelte-zukan/src/lib/app/hash.ts`, `app/App.svelte`, `app/Sidebar.svelte`, `app/i18n.ts`
 - Create: `packages/svelte-zukan/src/lib/app/Tailwind.svelte`, `app/TailwindTokens.svelte`
 - Test: `app/hash.test.ts`, `app/i18n.test.ts`, `app/Tailwind.svelte.test.ts`, `app/App.svelte.test.ts`
 
 **Interfaces:**
+
 - Consumes: `TailwindListItem`, `TailwindSource`, `TailwindCategoryId` (Tasks 1, 3).
 - Produces:
   - `Route` gains `{ view: 'tailwind'; source: string | null; category: string | null }` for `#/tailwind?source=<id>&category=<id>` (exactly the single segment `tailwind`); `export function formatTailwindHash(source?: string, category?: string): string`.
@@ -238,6 +275,7 @@ it('keeps the sample CSS out of the catalog document', ...); // no <style> with 
 it('switches category through the hash', ...);
 it('filters by class name and value', ...);     // 'brand' leaves bg-brand-500; no match shows t.noTokens
 it('copies the class name', ...);
+it('keeps samples light in the dark catalog theme', ...); // with theme 'dark' the iframe element and its root compute color-scheme 'light'; a sample using @media (prefers-color-scheme: dark) shows the light value
 it('lists every theme variable in Full config', ...);
 it('shows the entry\'s error instead of the tokens', ...);
 // App.svelte.test.ts
@@ -248,7 +286,7 @@ it('links one Tailwind item per entry, with the file when there are several', ..
 - [ ] **Step 2: Run them to verify they fail** — `pnpm --filter svelte-zukan exec vitest run --project client src/lib/app` and `pnpm --filter svelte-zukan exec vitest run --project server src/lib/app/hash.test.ts src/lib/app/i18n.test.ts`. Expected: FAIL.
 
 - [ ] **Step 3: Implement**
-  - `Tailwind.svelte`: loads the selected entry (`source` or the first), shows category links, the filter and (for text kinds) the sample-text field, and an `<iframe>` (`srcdoc` with a `<!doctype html>` skeleton, same origin). On load it writes `<style>{source.css}</style>` into the iframe's head and `mount`s `TailwindTokens` into its body with a `$state` props object, so filter and category changes update in place; a `ResizeObserver` on the iframe's body sets the iframe height. `unmount` and the iframe go with the component.
+  - `Tailwind.svelte`: loads the selected entry (`source` or the first), shows category links, the filter and (for text kinds) the sample-text field, and an `<iframe>` (`srcdoc` with a `<!doctype html>` skeleton, same origin, `style="color-scheme: light"` on the element and `:root { color-scheme: light }` in the document). On load it writes `<style>{source.css}</style>` into the iframe's head and `mount`s `TailwindTokens` into its body with a `$state` props object, so filter and category changes update in place; a `ResizeObserver` on the iframe's body sets the iframe height. `unmount` and the iframe go with the component.
   - `TailwindTokens.svelte` (`<svelte:options css="injected" />`, so its styles land in the iframe document): one card per filtered token — sample `<div class={token.class}>` drawn per kind as in Histoire's `render.ts`, the class and the variable with copy buttons (same failure handling as `CodeBlock.svelte`); "Full config" is a table of `variables`. Cards set their own colours for `theme`. No virtualization.
   - `App.svelte`: the `tailwind` route renders `Tailwind` in `<main>`; title `Tailwind CSS | <title>`; `j`/`k` do nothing there.
   - `Sidebar.svelte`: below the entry list, inside the same `nav`, one link per entry (`t.tailwind`, plus ` (<file>)` when there are several), `aria-current="page"` when active.
@@ -262,10 +300,12 @@ it('links one Tailwind item per entry, with the file when there are several', ..
 ### Task 5: Agents
 
 **Files:**
+
 - Modify: `packages/svelte-zukan/src/lib/app/webmcp.ts`, `app/App.svelte` (`tailwind: tailwind.length > 0` to `buildTools`), `packages/svelte-zukan/skills/svelte-zukan/SKILL.md`
 - Test: `packages/svelte-zukan/src/lib/app/webmcp.svelte.test.ts`
 
 **Interfaces:**
+
 - Consumes: `CatalogJson.tailwind` (Task 3).
 - Produces: `buildTools` option `tailwind?: boolean`; when true, a read-only tool `list_tailwind_tokens` with input `{ category?: TailwindCategoryId | 'full-config'; query?: string }`. Without `category`: per entry `{ file, prefix, error?, categories: { id, title, count }[] }`. With `category`: per entry that category's tokens (or `variables` for `full-config`), filtered by `query` like the page.
 
@@ -280,6 +320,7 @@ it('links one Tailwind item per entry, with the file when there are several', ..
 ### Task 6: Build tests and the dogfooding demo
 
 **Files:**
+
 - Modify: `tests/build/package.json` (`tailwindcss`, `@tailwindcss/node` as `catalog:` dev dependencies), `tests/build/build.test.ts`
 - Create: `tests/build/vite-svelte/src/app.css` (`@import "tailwindcss";`, `:root { --primary: #123456; }`, `@theme inline { --color-primary: var(--primary); }`, `@theme { --color-brand-500: #ff3e00; }`)
 - Create: `packages/svelte-zukan/src/tailwind.css` (`@import "tailwindcss";` and a few `@theme` tokens; outside `src/lib`, searched in both demo locales)
@@ -296,6 +337,7 @@ it('links one Tailwind item per entry, with the file when there are several', ..
 ### Task 7: Docs and release
 
 **Files:**
+
 - Create: `docs/content/(catalog)/tailwind.md`, `docs/content/ja/(catalog)/tailwind.md` (sidebar order right after `catalog-ui`)
 - Modify: `docs/content/(catalog)/ai-agents.md` and its ja copy (the `tailwind` field, `list_tailwind_tokens`); CONTRIBUTING.md (the first rule of "What belongs in svelte-zukan" covers the design tokens components are built from); AGENTS.md (the two modules, the guard, the virtual modules, lazy generation, the CSS HMR rule, the iframe)
 - Create: `.changeset/tailwind-tokens.md` — `'svelte-zukan': minor`, `feat: show the project's Tailwind CSS v4 theme in the catalog and in catalog.json.`
