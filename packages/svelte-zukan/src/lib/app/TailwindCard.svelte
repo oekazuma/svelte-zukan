@@ -6,8 +6,9 @@
 
   let { item, t }: { item: TailwindListItem; t: Messages } = $props();
 
-  // an entry with an error has no data to load; the page it links to shows the error
-  const data = $derived(item.error ? null : item.load());
+  // an entry with an error, or one that fails to load, shows its error on the page it links to; never rejects, as an
+  // `{#await}` without `{:catch}` would rethrow
+  const data = $derived(item.error ? null : item.load().catch(() => null));
   const id = $props.id();
 
   /** one shade per palette reads as the theme at a glance; a palette without a 500 shows its first colours */
@@ -31,8 +32,6 @@
         {/each}
       </div>
     {/if}
-  {:catch}
-    <!-- the page this links to shows the error -->
   {/await}
   <div class="text">
     <!-- the catalog is a hash-routed SPA outside SvelteKit, so resolve() does not apply -->
@@ -55,8 +54,6 @@
           </div>
         </dl>
       {/if}
-    {:catch}
-      <!-- the page this links to shows the error -->
     {/await}
   </div>
 </article>

@@ -68,6 +68,8 @@
   }
 
   const t = $derived(messages[locale]);
+  // what the search covers; an entry with an error only has its page
+  const searchedTailwind = $derived(tailwind.filter((s) => !s.error));
   const route = $derived(parseHash(hash));
   const entry = $derived(
     route.view === 'list' || route.view === 'tailwind' ? undefined : catalog.find((e) => e.path === route.path)
@@ -140,7 +142,14 @@
   function filterTailwind(query: string) {
     if (route.view !== 'tailwind') return;
     hash = formatTailwindHash(route.source ?? undefined, route.category ?? undefined, query);
-    history.replaceState(history.state, '', hash);
+    // the entry now holds a catalog route; a route remembered for an ignored hash would win on reload
+    const state = typeof history.state === 'object' && history.state ? { ...history.state } : {};
+    delete state[KEY];
+    try {
+      history.replaceState(state, '', hash);
+    } catch {
+      // Safari throws past about 100 calls in 10 seconds; the page shows the filter already, only the URL lags
+    }
   }
 
   // components in a preview and links in a doc can change the hash too; only catalog routes navigate
@@ -242,7 +251,7 @@
         <dt><kbd>/</kbd></dt>
         <dd>{t.shortcutSearch}</dd>
         <dt><kbd>{modifier}</kbd> <kbd>K</kbd></dt>
-        <dd>{tailwind.length ? t.shortcutSearchCatalogTailwind : t.shortcutSearchCatalog}</dd>
+        <dd>{searchedTailwind.length ? t.shortcutSearchCatalogTailwind : t.shortcutSearchCatalog}</dd>
         <dt><kbd>J</kbd></dt>
         <dd>{t.shortcutNext}</dd>
         <dt><kbd>K</kbd></dt>
@@ -262,7 +271,7 @@
       </dl>
       <form method="dialog"><button>{t.close}</button></form>
     </dialog>
-    <SearchDialog bind:this={searchDialog} entries={catalog} {tailwind} {locale} {t} />
+    <SearchDialog bind:this={searchDialog} entries={catalog} tailwind={searchedTailwind} {locale} {t} />
   </div>
 {/if}
 

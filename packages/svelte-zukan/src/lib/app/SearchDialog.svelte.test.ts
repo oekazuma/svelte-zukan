@@ -345,6 +345,49 @@ describe('Tailwind CSS in the search dialog', () => {
       .toEqual(['bg-brand-500 Background Color']);
   });
 
+  it('leaves out entries with an error: no Tailwind CSS search when all have one, no file for the only usable one', async () => {
+    const { props } = setupTailwind();
+    const errored = (id: string, file: string): TailwindListItem => ({
+      id,
+      file,
+      error: 'broken',
+      load: vi.fn(() => Promise.resolve({ default: tailwindSource }))
+    });
+    const allErrors = [errored('a', 'src/a.css'), errored('b', 'src/b.css')];
+    const none = await render(App, { props: { ...props, tailwind: allErrors } });
+    await userEvent.keyboard('?');
+    await expect
+      .element(none.getByRole('dialog', { name: 'Keyboard shortcuts' }))
+      .toMatchTextContent('Search names, sections, props and descriptions');
+    await userEvent.keyboard('{Escape}');
+    await openSearch();
+    await expect
+      .element(none.getByRole('combobox'))
+      .toHaveAttribute('placeholder', 'Names, sections, props and descriptions');
+    expect(none.getByRole('button', { name: 'Tailwind CSS' }).query()).toBeNull();
+    for (const s of allErrors) expect(s.load).not.toHaveBeenCalled();
+    none.unmount();
+    document.querySelector('dialog')?.close();
+
+    const usable = {
+      id: 'app',
+      file: 'src/app.css',
+      error: null,
+      load: () => Promise.resolve({ default: tailwindSource })
+    };
+    const one = await render(App, { props: { ...props, tailwind: [usable, errored('b', 'src/b.css')] } });
+    await openSearch();
+    await one.getByRole('combobox').fill('bg-brand');
+    await expect
+      .poll(() =>
+        one
+          .getByRole('option')
+          .elements()
+          .map((o) => o.textContent!.replace(/\s+/g, ' ').trim())
+      )
+      .toEqual(['bg-brand-500 Background Color']);
+  });
+
   it('has no Tailwind CSS group or filter without Tailwind data', async () => {
     const { props } = setup();
     const screen = await render(App, { props: { ...props, tailwind: [] } });

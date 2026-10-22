@@ -39,15 +39,16 @@ function snippet(text: string, at: number, length: number) {
 /**
  * Case-insensitive substring search. Results come in tiers (name prefix, ID, section, prop name,
  * prop description, description), each tier in catalog order; `groups` null means every group.
- * A Tailwind CSS category title, class or variable joins the first tier when it starts with the query and the
- * second when it contains it, after the components.
+ * Tailwind CSS category titles, classes and variables come after them, those starting with the query first, and
+ * are capped on their own: a theme has hundreds of `text-*` or `--color-*` names that would push every component out.
  */
 export function search(
   items: SearchItem[],
   query: string,
   groups: Set<string> | null,
   limit = 20,
-  tailwind: TailwindSearchItem[] = []
+  tailwind: TailwindSearchItem[] = [],
+  tailwindLimit = 10
 ): SearchHit[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
@@ -78,7 +79,8 @@ export function search(
     const at = doc.toLowerCase().indexOf(q);
     if (at !== -1) tiers[5].push({ item, kind: 'description', snippet: snippet(doc, at, q.length) });
   }
-  const tier = (text: string) => (text.toLowerCase().startsWith(q) ? tiers[0] : tiers[1]);
+  const tailwindTiers: SearchHit[][] = [[], []];
+  const tier = (text: string) => tailwindTiers[text.toLowerCase().startsWith(q) ? 0 : 1];
   for (const item of tailwind) {
     if (item.title.toLowerCase().includes(q)) tier(item.title).push({ item, kind: 'tailwind' });
     for (const token of item.tokens) {
@@ -86,5 +88,5 @@ export function search(
       if (label) tier(label).push({ item, kind: 'tailwind', label, value: token.value });
     }
   }
-  return tiers.flat().slice(0, limit);
+  return [...tiers.flat().slice(0, limit), ...tailwindTiers.flat().slice(0, tailwindLimit)];
 }

@@ -400,6 +400,32 @@ describe('the Tailwind CSS page', () => {
     expect(location.hash).toBe('#/tailwind?source=app&category=background-color');
   });
 
+  it('a filter replaces the route an ignored hash left in the history entry', async () => {
+    location.hash = '#/tailwind';
+    history.replaceState({ zukanHash: '#/tailwind?q=old' }, '');
+    const screen = await render(App, { props: props('#/tailwind') });
+    const filter = screen.getByRole('searchbox', { name: 'Filter tokens' });
+    await expect.element(filter).toHaveValue('old');
+    await filter.fill('brand');
+    expect(location.hash).toBe('#/tailwind?q=brand');
+    expect(history.state?.zukanHash).toBeUndefined();
+  });
+
+  it('filters when the browser refuses to replace the URL', async () => {
+    const replaceState = vi.spyOn(history, 'replaceState').mockImplementation(() => {
+      throw new DOMException('too many calls', 'SecurityError');
+    });
+    try {
+      const screen = await render(App, { props: props('#/tailwind') });
+      const { doc } = await frame(screen.container);
+      await screen.getByRole('searchbox', { name: 'Filter tokens' }).fill('brand');
+      await expect.poll(() => tokenTexts(doc)).toEqual(['bg-brand-500']);
+      expect(replaceState).toHaveBeenCalled();
+    } finally {
+      replaceState.mockRestore();
+    }
+  });
+
   it('copies the class name', async () => {
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
     try {
@@ -609,6 +635,16 @@ describe('the Tailwind CSS page', () => {
     const swatch = screen.container.querySelector<HTMLElement>('.thumb span')!;
     expect(getComputedStyle(swatch).backgroundColor).toBe('rgb(255, 62, 0)');
     expect([...document.querySelectorAll('style')].some((s) => s.textContent!.includes('.bg-brand-500'))).toBe(false);
+  });
+
+  it('shows the card of an entry that fails to load without its numbers', async () => {
+    const failing: TailwindListItem = { ...item(source), load: () => Promise.reject(new Error('gone')) };
+    const screen = await render(App, { props: props('', [failing]) });
+    const section = screen.getByRole('region', { name: 'Tailwind CSS' });
+    await expect
+      .element(section.getByRole('link', { name: 'src/app.css' }))
+      .toHaveAccessibleDescription('Tailwind CSS');
+    expect(section.getByRole('definition').query()).toBeNull();
   });
 
   it('shows no Tailwind CSS card on the top page without Tailwind data', async () => {

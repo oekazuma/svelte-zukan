@@ -15,7 +15,13 @@
     tailwind,
     locale,
     t
-  }: { entries: Entry[]; tailwind: TailwindListItem[]; locale: 'en' | 'ja'; t: Messages } = $props();
+  }: {
+    entries: Entry[];
+    /** the entries without an error */
+    tailwind: TailwindListItem[];
+    locale: 'en' | 'ja';
+    t: Messages;
+  } = $props();
 
   let dialog: HTMLDialogElement;
   let input: HTMLInputElement;
@@ -56,14 +62,12 @@
     });
     // an entry that fails to load shows its error on its own page
     Promise.all(
-      tailwind
-        .filter((s) => !s.error)
-        .map((s) =>
-          s.load().then(
-            ({ default: data }) => (data.error ? [] : [data]),
-            () => []
-          )
+      tailwind.map((s) =>
+        s.load().then(
+          ({ default: data }) => (data.error ? [] : [data]),
+          () => []
         )
+      )
     ).then((found) => {
       sources = found.flat();
       active = 0;
@@ -99,16 +103,16 @@
   const groups = $derived([
     null,
     ...new Set(entries.map((e) => e.group)),
-    ...(tailwind.some((s) => !s.error) ? ([TAILWIND] as const) : [])
+    ...(tailwind.length ? ([TAILWIND] as const) : [])
   ]);
   const kinds = $derived<[SearchKind, string][]>([
     ['component', t.searchComponents],
-    ['tailwind', t.tailwind],
     ['section', t.searchSections],
     ['prop', t.searchProps],
-    ['description', t.searchDescriptions]
+    ['description', t.searchDescriptions],
+    ['tailwind', t.tailwind]
   ]);
-  // in the order they are shown, so ↑ and ↓ move down the list
+  // already in the order of `kinds`, so ↑ and ↓ move down the list as shown
   const hits = $derived(
     search(
       group === TAILWIND ? [] : items,
@@ -116,7 +120,7 @@
       typeof group === 'string' ? new Set([group]) : null,
       undefined,
       group === null || group === TAILWIND ? tailwindItems : []
-    ).sort((a, b) => kinds.findIndex(([k]) => k === a.kind) - kinds.findIndex(([k]) => k === b.kind))
+    )
   );
 
   export function open() {

@@ -49,7 +49,9 @@ export function groupVariables(
   for (const entry of variables) {
     const name = entry[0].startsWith(start) ? entry[0].slice(start.length) : null;
     const namespace = (name && MATCH_ORDER.find((ns) => name === ns || name.startsWith(`${ns}-`))) ?? null;
-    groups.set(namespace, [...(groups.get(namespace) ?? []), entry]);
+    const group = groups.get(namespace);
+    if (group) group.push(entry);
+    else groups.set(namespace, [entry]);
   }
   return [...NAMESPACES, null].flatMap((namespace) => {
     const found = groups.get(namespace);

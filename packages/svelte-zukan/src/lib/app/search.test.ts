@@ -127,23 +127,38 @@ describe('search', () => {
       expect(summary(search([], 'font size', null, 20, tailwind('ja')))).toEqual([]);
     });
 
-    it('ranks a prefix with the name prefixes and a substring with the IDs, after the components', () => {
+    it('comes after every component result, those starting with the query first', () => {
       const items = [item('ui/Text'), item('ui/RichText'), item('ui/Card', { sections: ['Long text'] })];
       expect(summary(search(items, 'text', null, 20, tailwind('en')))).toEqual([
         'component:ui/Text:',
-        'tailwind:app/font-size:text-lg',
         'component:ui/RichText:',
-        'tailwind:app/full-config:--text-lg',
-        'section:ui/Card:Long text'
+        'section:ui/Card:Long text',
+        'tailwind:app/font-size:text-lg',
+        'tailwind:app/full-config:--text-lg'
       ]);
     });
 
-    it('counts towards the cap', () => {
-      const items = Array.from({ length: 19 }, (_, i) => item(`ui/Bg${i}`));
-      expect(summary(search(items, 'bg', null, 20, tailwind('en'))).slice(-2)).toEqual([
-        'component:ui/Bg18:',
-        'tailwind:app/background-color:bg-brand-500'
-      ]);
+    it('never pushes component results out and is capped on its own', () => {
+      const items = [
+        ...Array.from({ length: 25 }, (_, i) => item(`ui/Text${i}`)),
+        item('ui/RichText', { sections: ['Long text'] })
+      ];
+      const many: TailwindSearchItem[] = [
+        {
+          source: 'app',
+          category: 'font-size',
+          title: 'Font Size',
+          tokens: Array.from({ length: 300 }, (_, i) => ({ class: `text-${i}`, cssVariable: null, value: '1rem' }))
+        }
+      ];
+      const components = search(items, 'text', null);
+      const hits = search(items, 'text', null, 20, many);
+      expect(hits.slice(0, components.length)).toEqual(components);
+      expect(components).toHaveLength(20);
+      expect(summary(hits.slice(components.length))).toEqual(
+        Array.from({ length: 10 }, (_, i) => `tailwind:app/font-size:text-${i}`)
+      );
+      expect(search([item('ui/Text'), item('ui/RichText')], 'text', null, 20, many, 3)).toHaveLength(5);
     });
   });
 });
