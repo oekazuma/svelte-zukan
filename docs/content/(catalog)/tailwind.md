@@ -8,7 +8,7 @@ When your app uses Tailwind CSS v4, the catalog shows the theme your components 
 
 ## When the page appears
 
-A "Tailwind CSS" link appears in the sidebar, below the components, when both of these hold:
+A "Tailwind CSS" link appears in the sidebar, below the components, and a card for each entry at the top of the catalog's top page, when both of these hold:
 
 - **Tailwind CSS 4.1.0 or later is installed with one of its build integrations**: `@tailwindcss/vite`, `@tailwindcss/postcss` or `@tailwindcss/cli`. svelte-zukan loads Tailwind through the same copy that builds your app's CSS, so the catalog and the app always agree. It looks in the `node_modules` of the entry's folder and the folders above it, then in those of Vite's root
 - **A Tailwind CSS entry exists**: a CSS file that has `@import "tailwindcss"` (or an import of a `tailwindcss/…` file), or that has `@theme`. They are searched in the directories svelte-zukan already scans for catalog files (see [`groups`](/options) and [monorepos](/monorepo)) and in Vite's root `src`, even when `groups` leaves it out, because a SvelteKit app usually keeps `src/app.css` while its `groups` point at `src/lib`
@@ -21,11 +21,15 @@ Without Tailwind, or with Tailwind CSS v3, there is no page, no warning and no e
 
 What the page lists is everything Tailwind resolves from the entry: its defaults, what `@theme` adds or overrides, and what `@plugin` and `@config` load. Imports are resolved the way your app's build does, so aliases such as `$lib/theme.css` work.
 
+## The card
+
+On the top page, above the components, each entry has a card: a strip of the theme's colors, the entry's file and Tailwind version, and the number of tokens and theme variables. Click it to open the page.
+
 ## The page
 
 The categories are a list on the left, grouped as Colors, Spacing & sizing, Typography, Borders, Effects and Layout, then **Full config**, each with its token count. On a narrow page the list becomes a select above the tokens. With no category chosen, the first one in the list opens.
 
-Tokens come in the theme's order: sizes from small to large, and the default palette in Tailwind's order, with your own colors after the defaults (the filter finds them). In the color categories, `current`, `inherit` and `transparent` come after the theme colors. The categories:
+Tokens come in the theme's order: sizes from small to large, with a zero size or `none` first and `rounded-full` last, and the default palette in Tailwind's order, with your own colors after the defaults (the filter finds them). In the color categories, `current`, `inherit` and `transparent` come after the theme colors. The categories:
 
 | Category                                   | Class                                      |
 | ------------------------------------------ | ------------------------------------------ |
@@ -39,21 +43,22 @@ Tokens come in the theme's order: sizes from small to large, and the default pal
 | Breakpoints                                | `--breakpoint-*` variables                 |
 | Spacing                                    | the `--spacing` base and the `p-*` classes |
 
-A category with no token is left out. **Full config** is a table of every theme variable and its value.
+A category with no token is left out. **Full config** lists every theme variable and its value, in a table for each namespace (`--color-*`, `--spacing`, `--radius-*` and so on, with the rest under Other). A color value has a swatch, and each variable has a button that copies its name.
 
 Each token has a live sample, its class and its CSS variable, and the value it resolves to. A size also shows its computed size in px, such as `calc(0.25rem * 4) · 16px` for `p-4`. A `var()` that the theme does not define is shown as its fallback when it has one (a shadow reads `0 4px 6px -1px rgb(0 0 0 / 0.1), …`), and as written otherwise. An empty value is shown as `none`. The class and the variable each have a button that copies the name. With a Tailwind `prefix`, the classes carry it (`tw:bg-brand-500`). Breakpoints and the spacing base are no classes, so they show the variable only. A token shows a variable when its class reads one, or, for an `@theme inline` token, when a theme variable holds the same value.
 
-- **Filter**: the box above the cards keeps the tokens whose class, variable or value contains the text
+- **Filter**: the box above the tokens keeps those whose class, variable or value contains the text. Full config is filtered by variable and value. The text is kept in the address, as `q` in `#/tailwind?source=…&category=…&q=…`, so a reload or a shared link shows the same tokens. Typing replaces the history entry instead of adding one, and the filter stays when you change category
 - **Sample text**: the text categories (Text Color, Font Size, Font Weight, Font Family, Letter Spacing, Line Height) have a field for the text the samples show
 
 Each category lists one class per token, not every utility a token feeds. Colors appear as `bg-*`, `text-*` and `border-*` only, not as `ring-*`, `fill-*` and so on.
 
 ### The samples
 
-Colors and text are cards. Shadows are cards too, drawn on a grey panel. The size categories (Padding, Margin, Spacing, Width, Height, Border Width, Border Radius, Opacity, Breakpoints, Z-index) are compact rows, so sizes can be compared at a glance:
+Background Color, Text Color and the text categories are cards. Shadows are cards too, drawn on a grey panel. Border Color and the size categories (Padding, Margin, Spacing, Width, Height, Border Width, Border Radius, Opacity, Breakpoints, Z-index) are compact rows, so they can be compared at a glance:
 
 - **Padding and Margin** show the space around a block
 - **Width, Height and Spacing** draw a bar at its real size. A bar longer than the row fades out at its end. A value that follows the frame, such as `100%` or `100vh`, has no bar
+- **Border Color** draws a white box with a thick border in the token's color
 - **Breakpoints** are bars proportional to their width
 - **Z-index** has no sample, only the names and the value
 
