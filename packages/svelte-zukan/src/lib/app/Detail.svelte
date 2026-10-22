@@ -164,8 +164,13 @@
                           {#if p.required}<span class="flag">{t.required}</span>{/if}
                           {#if p.bindable}<span class="flag">{t.bindable}</span>{/if}
                         </td>
+                        <!-- a union wraps between its members, never inside one such as `() => void` -->
                         <td
-                          >{#if p.type}<code>{p.type}</code>{/if}</td
+                          >{#if p.type}<code
+                              >{#each p.type.split(' | ') as part, i (i)}{#if i}{' | '}{/if}<span class="type-part"
+                                  >{part}</span
+                                >{/each}</code
+                            >{/if}</td
                         >
                         <td
                           >{#if p.default}<code>{p.default}</code>{/if}</td
@@ -394,6 +399,10 @@
     background: var(--_code-bg);
     font-family: var(--_mono);
     font-size: 0.9em;
+  }
+
+  .type-part {
+    white-space: nowrap;
   }
 
   .props .name {
