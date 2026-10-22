@@ -33,12 +33,7 @@
   }
 
   // the catalog is already in group order; a Map keeps it
-  const groups = $derived(
-    entries.reduce(
-      (map, entry) => map.set(entry.group, [...(map.get(entry.group) ?? []), entry]),
-      new Map<string, Entry[]>()
-    )
-  );
+  const groups = $derived(Map.groupBy(entries, (entry) => entry.group));
   const id = $props.id();
 </script>
 
