@@ -1,0 +1,13 @@
+@import 'tailwindcss';
+
+:root {
+  --primary: #123456;
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+}
+
+@theme {
+  --color-brand-500: #ff3e00;
+}

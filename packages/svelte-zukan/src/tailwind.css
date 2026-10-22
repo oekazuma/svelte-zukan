@@ -1,0 +1,8 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-brand-500: #ff3e00;
+  --color-brand-700: #b32d00;
+  --font-display: 'Georgia', serif;
+  --radius-card: 0.75rem;
+}

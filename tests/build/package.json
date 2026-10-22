@@ -9,9 +9,11 @@
     "@sveltejs/adapter-static": "catalog:",
     "@sveltejs/kit": "catalog:",
     "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",
     "playwright": "catalog:",
     "svelte": "catalog:",
+    "tailwindcss": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"
   }

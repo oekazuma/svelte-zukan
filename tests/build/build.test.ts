@@ -76,6 +76,8 @@ test('kit monorepo build', { timeout: 120_000 }, () => {
   for (const text of ['Long title', 'A card from']) expect(all).toContain(text);
   expect(unloadedCss(dir)).toEqual([]);
   expect(withLocalPaths(dir)).toEqual([]);
+  // no Tailwind CSS in the app: no page for it
+  expect(JSON.parse(readFileSync(join(dir, 'zukan-dist/catalog.json'), 'utf8')).tailwind).toBeNull();
 });
 
 test('kit monorepo build under paths.base', { timeout: 180_000 }, async () => {
@@ -149,6 +151,23 @@ test('plain vite build', { timeout: 120_000 }, async () => {
   const data = JSON.parse(readFileSync(join(dir, 'zukan-dist/catalog.json'), 'utf8'));
   expect(data.components.map((c: { id: string }) => c.id)).toEqual(['vite-svelte/lib/Counter']);
   expect(data.components[0].sections.map((s: { title: string }) => s.title)).toContain('Basic');
+
+  // the Tailwind CSS tokens, read through @tailwindcss/vite's own @tailwindcss/node (pnpm does not hoist it)
+  type Token = { class: string; cssVariable: string; value: string };
+  expect(data.tailwind).toHaveLength(1);
+  const [tailwind] = data.tailwind;
+  expect(tailwind.file).toBe('src/app.css');
+  expect(tailwind).not.toHaveProperty('id');
+  expect(tailwind).not.toHaveProperty('css');
+  const colors: Token[] = tailwind.categories.find((c: { id: string }) => c.id === 'background-color').tokens;
+  expect(colors).toContainEqual(
+    expect.objectContaining({ class: 'bg-brand-500', cssVariable: '--color-brand-500', value: '#ff3e00' })
+  );
+  expect(colors).toContainEqual(
+    expect.objectContaining({ class: 'bg-primary', cssVariable: '--color-primary', value: '#123456' })
+  );
+  // the page's sample stylesheet is bundled with the catalog
+  expect(catalogJs(dir).some(({ code }) => code.includes('.bg-brand-500'))).toBe(true);
 
   // `vite preview` serves the static catalog too
   const server = await preview({
