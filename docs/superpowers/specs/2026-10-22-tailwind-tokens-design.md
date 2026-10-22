@@ -16,7 +16,7 @@ People use svelte-zukan as the place where a design system lives. When the app s
 - Show the resolved Tailwind theme of the project: Tailwind's defaults plus everything the project's CSS adds or overrides with `@theme` (and `@plugin` / `@config`, as far as Tailwind resolves them).
 - Same categories and the same "one representative utility per category" rule as Histoire, so each token appears once per category with a live sample.
 - Search within a category; copy the class name and the CSS variable.
-- Works with no configuration: it appears when Tailwind CSS v4 or later is installed and a Tailwind CSS entry is found, and is absent otherwise.
+- Works with no configuration: it appears when Tailwind CSS v4 (4.0.0 or later) is installed and a Tailwind CSS entry is found, and is absent otherwise.
 - Agents can read the tokens from `catalog.json` and through a WebMCP tool.
 - Dev updates when the CSS changes; `build: true` includes it in the static catalog.
 
@@ -41,7 +41,7 @@ People use svelte-zukan as the place where a design system lives. When the app s
 ## Constraints
 
 - CONTRIBUTING.md "What belongs in svelte-zukan": the first rule says a feature helps someone look at, check or document a component. This feature widens that to the design tokens the components are built from. The maintainer accepts that; CONTRIBUTING.md gets one line saying so. All the other rules hold: no configuration, no dependency, catalog files stay plain Svelte, same behaviour in plain Vite and SvelteKit.
-- Tailwind v4 has no stable public API for this. The only way is `__unstable__loadDesignSystem` (the API IntelliSense uses): `theme.entries()` for every theme variable, `getClassList()` for the class names IntelliSense suggests, `candidatesToAst()` / `candidatesToCss()` for what a class generates, and `theme.prefix`. Everything that touches it sits behind one guarded module (see "Loading Tailwind").
+- Tailwind v4 has no stable public API for this. The only way is `__unstable__loadDesignSystem` (the API IntelliSense uses): `theme.entries()` for every theme variable, `getClassList()` for the class names IntelliSense suggests, `candidatesToCss()` for what a class generates, and `theme.prefix`. Everything that touches it sits behind one guarded module (see "Loading Tailwind").
 - Values cannot be read in the browser: Tailwind v4 emits only the variables that are used.
 - Node 22.17 floor, Vite 8, Svelte 5 runes; no `fs` helpers beyond Node's own (`fs.globSync`).
 - `catalog.json` and the static build carry no absolute paths.
@@ -59,7 +59,7 @@ People use svelte-zukan as the place where a design system lives. When the app s
 - Resolution matches the app's build:
   - CSS `@import`s (in both calls, and when telling an entry from a partial) go through Vite's resolver with the options `@tailwindcss/vite` uses: `createIdResolver(config, { ...config.resolve, extensions: ['.css'], mainFields: ['style'], conditions: ['style', 'development|production'], tryIndex: false, preferRelative: true })`. Node resolution of the package's `style` export is the fallback. So aliases such as `$lib/theme.css` work.
   - `@plugin` and `@config` load through `@tailwindcss/node`'s `loadModule`, which handles TypeScript files on the Node 22.17 floor.
-- The guard checks `__unstable__loadDesignSystem`, `compile`, `theme.entries`, `theme.prefix`, `getClassList`, `candidatesToAst` and `candidatesToCss`. A mismatch is the entry's `error`: "Tailwind CSS <version> does not expose the design-system API svelte-zukan uses".
+- Everything used exists since Tailwind v4.0.0, so v4.0.0 is the minimum. `candidatesToAst()` (only since 4.1.18) is not used. The guard checks `__unstable__loadDesignSystem`, `compile`, `loadModule`, `theme.entries`, `theme.prefix`, `getClassList` and `candidatesToCss`. A mismatch is the entry's `error`: "Tailwind CSS <version> does not expose the design-system API svelte-zukan uses".
 
 ### Detection
 
@@ -100,11 +100,14 @@ Following Histoire's `v4.ts`, with two corrections.
 
   Empty categories are left out.
 
-- A token is a class from `getClassList()` that is the stem or starts with `stem-`, and whose declarations, read from `candidatesToAst()` (`kind: 'declaration'` nodes, no CSS parser and no postcss), include the category's property. It records:
+- A token is a class from `getClassList()` that is the stem or starts with `stem-`, and whose declarations, read from its `candidatesToCss()` output with the CSS scanner below, include the category's property. It records:
   - `class`: with the project prefix. `null` for the tokens that are no class (Breakpoints, the `--spacing` base).
   - `cssVariable`: only when the declaration is exactly `var(--x)` or `var(--x, …)` and `--x` is a theme key, or, for an `@theme inline` token (whose class gets the value itself), the theme key whose value equals the declaration and whose name ends with the class's suffix (`bg-primary` → `--color-primary`); else `null`. (Histoire takes the first `var()`, which makes every `p-4` look like `--spacing`; that is the first correction.)
   - `value`: the declaration with `var()`s resolved as far as the known values allow, else the expression as written. For example `p-4` is `calc(0.25rem * 4)` and `bg-primary` is `oklch(…)`.
-- Known values (the second correction) are the theme variables plus the custom properties the entry declares unconditionally on `:root`, `:host` or `html`, outside any `@media`, `@supports` or other selector. These are read from the `compile()` output. The common Svelte + Tailwind setup `:root { --primary: … }` with `@theme inline { --color-primary: var(--primary) }` then gets real values and real swatches.
+- Known values (the second correction) are the theme variables plus the custom properties the entry declares unconditionally on `:root`, `:host` or `html`, read from the `compile().build([])` output. The common Svelte + Tailwind setup `:root { --primary: … }` with `@theme inline { --color-primary: var(--primary) }` then gets real values and real swatches.
+  - A rule counts when its selector list is only `:root`, `:host` and/or `html`, at the top level or inside `@layer` blocks (`@layer base { :root { … } }` is common).
+  - Rules inside `@media`, `@supports` or `@container`, and rules under any other selector (`.dark`), do not count.
+- The CSS scanner is a few dozen lines over Tailwind's own serialized output, which is regular. It matches braces, skips strings and comments, and yields rules with their at-rule ancestry and declarations. It reads both the token declarations and the known values. There is no postcss and no other parser dependency. Its unit tests run against real `candidatesToCss()` and `compile()` output.
 - `tailwind` in `catalog.json` is `null` when no entry was loaded (none found, or all skipped). It is never `[]`.
 
 ### The catalog page
@@ -115,7 +118,7 @@ Following Histoire's `v4.ts`, with two corrections.
 - Samples render inside a same-origin iframe, one document per page, like the component previews. The iframe holds the `compile().build(classes)` output: theme variables, the entry's own rules and `:root` variables, `@property` rules, preflight and `@font-face`.
   - Nothing leaks into the catalog, and nothing from the catalog reaches the samples. No selector rewriting is needed.
   - `@font-face` with a relative `url()` is out of scope: it would resolve against the catalog's URL. A Font Family sample may then fall back to a system font, and the docs say so.
-- The page itself follows the catalog's light/dark theme. Samples and values are the base values: the iframe's root carries no `.dark` class or dark media emulation, and `theme.entries()` has no dark values. Dark-mode values are a planned follow-up: keep the data shape open to a second value per token (an optional field added later), and keep the iframe able to switch to dark later.
+- The page itself follows the catalog's light/dark theme. Samples and values are the base values. The sample iframe element and its document root always have `color-scheme: light`, in every catalog theme: inside an iframe `prefers-color-scheme` follows the frame's `color-scheme`, so a dark catalog would otherwise switch on Tailwind's media-based `dark:` variant, authored dark media rules and `light-dark()` values. The iframe's root carries no `.dark` class, and `theme.entries()` has no dark values. Dark-mode values are a planned follow-up: keep the data shape open to a second value per token (an optional field added later), and keep the iframe able to switch to dark later.
 - The route must never collide with a component ID: `#/tailwind` is a single segment, and IDs always have a group prefix.
 
 ### Agents
@@ -138,7 +141,7 @@ Following Histoire's `v4.ts`, with two corrections.
   - A change to a watched file, or a `.css` file created or deleted in the searched directories, regenerates the data. Only when the data or the sample CSS actually changed, the catalog tab and its previews update through `zukan:reload` (compared like `servedProps` for props).
   - `hotUpdate` returns `undefined` for these files, so the app's own CSS HMR (`@tailwindcss/vite`) goes on untouched. Never `full-reload`, never `[]`.
   - A failing entry shows its error on its page and keeps the rest of the catalog working.
-- Build (`build: true`): the data and the sample CSS are strings in JS virtual modules that the `zukan` environment bundles under `_zukan/`, loaded lazily by the Tailwind page (like the `AXE` module). They are never a CSS import: the catalog's `index.html` links no CSS, and a CSS import would go through the app's CSS pipeline. `catalog.json` gets the data. A failure is a build warning plus an `error` in the data, not a failed build: the user did not ask for this feature.
+- Build (`build: true`): the data and the sample CSS are strings in JS virtual modules that the `zukan` environment bundles under `_zukan/`, loaded lazily by the Tailwind page (like the `AXE` module). The generated entry module contains that dynamic import only when detection found at least one entry that resolves Tailwind, and passes `null` otherwise, the way `wrapper` works. A project without Tailwind gets no new file in its build output. They are never a CSS import: the catalog's `index.html` links no CSS, and a CSS import would go through the app's CSS pipeline. `catalog.json` gets the data. A failure is a build warning plus an `error` in the data, not a failed build: the user did not ask for this feature.
 
 ### Docs and release
 
