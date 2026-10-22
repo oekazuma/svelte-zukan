@@ -96,7 +96,10 @@ describe('PreviewFrame', () => {
     await expect.poll(() => iframeWidth(screen.container)).toBe(586);
     expect(iframe.contentWindow!.innerWidth).toBe(1280);
     await expect.element(screen.getByRole('spinbutton', { name: 'Width in pixels' })).toHaveValue(1280);
-    await expect.element(screen.getByText('46%')).toBeInTheDocument();
+    // its explanation is the tooltip, and read after the number by screen readers
+    const zoom = screen.container.querySelector<HTMLElement>('.zoom')!;
+    await expect.element(zoom).toHaveTextContent(`46% ${messages.en.scaledToFit}`);
+    expect(zoom.getAttribute('data-tip')).toBe(messages.en.scaledToFit);
     await expect.element(screen.getByRole('separator')).toHaveAttribute('aria-valuenow', '1280');
     // the visible box follows the scaled height
     const viewport = iframe.parentElement!;
@@ -568,6 +571,46 @@ describe('PreviewFrame tools', () => {
     await userEvent.keyboard('{Escape}');
     await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
     await expect.element(screen.getByRole('button', { name: 'Expand' })).toHaveFocus();
+  });
+
+  it('shows a tooltip with the name of a toolbar control on hover, without a native title', async () => {
+    const screen = await render(PreviewFrame, { props: { ...props, shareUrl: () => '' } });
+    const tip = screen.container.querySelector<HTMLElement>('.tip')!;
+    expect(screen.container.querySelectorAll('.toolbar [title]')).toHaveLength(0);
+    expect(tip.getAttribute('aria-hidden')).toBe('true');
+    await screen.getByRole('button', { name: 'Measure elements on hover' }).hover();
+    await expect.poll(() => tip.matches(':popover-open') && tip.textContent).toBe('Measure elements on hover');
+    await screen.getByRole('spinbutton', { name: 'Width in pixels' }).hover();
+    await expect.poll(() => tip.matches(':popover-open')).toBe(false);
+    // it follows a state change, as the title did
+    await screen.getByRole('button', { name: 'Background: Theme' }).hover();
+    await expect.poll(() => tip.matches(':popover-open') && tip.textContent).toBe('Background: Theme');
+    await screen.getByRole('button', { name: 'Background: Theme' }).click();
+    await expect.poll(() => tip.textContent).toBe('Background: Checkerboard');
+    // the clicked Background button losing focus does not hide the next button's tip
+    await screen.getByRole('button', { name: 'Show outlines' }).hover();
+    await screen.getByRole('button', { name: 'Show outlines' }).click();
+    await expect.poll(() => tip.matches(':popover-open') && tip.textContent).toBe('Show outlines');
+  });
+
+  it('shows the tooltip on keyboard focus and keeps it inside the viewport', async () => {
+    const screen = await render(PreviewFrame, { props: { ...props, shareUrl: () => '' } });
+    const tip = screen.container.querySelector<HTMLElement>('.tip')!;
+    // the pointer is left where the previous test put it; keep it off the buttons
+    await screen.getByRole('spinbutton', { name: 'Width in pixels' }).hover();
+    screen.getByRole('button', { name: 'Mobile (375px)', exact: true }).element().focus();
+    await userEvent.tab();
+    await expect.poll(() => tip.matches(':popover-open') && tip.textContent).toBe('Tablet (768px)');
+    await userEvent.tab({ shift: true });
+    await expect.poll(() => tip.textContent).toBe('Mobile (375px)');
+    expect(tip.getBoundingClientRect().left).toBeGreaterThanOrEqual(0);
+    const link = screen.getByRole('link', { name: 'Open in new tab' });
+    link.element().focus();
+    // a programmatic focus after keyboard use is still :focus-visible
+    await expect.poll(() => tip.textContent).toBe('Open in new tab');
+    expect(tip.getBoundingClientRect().right).toBeLessThanOrEqual(document.documentElement.clientWidth);
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(() => tip.matches(':popover-open')).toBe(false);
   });
 
   it('shows a skeleton until the preview is measured', async () => {
