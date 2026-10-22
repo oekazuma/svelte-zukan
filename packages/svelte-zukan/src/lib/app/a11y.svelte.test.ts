@@ -1,8 +1,9 @@
 import axe from 'axe-core';
+import axeSource from 'axe-core/axe.min.js?raw';
 import { afterEach, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
-import type { ZukanMeta } from '../types.js';
+import type { TailwindListItem, ZukanMeta } from '../types.js';
 import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
 import { modifier } from './SearchDialog.svelte';
@@ -51,6 +52,61 @@ async function violations() {
   return result.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
 }
 
+const tailwind: TailwindListItem[] = [
+  {
+    id: 'app',
+    file: 'src/app.css',
+    error: null,
+    load: () =>
+      Promise.resolve({
+        default: {
+          id: 'app',
+          file: 'src/app.css',
+          version: '4.3.3',
+          prefix: null,
+          categories: [
+            {
+              id: 'text-color',
+              title: 'Text Color',
+              tokens: [{ class: 'text-brand', cssVariable: '--color-brand', value: '#ff3e00' }]
+            },
+            {
+              id: 'breakpoints',
+              title: 'Breakpoints',
+              tokens: [{ class: null, cssVariable: '--breakpoint-sm', value: '40rem' }]
+            }
+          ],
+          variables: { '--color-brand': '#ff3e00', '--breakpoint-sm': '40rem' },
+          css: '.text-brand { color: #ff3e00 }'
+        }
+      })
+  }
+];
+
+/** the cards in the sample frame; the samples themselves are the project's tokens, whatever their contrast */
+async function frameViolations(container: HTMLElement) {
+  await expect
+    .poll(() => container.querySelector('iframe')?.contentDocument?.querySelector('[data-token]'))
+    .toBeTruthy();
+  const doc = container.querySelector('iframe')!.contentDocument!;
+  const win = doc.defaultView as Window & { axe?: typeof axe };
+  if (!win.axe) {
+    const script = doc.createElement('script');
+    script.textContent = axeSource;
+    doc.head.append(script);
+  }
+  const result = await win.axe!.run(
+    { include: doc.querySelector('.zukan-tokens')!, exclude: '.zukan-sample' },
+    // the frame is a part of the page, which has the title, the landmarks and the heading
+    {
+      rules: Object.fromEntries(
+        ['region', 'document-title', 'landmark-one-main', 'page-has-heading-one'].map((id) => [id, { enabled: false }])
+      )
+    }
+  );
+  return result.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+}
+
 afterEach(() => {
   localStorage.clear();
   history.replaceState(null, '', location.pathname + location.search);
@@ -96,6 +152,20 @@ describe.each(['light', 'dark'] as const)('the catalog UI in %s has no axe viola
     const screen = await render(App, { props: props('#/ui/Card', theme) });
     await screen.getByRole('button', { name: 'Menu' }).click();
     await expect.element(screen.getByRole('navigation', { name: 'Components' })).toBeInTheDocument();
+    expect(await violations()).toEqual([]);
+  });
+
+  it('on the Tailwind CSS page and in its sample frame', async () => {
+    await page.viewport(1280, 800);
+    const screen = await render(App, { props: { ...props('#/tailwind', theme), tailwind } });
+    expect(await frameViolations(screen.container)).toEqual([]);
+    expect(await violations()).toEqual([]);
+  });
+
+  it('on the Full config of the Tailwind CSS page', async () => {
+    await page.viewport(1280, 800);
+    const screen = await render(App, { props: { ...props('#/tailwind?category=full-config', theme), tailwind } });
+    await expect.element(screen.getByRole('table')).toBeInTheDocument();
     expect(await violations()).toEqual([]);
   });
 });

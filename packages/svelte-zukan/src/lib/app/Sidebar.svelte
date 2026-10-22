@@ -3,6 +3,7 @@
   import EntryList from '../components/EntryList.svelte';
   import type { Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
+  import { formatTailwindHash } from './hash.js';
   import type { Messages } from './i18n.js';
   import { modifier } from './SearchDialog.svelte';
 
@@ -15,6 +16,8 @@
     ontoggletheme,
     onshortcuts,
     onsearch,
+    tailwind,
+    currentTailwind,
     t
   }: {
     entries: Entry[];
@@ -26,6 +29,8 @@
     ontoggletheme?: () => void;
     onshortcuts: () => void;
     onsearch: () => void;
+    tailwind: { id: string; file: string }[];
+    currentTailwind?: string;
     t: Messages;
   } = $props();
 
@@ -197,6 +202,18 @@
       {:else}
         <p>{t.noMatches}</p>
       {/if}
+      {#if tailwind.length}
+        <ul class="tailwind">
+          {#each tailwind as item (item.id)}
+            <li>
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+              <a href={formatTailwindHash(item.id)} aria-current={item.id === currentTailwind ? 'page' : undefined}>
+                {t.tailwind}{tailwind.length > 1 ? ` (${item.file})` : ''}
+              </a>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </nav>
   </div>
 </div>
@@ -283,6 +300,34 @@
   input:focus-visible {
     outline: 2px solid var(--_accent);
     outline-offset: -1px;
+  }
+
+  .tailwind {
+    margin: 12px 0 0;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--_border);
+    list-style: none;
+    font-family: var(--_font);
+  }
+
+  /* drawn like the component links */
+  .tailwind a {
+    display: block;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: var(--_text);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+
+  .tailwind a:hover {
+    background: var(--_code-bg);
+  }
+
+  .tailwind a[aria-current='page'] {
+    color: var(--_accent);
+    background: var(--_code-bg);
+    font-weight: 600;
   }
 
   p {

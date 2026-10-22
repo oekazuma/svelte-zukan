@@ -1,3 +1,5 @@
+import type { TailwindCategoryId } from '../types.js';
+
 export type Messages = {
   nav: string;
   listHeading: string;
@@ -91,6 +93,17 @@ export type Messages = {
   searchProps: string;
   searchDescriptions: string;
   shortcutSearchCatalog: string;
+  tailwind: string;
+  filterTokens: string;
+  sampleText: string;
+  sampleTextValue: string;
+  fullConfig: string;
+  copyClass: string;
+  copyVariable: string;
+  noTokens: string;
+  tailwindError: string;
+  tokenVariable: string;
+  tokenValue: string;
 };
 
 export const messages: Record<'en' | 'ja', Messages> = {
@@ -187,7 +200,18 @@ export const messages: Record<'en' | 'ja', Messages> = {
     searchSections: 'Sections',
     searchProps: 'Props',
     searchDescriptions: 'Descriptions',
-    shortcutSearchCatalog: 'Search names, sections, props and descriptions'
+    shortcutSearchCatalog: 'Search names, sections, props and descriptions',
+    tailwind: 'Tailwind CSS',
+    filterTokens: 'Filter tokens',
+    sampleText: 'Sample text',
+    sampleTextValue: 'The quick brown fox jumps over the lazy dog',
+    fullConfig: 'Full config',
+    copyClass: 'Copy class',
+    copyVariable: 'Copy variable',
+    noTokens: 'No matching tokens',
+    tailwindError: 'Could not load the Tailwind CSS data:',
+    tokenVariable: 'Variable',
+    tokenValue: 'Value'
   },
   ja: {
     nav: 'コンポーネント',
@@ -282,6 +306,67 @@ export const messages: Record<'en' | 'ja', Messages> = {
     searchSections: 'セクション',
     searchProps: 'Props',
     searchDescriptions: '説明',
-    shortcutSearchCatalog: '名前・セクション・Props・説明から探す'
+    shortcutSearchCatalog: '名前・セクション・Props・説明から探す',
+    tailwind: 'Tailwind CSS',
+    filterTokens: 'トークンを絞り込む',
+    sampleText: 'サンプルテキスト',
+    sampleTextValue: 'いろはにほへと ちりぬるを The quick brown fox',
+    fullConfig: 'すべてのテーマ変数',
+    copyClass: 'クラス名をコピー',
+    copyVariable: '変数名をコピー',
+    noTokens: '一致するトークンがありません',
+    tailwindError: 'Tailwind CSS のデータを読み込めませんでした:',
+    tokenVariable: '変数',
+    tokenValue: '値'
+  }
+};
+
+/** the category names of the Tailwind CSS page; class names and variables are never translated */
+export const categoryTitles: Record<'en' | 'ja', Record<TailwindCategoryId | 'full-config', string>> = {
+  en: {
+    'background-color': 'Background Color',
+    'text-color': 'Text Color',
+    'border-color': 'Border Color',
+    padding: 'Padding',
+    margin: 'Margin',
+    'font-size': 'Font Size',
+    'font-weight': 'Font Weight',
+    'font-family': 'Font Family',
+    'letter-spacing': 'Letter Spacing',
+    'line-height': 'Line Height',
+    'drop-shadow': 'Drop Shadow',
+    'border-radius': 'Border Radius',
+    'border-width': 'Border Width',
+    width: 'Width',
+    height: 'Height',
+    'box-shadow': 'Box Shadow',
+    opacity: 'Opacity',
+    breakpoints: 'Breakpoints',
+    'z-index': 'Z-index',
+    spacing: 'Spacing',
+    'full-config': messages.en.fullConfig
+  },
+  ja: {
+    'background-color': '背景色',
+    'text-color': '文字色',
+    'border-color': '枠線の色',
+    padding: 'パディング',
+    margin: 'マージン',
+    'font-size': 'フォントサイズ',
+    'font-weight': 'フォントの太さ',
+    'font-family': 'フォントファミリー',
+    'letter-spacing': '文字間隔',
+    'line-height': '行の高さ',
+    'drop-shadow': 'ドロップシャドウ',
+    'border-radius': '角丸',
+    'border-width': '枠線の太さ',
+    width: '幅',
+    height: '高さ',
+    'box-shadow': 'ボックスシャドウ',
+    opacity: '不透明度',
+    breakpoints: 'ブレークポイント',
+    'z-index': '重なり順（z-index）',
+    spacing: 'スペーシング',
+    'full-config': messages.ja.fullConfig
   }
 };

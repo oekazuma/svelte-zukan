@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick, type Component, type Snippet } from 'svelte';
   import { readTheme, writeTheme, type Theme } from '../components/PreviewFrame/storage.js';
-  import type { Entry } from '../types.js';
+  import type { Entry, TailwindListItem } from '../types.js';
   import Detail from './Detail.svelte';
   import { formatHash, parseHash, type Route } from './hash.js';
   import { messages } from './i18n.js';
@@ -9,6 +9,7 @@
   import Preview from './Preview.svelte';
   import SearchDialog, { modifier } from './SearchDialog.svelte';
   import Sidebar from './Sidebar.svelte';
+  import Tailwind from './Tailwind.svelte';
 
   let {
     catalog,
@@ -19,6 +20,7 @@
     fixedTheme = null,
     searched,
     uncataloged = [],
+    tailwind = [],
     axe
   }: {
     catalog: Entry[];
@@ -31,6 +33,8 @@
     searched: { group: string; dirs: string[] }[];
     /** `.svelte` files with no catalog file next to them, relative to the Vite root */
     uncataloged?: { group: string; file: string }[];
+    /** the Tailwind CSS entries; empty without Tailwind */
+    tailwind?: TailwindListItem[];
     /** the source of axe-core, loaded on the first accessibility check */
     axe?: () => Promise<string>;
   } = $props();
@@ -60,12 +64,14 @@
 
   // a shared link's theme applies to this tab without replacing the one the viewer chose
   function themeOf(route: Route) {
-    return route.view === 'list' ? undefined : route.theme;
+    return route.view === 'list' || route.view === 'tailwind' ? undefined : route.theme;
   }
 
   const t = $derived(messages[locale]);
   const route = $derived(parseHash(hash));
-  const entry = $derived(route.view === 'list' ? undefined : catalog.find((e) => e.path === route.path));
+  const entry = $derived(
+    route.view === 'list' || route.view === 'tailwind' ? undefined : catalog.find((e) => e.path === route.path)
+  );
   const index = $derived(entry ? catalog.indexOf(entry) : -1);
   const previous = $derived(index > 0 ? catalog[index - 1] : undefined);
   const next = $derived(index === -1 ? (route.view === 'list' ? catalog[0] : undefined) : catalog[index + 1]);
@@ -142,14 +148,21 @@
     hash = next;
     theme = fixedTheme ?? themeOf(route) ?? theme;
     // the browser keeps the scroll position on a hash change; the previous page's position means nothing on the next
-    if (route.view === 'list' || (route.view === 'detail' && route.section === null)) tick().then(() => scrollTo(0, 0));
+    if (route.view === 'list' || route.view === 'tailwind' || (route.view === 'detail' && route.section === null))
+      tick().then(() => scrollTo(0, 0));
   }
 </script>
 
 <svelte:window {onhashchange} {onkeydown} />
 
 <svelte:head>
-  <title>{route.view === 'detail' && entry ? `${entry.name} | ${title}` : title}</title>
+  <title
+    >{route.view === 'detail' && entry
+      ? `${entry.name} | ${title}`
+      : route.view === 'tailwind' && tailwind.length
+        ? `Tailwind CSS | ${title}`
+        : title}</title
+  >
 </svelte:head>
 
 {#if route.view === 'preview'}
@@ -180,11 +193,15 @@
       ontoggletheme={fixedTheme ? undefined : toggleTheme}
       onshortcuts={() => shortcuts?.showModal()}
       onsearch={() => searchDialog?.open()}
+      {tailwind}
+      currentTailwind={route.view === 'tailwind' ? (route.source ?? tailwind[0]?.id) : undefined}
       {t}
     />
     <main id="zukan-main" tabindex="-1" bind:this={main}>
       {#if route.view === 'list'}
         <List entries={catalog} {searched} {uncataloged} {theme} {t} />
+      {:else if route.view === 'tailwind' && tailwind.length}
+        <Tailwind sources={tailwind} source={route.source} category={route.category} {theme} {locale} {t} />
       {:else if entry}
         <Detail
           bind:this={detail}

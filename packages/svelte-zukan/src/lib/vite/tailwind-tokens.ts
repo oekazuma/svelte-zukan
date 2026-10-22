@@ -199,7 +199,7 @@ export const CATEGORIES: readonly {
   { id: 'opacity', title: 'Opacity', stem: 'opacity', property: 'opacity', kind: 'box' },
   { id: 'breakpoints', title: 'Breakpoints', stem: 'breakpoint', property: '', kind: 'value' },
   { id: 'z-index', title: 'Z-index', stem: 'z', property: 'z-index', kind: 'value' },
-  { id: 'spacing', title: 'Spacing', stem: 'p', property: 'padding', kind: 'padding' }
+  { id: 'spacing', title: 'Spacing', stem: 'p', property: 'padding', kind: 'width' }
 ];
 
 // The shadow declarations are chains of `--tw-*` helpers; the rule's own helper holds the readable value.

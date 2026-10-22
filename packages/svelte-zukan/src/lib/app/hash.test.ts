@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatHash, parseHash } from './hash.js';
+import { formatHash, formatTailwindHash, parseHash } from './hash.js';
 
 describe('parseHash / formatHash', () => {
   it.each(['', '#', '#/'])('%j is the list', (hash) => {
@@ -73,5 +73,24 @@ describe('shared view', () => {
     const route = parseHash('#/ui/Card?width=-3&theme=blue');
     expect(route).toMatchObject({ width: undefined, theme: undefined });
     expect(parseHash('#/ui/Card?width=12.5')).toMatchObject({ width: undefined });
+  });
+});
+
+describe('the Tailwind page', () => {
+  it('parses the Tailwind page', () => {
+    expect(parseHash('#/tailwind?source=abc&category=spacing')).toEqual({
+      view: 'tailwind',
+      source: 'abc',
+      category: 'spacing'
+    });
+    expect(parseHash('#/tailwind')).toEqual({ view: 'tailwind', source: null, category: null });
+    expect(parseHash('#/tailwind/Button').view).toBe('detail');
+  });
+
+  it('round-trips a source and a category', () => {
+    expect(formatTailwindHash()).toBe('#/tailwind');
+    const hash = formatTailwindHash('a b', 'font-size');
+    expect(hash).toBe('#/tailwind?source=a%20b&category=font-size');
+    expect(parseHash(hash)).toEqual({ view: 'tailwind', source: 'a b', category: 'font-size' });
   });
 });
