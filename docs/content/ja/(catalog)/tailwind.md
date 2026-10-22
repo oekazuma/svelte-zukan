@@ -33,7 +33,7 @@ Tailwind が入っていない場合や Tailwind CSS v3 の場合は、ページ
 | 文字間隔、行の高さ                                 | `tracking-*` `leading-*`              |
 | ドロップシャドウ、ボックスシャドウ                 | `drop-shadow-*` `shadow-*`            |
 | 角丸、枠線の太さ、不透明度                         | `rounded-*` `border-*` `opacity-*`    |
-| 幅、高さ、z-index                                  | `w-*` `h-*` `z-*`                     |
+| 幅、高さ、重なり順（z-index）                      | `w-*` `h-*` `z-*`                     |
 | ブレークポイント                                   | `--breakpoint-*` の変数               |
 | スペーシング                                       | `--spacing` の基準値と `p-*` のクラス |
 
