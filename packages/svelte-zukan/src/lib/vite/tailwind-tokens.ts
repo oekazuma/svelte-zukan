@@ -107,19 +107,33 @@ function varName(inner: string): string {
   return (comma < 0 ? inner : inner.slice(0, comma)).trim();
 }
 
-/** replaces `var(--x)` with the known value, recursively; unknown variables and cycles stay as written */
+/**
+ * replaces `var(--x)` with the known value, recursively. An unknown variable (or a cycle) takes its fallback when it has
+ * one, so `var(--tw-shadow-color, rgb(0 0 0 / 0.1))` reads as the color; without a fallback it stays as written.
+ */
 export function resolveValue(value: string, known: Record<string, string>, seen: string[] = []): string {
   let out = '';
   let from = 0;
+  let fell = false;
   for (;;) {
     const at = value.indexOf('var(', from);
     const close = at < 0 ? -1 : closeParen(value, at + 3);
-    if (close < 0) return out + value.slice(from);
-    const name = varName(value.slice(at + 4, close));
-    const replace = Object.hasOwn(known, name) && !seen.includes(name);
-    out +=
-      value.slice(from, at) +
-      (replace ? resolveValue(known[name], known, [...seen, name]) : value.slice(at, close + 1));
+    if (close < 0) {
+      out += value.slice(from);
+      // an empty fallback (`var(--tw-blur,)`) leaves a doubled space behind
+      return fell ? out.replace(/\s+/g, ' ').trim() : out;
+    }
+    const inner = value.slice(at + 4, close);
+    const name = varName(inner);
+    const comma = inner.indexOf(',');
+    let text = value.slice(at, close + 1);
+    if (Object.hasOwn(known, name) && !seen.includes(name)) {
+      text = resolveValue(known[name], known, [...seen, name]);
+    } else if (comma >= 0) {
+      text = resolveValue(inner.slice(comma + 1).trim(), known, seen);
+      fell = true;
+    }
+    out += value.slice(from, at) + text;
     from = close + 1;
   }
 }
@@ -232,7 +246,7 @@ export function extractTokens(
 
   const themeIndex = new Map(Object.keys(variables).map((key, i) => [key, i]));
   const byCategory = new Map<TailwindCategoryId, TailwindToken[]>();
-  for (const { id, stem, property, namespace } of stems) {
+  for (const { id, stem, property, namespace, kind } of stems) {
     const tokens: [index: number, TailwindToken][] = [];
     for (const name of names) {
       if (!matches(name, stem)) continue;
@@ -252,9 +266,12 @@ export function extractTokens(
       tokens.push([themeIndex.get(key) ?? -1, t]);
     }
     // stable: tokens outside the theme (`p-4`, `rounded-full`, `shadow-none`) stay first, in class-list order
+    const sorted = tokens.sort((a, b) => a[0] - b[0]).map(([, t]) => t);
+    // `current`, `inherit` and `transparent` are no theme colors: they go after the palette
+    const keyword = (t: TailwindToken) => /^(currentcolor|inherit|transparent)$/i.test(t.value);
     byCategory.set(
       id,
-      tokens.sort((a, b) => a[0] - b[0]).map(([, t]) => t)
+      kind.endsWith('color') ? [...sorted.filter((t) => !keyword(t)), ...sorted.filter(keyword)] : sorted
     );
   }
 

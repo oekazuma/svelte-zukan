@@ -66,6 +66,14 @@ describe('extractTokens', () => {
     expect(drop?.value).not.toContain('var(--tw-blur');
   });
 
+  it('shows fallbacks instead of unknown variables', async () => {
+    const { token } = await load('@import "tailwindcss";');
+    const box = token('box-shadow', 'shadow-md')?.value;
+    expect(box).toContain('rgb(0 0 0 / 0.1)');
+    expect(box).not.toContain('var(--tw-shadow-color');
+    expect(token('drop-shadow', 'drop-shadow-md')?.value).not.toContain('var(');
+  });
+
   it('collapses line breaks and indentation in values', async () => {
     const { result, token } = await load('@import "tailwindcss";');
     const family = token('font-family', 'font-mono');
@@ -84,6 +92,23 @@ describe('extractTokens', () => {
   });
 
   describe('order', () => {
+    it('lists keyword colors after the theme colors', async () => {
+      const { result } = await load('@import "tailwindcss";');
+      for (const [id, stem] of [
+        ['background-color', 'bg'],
+        ['text-color', 'text'],
+        ['border-color', 'border']
+      ] as const) {
+        const tokens = result.categories.find((c) => c.id === id)?.tokens ?? [];
+        expect(tokens[0].class).toBe(`${stem}-red-50`);
+        expect(tokens.slice(-3).map((t) => t.class)).toEqual([
+          `${stem}-current`,
+          `${stem}-inherit`,
+          `${stem}-transparent`
+        ]);
+      }
+    });
+
     const classes = (result: Awaited<ReturnType<typeof load>>['result'], id: TailwindCategoryId) =>
       result.categories.find((c) => c.id === id)?.tokens.map((t) => t.class ?? t.cssVariable) ?? [];
 
@@ -227,6 +252,22 @@ describe('resolveValue', () => {
     expect(resolveValue('var(--a)', { '--a': 'var(--b)', '--b': 'red' })).toBe('red');
     expect(resolveValue('calc(var(--s) * 4)', { '--s': '0.25rem' })).toBe('calc(0.25rem * 4)');
     expect(resolveValue('var(--x)', { '--x': 'var(--x)' })).toBe('var(--x)');
-    expect(resolveValue('var(--u, 1px)', {})).toBe('var(--u, 1px)');
+  });
+
+  it('takes the fallback of an unknown variable', () => {
+    expect(resolveValue('0 1px var(--u, rgb(0 0 0 / 0.1)), 0 2px var(--u, red)', {})).toBe(
+      '0 1px rgb(0 0 0 / 0.1), 0 2px red'
+    );
+    expect(resolveValue('var(--a, var(--b, red))', {})).toBe('red');
+    expect(resolveValue('var(--a, var(--b, red))', { '--b': 'blue' })).toBe('blue');
+    expect(resolveValue('var(--a, calc(var(--s) * 2))', { '--s': '1px' })).toBe('calc(1px * 2)');
+    expect(resolveValue('blur(2px) var(--tw-blur,) var(--tw-x, )', {})).toBe('blur(2px)');
+    expect(resolveValue('var(--x, 1px)', { '--x': 'var(--x)' })).toBe('var(--x)');
+  });
+
+  it('keeps an unknown variable without a fallback', () => {
+    expect(resolveValue('var(--u)', {})).toBe('var(--u)');
+    expect(resolveValue('1px var(--u) var(--v, 2px)', {})).toBe('1px var(--u) 2px');
+    expect(resolveValue('var(--x)', { '--x': 'var(--x)' })).toBe('var(--x)');
   });
 });
