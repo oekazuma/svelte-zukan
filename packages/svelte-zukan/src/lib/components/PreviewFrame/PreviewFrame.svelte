@@ -758,6 +758,18 @@
     .label {
       display: none;
     }
+
+    /* the wrapped row of tools reads as one evenly spaced set, and the link is an icon like the others */
+    .toolbar {
+      column-gap: 2px;
+    }
+
+    .toolbar a {
+      justify-content: center;
+      width: 30px;
+      height: 28px;
+      padding: 0;
+    }
   }
 
   .stage {
