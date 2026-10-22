@@ -23,9 +23,16 @@
   // svelte-ignore state_referenced_locally
   if (section !== null) setContext(PREVIEW_SECTION_KEY, section);
 
-  // a preview opened in its own tab has no catalog page to set it; inside the catalog, the frame sets the same value
+  // a preview opened in its own tab has no catalog page to set it. Inside the catalog the frame sets it, and it can
+  // differ from the stored one (a shared link's theme), so the stored one must not override it once this mounts
+  let framed = false;
+  try {
+    framed = window !== parent && parent.location.pathname === location.pathname;
+  } catch {
+    // a cross-origin parent is not the catalog
+  }
   // svelte-ignore state_referenced_locally
-  const stored = theme ?? readTheme();
+  const stored = theme ?? (framed ? null : readTheme());
   if (stored) {
     document.documentElement.style.colorScheme = stored;
     document.documentElement.style.backgroundColor = BACKGROUNDS[stored];

@@ -78,6 +78,21 @@ describe('App', () => {
     }
   });
 
+  it('a preview inside the catalog leaves the theme to its frame', async () => {
+    localStorage.setItem('svelte-zukan:theme', 'dark');
+    // the catalog page that frames it: same path, another window
+    vi.stubGlobal('parent', { location: { pathname: location.pathname } });
+    try {
+      const { props } = setup('#/preview/ui/Card?section=Two');
+      const screen = await render(App, { props });
+      await expect.element(screen.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+      expect(document.documentElement.style.colorScheme).toBe('');
+    } finally {
+      vi.unstubAllGlobals();
+      localStorage.removeItem('svelte-zukan:theme');
+    }
+  });
+
   it('shows the logo image with the title as its alt text', async () => {
     const { props } = setup('');
     props.logo = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E';
