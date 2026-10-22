@@ -18,8 +18,10 @@ type AxeWindow = Window & {
   };
 };
 
-/** Runs axe-core inside a preview page, injecting its source on the first run, and returns the violations. */
+/** Runs axe-core inside a preview page, or throws the preview's own error when it failed to load, injecting its source on the first run, and returns the violations. */
 export async function runAxe(doc: Document, source: () => Promise<string>): Promise<Violation[]> {
+  const failed = doc.querySelector('[data-zukan-error]');
+  if (failed) throw new Error(failed.textContent ?? '');
   const win = doc.defaultView as AxeWindow;
   if (!win.axe) {
     const script = doc.createElement('script');

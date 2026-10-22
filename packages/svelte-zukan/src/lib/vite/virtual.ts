@@ -28,6 +28,27 @@ export function generateCatalogModule(
   );
 }
 
+/**
+ * Part of the entry module, exported so that a test can run it in a page. A deploy deletes the previous build's
+ * chunks, which a page loaded from a cached index.html still asks for; Vite's preload helper then fires
+ * `vite:preloadError`, and the top catalog page reloads once.
+ */
+export const RELOAD_ON_PRELOAD_ERROR = [
+  `const inPreview = () => {`,
+  `  try { return window !== parent && parent.location.pathname === location.pathname; } catch { return false; }`,
+  `};`,
+  `window.addEventListener('vite:preloadError', (event) => {`,
+  // without storage there is no guard against a reload loop, so the error shows instead
+  `  try {`,
+  `    if (Date.now() - Number(sessionStorage.getItem('svelte-zukan:reloaded')) < 10000) return;`,
+  `    sessionStorage.setItem('svelte-zukan:reloaded', String(Date.now()));`,
+  `  } catch { return; }`,
+  // a prevented error resolves the import to undefined, which is only harmless when the page goes away
+  `  event.preventDefault();`,
+  `  (inPreview() ? parent : window).location.reload();`,
+  `});`
+].join('\n');
+
 export function generateEntryModule(opts: {
   appFile: string;
   logo: string | null;
@@ -44,11 +65,10 @@ export function generateEntryModule(opts: {
   return [
     `import { mount } from 'svelte';`,
     ...(opts.logo ? [`import logo from ${s(opts.logo + '?url')};`] : []),
+    RELOAD_ON_PRELOAD_ERROR,
     // a preview iframe is recreated when its catalog page reloads; any other page (a tab, an editor's iframe) reloads itself
     `if (import.meta.hot) import.meta.hot.on('zukan:reload', () => {`,
-    `  let preview = false;`,
-    `  try { preview = window !== parent && parent.location.pathname === location.pathname; } catch {}`,
-    `  if (!preview) location.reload();`,
+    `  if (!inPreview()) location.reload();`,
     `});`,
     `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)})]).then(([{ default: App }, { catalog, uncataloged }]) =>`,
     `  mount(App, {`,

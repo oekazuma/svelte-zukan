@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { META, generateCatalogModule, generateEntryModule, metaId, pathOfMeta } from './virtual.js';
+import {
+  META,
+  RELOAD_ON_PRELOAD_ERROR,
+  generateCatalogModule,
+  generateEntryModule,
+  metaId,
+  pathOfMeta
+} from './virtual.js';
 
 describe('generateCatalogModule', () => {
   it('lists items with lazy imports', () => {
@@ -47,6 +54,15 @@ describe('generateEntryModule', () => {
     expect(listen).toBeLessThan(code.indexOf('import("virtual:svelte-zukan/catalog")'));
     expect(listen).toBeLessThan(code.indexOf('import("/lib/app/App.svelte")'));
     expect(code).not.toMatch(/^import .* from "(virtual:svelte-zukan\/catalog|\/lib\/app\/App\.svelte)"/m);
+  });
+
+  it('reloads on a preload error outside the dev-only block, before loading anything', () => {
+    const code = generateEntryModule({ ...base, logo: null, wrapper: null });
+    const listen = code.indexOf(RELOAD_ON_PRELOAD_ERROR);
+    expect(listen).toBeGreaterThan(-1);
+    expect(listen).toBeLessThan(code.indexOf('import.meta.hot'));
+    expect(listen).toBeLessThan(code.indexOf('import("/lib/app/App.svelte")'));
+    expect(RELOAD_ON_PRELOAD_ERROR).toContain("window.addEventListener('vite:preloadError'");
   });
 
   it('passes null without a logo or a wrapper', () => {

@@ -368,6 +368,18 @@ describe('PreviewFrame resizing', () => {
     await expect.element(screen.getByText('Could not run the check: boom')).toBeInTheDocument();
   });
 
+  it('reports a preview that failed to load instead of checking its error message', async () => {
+    const axe = vi.fn(() => Promise.resolve('window.axe = { run: async () => ({ violations: [] }) };'));
+    const screen = await render(PreviewFrame, { props: { ...props, axe } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    frame.contentDocument!.body.innerHTML =
+      '<div data-zukan-preview><p data-zukan-error>Failed to load: boom</p></div>';
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.element(screen.getByText('Could not run the check: Failed to load: boom')).toBeInTheDocument();
+    expect(axe).not.toHaveBeenCalled();
+  });
+
   it('has no accessibility button without axe-core', async () => {
     const screen = await render(PreviewFrame, { props });
     await expect.element(screen.getByRole('button', { name: 'Show outlines' })).toBeInTheDocument();
