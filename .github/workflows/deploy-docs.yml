@@ -8,6 +8,7 @@ on:
       - 'docs/**'
       # the demo catalog is the library's own catalog
       - 'packages/svelte-zukan/**'
+      - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
 permissions:
