@@ -12,6 +12,8 @@
     sources,
     source,
     category,
+    query,
+    onquery,
     theme,
     locale,
     t
@@ -20,6 +22,9 @@
     sources: TailwindListItem[];
     source: string | null;
     category: string | null;
+    /** the filter, kept in the route so a search result can open the page filtered */
+    query: string;
+    onquery: (query: string) => void;
     theme: Theme;
     locale: 'en' | 'ja';
     t: Messages;
@@ -69,7 +74,6 @@
   const id = $props.id();
   const kind = $derived(CATEGORIES.find((c) => c.id === selected?.id)?.kind ?? 'value');
 
-  let query = $state('');
   // the dictionary never changes while the catalog runs
   // svelte-ignore state_referenced_locally
   let sampleText = $state(t.sampleTextValue);
@@ -141,7 +145,7 @@
       {#snippet link(category: keyof typeof titles, count: number)}
         <!-- the catalog is a hash-routed SPA outside SvelteKit, so resolve() does not apply -->
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-        <a href={formatTailwindHash(item.id, category)} aria-current={category === current ? 'page' : undefined}>
+        <a href={formatTailwindHash(item.id, category, query)} aria-current={category === current ? 'page' : undefined}>
           <span>{titles[category]}</span>
           <!-- the link is named by its category alone -->
           <span class="count" aria-hidden="true">{count}</span>
@@ -166,7 +170,7 @@
         <select
           aria-label={t.tailwindCategories}
           value={current}
-          onchange={(e) => (location.hash = formatTailwindHash(item.id, e.currentTarget.value))}
+          onchange={(e) => (location.hash = formatTailwindHash(item.id, e.currentTarget.value, query))}
         >
           {#each groups as group (group.title)}
             <optgroup label={group.title}>
@@ -181,7 +185,8 @@
         <div class="controls">
           <input
             type="search"
-            bind:value={query}
+            value={query}
+            oninput={(e) => onquery(e.currentTarget.value)}
             placeholder={t.filterTokens}
             aria-label={t.filterTokens}
             autocomplete="off"

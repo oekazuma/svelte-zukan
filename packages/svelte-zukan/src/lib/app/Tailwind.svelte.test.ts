@@ -378,6 +378,28 @@ describe('the Tailwind CSS page', () => {
     await expect.poll(() => doc.body.textContent).toContain('No matching tokens');
   });
 
+  it('keeps the filter in the route without adding history entries', async () => {
+    const screen = await render(App, { props: props('#/tailwind?source=app&q=brand') });
+    const { doc } = await frame(screen.container);
+    const filter = screen.getByRole('searchbox', { name: 'Filter tokens' });
+    await expect.element(filter).toHaveValue('brand');
+    await expect.poll(() => tokenTexts(doc)).toEqual(['bg-brand-500']);
+    const entries = history.length;
+    await filter.fill('white');
+    await expect.poll(() => tokenTexts(doc)).toEqual(['bg-white']);
+    expect(location.hash).toBe('#/tailwind?source=app&q=white');
+    expect(history.length).toBe(entries);
+    const link = screen.getByRole('link', { name: 'Font Size' });
+    await expect.element(link).toHaveAttribute('href', '#/tailwind?source=app&category=font-size&q=white');
+    await link.click();
+    await expect.poll(() => location.hash).toBe('#/tailwind?source=app&category=font-size&q=white');
+    await expect.element(filter).toHaveValue('white');
+    await setHash('#/tailwind?source=app&category=background-color&q=brand');
+    await expect.element(filter).toHaveValue('brand');
+    await filter.fill('');
+    expect(location.hash).toBe('#/tailwind?source=app&category=background-color');
+  });
+
   it('copies the class name', async () => {
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
     try {

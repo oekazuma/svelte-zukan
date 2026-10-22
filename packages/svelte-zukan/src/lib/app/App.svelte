@@ -3,7 +3,7 @@
   import { readTheme, writeTheme, type Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry, TailwindListItem } from '../types.js';
   import Detail from './Detail.svelte';
-  import { formatHash, parseHash, type Route } from './hash.js';
+  import { formatHash, formatTailwindHash, parseHash, type Route } from './hash.js';
   import { messages } from './i18n.js';
   import List from './List.svelte';
   import Preview from './Preview.svelte';
@@ -136,6 +136,13 @@
     location.hash = formatHash('detail', to.path);
   }
 
+  // a replaced entry, not a new one per keystroke; replaceState fires no hashchange, so the route is set here too
+  function filterTailwind(query: string) {
+    if (route.view !== 'tailwind') return;
+    hash = formatTailwindHash(route.source ?? undefined, route.category ?? undefined, query);
+    history.replaceState(history.state, '', hash);
+  }
+
   // components in a preview and links in a doc can change the hash too; only catalog routes navigate
   function onhashchange() {
     const next = location.hash;
@@ -202,7 +209,16 @@
       {#if route.view === 'list'}
         <List entries={catalog} {searched} {uncataloged} {tailwind} {theme} {t} />
       {:else if route.view === 'tailwind' && tailwind.length}
-        <Tailwind sources={tailwind} source={route.source} category={route.category} {theme} {locale} {t} />
+        <Tailwind
+          sources={tailwind}
+          source={route.source}
+          category={route.category}
+          query={route.q ?? ''}
+          onquery={filterTailwind}
+          {theme}
+          {locale}
+          {t}
+        />
       {:else if entry}
         <Detail
           bind:this={detail}
@@ -246,7 +262,7 @@
       </dl>
       <form method="dialog"><button>{t.close}</button></form>
     </dialog>
-    <SearchDialog bind:this={searchDialog} entries={catalog} {t} />
+    <SearchDialog bind:this={searchDialog} entries={catalog} {tailwind} {locale} {t} />
   </div>
 {/if}
 

@@ -7,7 +7,7 @@ export type Route =
   | { view: 'list' }
   | ({ view: 'detail'; path: string; section: string | null } & View)
   | ({ view: 'preview'; path: string; section: string | null } & View)
-  | { view: 'tailwind'; source: string | null; category: string | null };
+  | { view: 'tailwind'; source: string | null; category: string | null; q: string | null };
 
 const PREVIEW = 'preview/';
 // a single segment, while every component ID has a group prefix
@@ -33,14 +33,15 @@ function viewOf(params: URLSearchParams): View {
   };
 }
 
-/** `#/<ID>[?section=<title>]`, `#/preview/<ID>[?section=<title>]` or `#/tailwind[?source=<id>&category=<id>]`; IDs encode `?` per segment, so the first `?` starts the query */
+/** `#/<ID>[?section=<title>]`, `#/preview/<ID>[?section=<title>]` or `#/tailwind[?source=<id>&category=<id>&q=<filter>]`; IDs encode `?` per segment, so the first `?` starts the query */
 export function parseHash(hash: string): Route {
   const raw = hash.replace(/^#\/?/, '');
   const q = raw.indexOf('?');
   const rawPath = q === -1 ? raw : raw.slice(0, q);
   const params = new URLSearchParams(q === -1 ? '' : raw.slice(q + 1));
   const section = params.get('section');
-  if (rawPath === TAILWIND) return { view: 'tailwind', source: params.get('source'), category: params.get('category') };
+  if (rawPath === TAILWIND)
+    return { view: 'tailwind', source: params.get('source'), category: params.get('category'), q: params.get('q') };
   if (rawPath.startsWith(PREVIEW)) {
     const path = rawPath.slice(PREVIEW.length).split('/').map(decode).join('/');
     return { view: 'preview', path, section, ...viewOf(params) };
@@ -61,10 +62,11 @@ export function formatHash(view: 'detail' | 'preview', path: string, section?: s
   return `#/${view === 'preview' ? PREVIEW : ''}${encodePath(path)}${q && `?${q}`}`;
 }
 
-export function formatTailwindHash(source?: string, category?: string): string {
+export function formatTailwindHash(source?: string, category?: string, filter?: string): string {
   const params = new URLSearchParams();
   if (source !== undefined) params.set('source', source);
   if (category !== undefined) params.set('category', category);
+  if (filter) params.set('q', filter);
   const q = query(params);
   return `#/${TAILWIND}${q && `?${q}`}`;
 }
