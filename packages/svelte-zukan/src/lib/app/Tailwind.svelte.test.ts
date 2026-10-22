@@ -306,6 +306,36 @@ describe('the Tailwind CSS page', () => {
     expect(width('--breakpoint-sm')).toBeCloseTo(full, 0);
   });
 
+  it('draws long widths across the row, and marks a bar cut off by it', async () => {
+    const widths: TailwindSource = {
+      ...source,
+      categories: [
+        {
+          id: 'width',
+          title: 'Width',
+          tokens: [
+            { class: 'w-64', cssVariable: null, value: 'calc(0.25rem * 64)' },
+            { class: 'w-96', cssVariable: null, value: 'calc(0.25rem * 96)' },
+            { class: 'w-7xl', cssVariable: '--container-7xl', value: '80rem' },
+            { class: 'w-full', cssVariable: null, value: '100%' }
+          ]
+        }
+      ]
+    };
+    const screen = await render(App, { props: props('#/tailwind', [item(widths)]) });
+    const { doc } = await frame(screen.container);
+    const bar = (token: string) => doc.querySelector<HTMLElement>(`[data-token="${token}"] .zukan-bar`);
+    await expect.poll(() => bar('w-96')?.getBoundingClientRect().width).toBe(384);
+    expect(bar('w-64')!.getBoundingClientRect().width).toBe(256);
+    expect(bar('w-96')!.hasAttribute('data-cut')).toBe(false);
+    // 1280px does not fit: the bar ends at the track with a fading end
+    await expect.poll(() => bar('w-7xl')!.hasAttribute('data-cut')).toBe(true);
+    expect(getComputedStyle(bar('w-7xl')!).maskImage).toContain('linear-gradient');
+    expect(bar('w-7xl')!.getBoundingClientRect().width).toBeLessThan(1280);
+    // a width that follows the frame is not drawn
+    expect(doc.querySelector('[data-token="w-full"] .zukan-sample')).toBeNull();
+  });
+
   it('filters by class name and value', async () => {
     const screen = await render(App, { props: props('#/tailwind') });
     const { doc } = await frame(screen.container);

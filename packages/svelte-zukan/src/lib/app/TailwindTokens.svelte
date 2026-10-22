@@ -60,6 +60,8 @@
   const text = $derived(kind === 'text' || kind === 'text-color');
   const rows = $derived(ROWS.includes(category.id));
   const sampled = $derived(category.id !== 'z-index');
+  /** a length drawn as a bar across the whole row */
+  const bars = $derived(['spacing', 'width', 'height'].includes(category.id));
 
   /** px by token, for the values that do not depend on the frame */
   let measured = $state.raw<Record<string, number>>({});
@@ -85,6 +87,20 @@
       probe.remove();
     }
     measured = out;
+  }
+
+  /** marks a bar longer than its track, which is capped at the track and would otherwise look like an exact fit */
+  function cutOff(px: number) {
+    return (bar: HTMLElement) => {
+      const track = bar.parentElement!;
+      const observer = new ResizeObserver(() => {
+        const style = getComputedStyle(track);
+        const room = track.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        bar.toggleAttribute('data-cut', px > room + 0.5);
+      });
+      observer.observe(track);
+      return () => observer.disconnect();
+    };
   }
 
   function computed(token: TailwindToken): string | null {
@@ -181,7 +197,7 @@
     <div class={['zukan-shape', token.class]}></div>
   {:else if px !== undefined}
     <!-- Width, Height and Spacing draw the length as a bar; a value that follows the frame has none -->
-    <div class="zukan-bar" style:width={token.value}></div>
+    <div class="zukan-bar" style:width={token.value} {@attach cutOff(px)}></div>
   {/if}
 {/snippet}
 
@@ -192,10 +208,11 @@
   {#if !tokens.length}
     <p class="zukan-empty">{t.noTokens}</p>
   {:else if rows}
-    <ul class={['zukan-rows', !sampled && 'zukan-bare']}>
+    <ul class={['zukan-rows', !sampled && 'zukan-bare', bars && 'zukan-bars']}>
       {#each tokens as token (key(token))}
         <li class="zukan-row" data-token={key(token)}>
-          {#if sampled}
+          <!-- a length that follows the frame has no bar, and so no panel to draw it in -->
+          {#if sampled && !(bars && measured[key(token)!] === undefined)}
             <div class="zukan-sample zukan-{category.id}">{@render rowSample(token)}</div>
           {/if}
           <div class="zukan-names">{@render names(token)}</div>
@@ -382,6 +399,17 @@
     }
   }
 
+  /* the bar takes the row's whole width under its names, so long lengths stay apart */
+  .zukan-bars .zukan-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'names value' 'sample sample';
+  }
+
+  .zukan-bars .zukan-values {
+    justify-self: end;
+    text-align: right;
+  }
+
   /* one height for every row; larger samples are clipped, their size is in the value column */
   .zukan-row .zukan-sample {
     grid-area: sample;
@@ -413,10 +441,21 @@
     background: #3b82f6;
   }
 
+  .zukan-bars .zukan-sample {
+    height: 32px;
+  }
+
   .zukan-bar {
+    max-width: 100%;
     height: 16px;
     border-radius: 2px;
     background: #3b82f6;
+  }
+
+  /* a fading end over the last stretch of the track; `data-cut` is set by `cutOff`, outside the markup */
+  .zukan-bar:global([data-cut]) {
+    border-radius: 2px 0 0 2px;
+    mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
   }
 
   .zukan-shape {
