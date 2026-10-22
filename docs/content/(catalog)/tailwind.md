@@ -25,7 +25,7 @@ What the page lists is everything Tailwind resolves from the entry: its defaults
 
 The categories are a list on the left, grouped as Colors, Spacing & sizing, Typography, Borders, Effects and Layout, then **Full config**, each with its token count. On a narrow page the list becomes a select above the tokens. With no category chosen, the first one in the list opens.
 
-Tokens come in the theme's order: sizes from small to large, and the default palette in Tailwind's order, with your own colors after the defaults (the filter finds them). The categories:
+Tokens come in the theme's order: sizes from small to large, and the default palette in Tailwind's order, with your own colors after the defaults (the filter finds them). In the color categories, `current`, `inherit` and `transparent` come after the theme colors. The categories:
 
 | Category                                   | Class                                      |
 | ------------------------------------------ | ------------------------------------------ |
@@ -41,7 +41,7 @@ Tokens come in the theme's order: sizes from small to large, and the default pal
 
 A category with no token is left out. **Full config** is a table of every theme variable and its value.
 
-Each token is a card with a live sample, its class and its CSS variable, and the value it resolves to, such as `calc(0.25rem * 4)` for `p-4`. The class and the variable each have a button that copies the name. With a Tailwind `prefix`, the classes carry it (`tw:bg-brand-500`). Breakpoints and the spacing base are no classes, so they show the variable only. A token shows a variable when its class reads one, or, for an `@theme inline` token, when a theme variable holds the same value.
+Each token has a live sample, its class and its CSS variable, and the value it resolves to. A size also shows its computed size in px, such as `calc(0.25rem * 4) · 16px` for `p-4`. A `var()` that the theme does not define is shown as its fallback when it has one (a shadow reads `0 4px 6px -1px rgb(0 0 0 / 0.1), …`), and as written otherwise. An empty value is shown as `none`. The class and the variable each have a button that copies the name. With a Tailwind `prefix`, the classes carry it (`tw:bg-brand-500`). Breakpoints and the spacing base are no classes, so they show the variable only. A token shows a variable when its class reads one, or, for an `@theme inline` token, when a theme variable holds the same value.
 
 - **Filter**: the box above the cards keeps the tokens whose class, variable or value contains the text
 - **Sample text**: the text categories (Text Color, Font Size, Font Weight, Font Family, Letter Spacing, Line Height) have a field for the text the samples show
@@ -49,6 +49,13 @@ Each token is a card with a live sample, its class and its CSS variable, and the
 Each category lists one class per token, not every utility a token feeds. Colors appear as `bg-*`, `text-*` and `border-*` only, not as `ring-*`, `fill-*` and so on.
 
 ### The samples
+
+Colors and text are cards. Shadows are cards too, drawn on a grey panel. The size categories (Padding, Margin, Spacing, Width, Height, Border Width, Border Radius, Opacity, Breakpoints, Z-index) are compact rows, so sizes can be compared at a glance:
+
+- **Padding and Margin** show the space around a block
+- **Width, Height and Spacing** draw a bar at its real size. A bar longer than the row fades out at its end. A value that follows the frame, such as `100%` or `100vh`, has no bar
+- **Breakpoints** are bars proportional to their width
+- **Z-index** has no sample, only the names and the value
 
 The samples are drawn in a frame of their own, built from the CSS Tailwind generates for the entry: the theme variables, the entry's own rules, and its preflight. Nothing from the catalog reaches the samples, and Tailwind's CSS does not reach the catalog or your component previews.
 
