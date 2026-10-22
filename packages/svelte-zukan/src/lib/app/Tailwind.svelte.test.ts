@@ -171,6 +171,44 @@ describe('the Tailwind CSS page', () => {
     }
   });
 
+  it('shows a failed copy on the button and announces it', async () => {
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
+    try {
+      const screen = await render(App, { props: props('#/tailwind') });
+      const { doc } = await frame(screen.container);
+      const button = doc.querySelector<HTMLButtonElement>('button[aria-label="Copy class: bg-brand-500"]')!;
+      button.click();
+      await expect.poll(() => button.textContent).toContain('Copy failed');
+      expect(button.classList.contains('zukan-failed')).toBe(true);
+      expect(doc.querySelector('[aria-live="polite"]')!.textContent).toBe('Copy failed');
+    } finally {
+      writeText.mockRestore();
+    }
+  });
+
+  it('shows the last selected entry when an earlier load finishes later', async () => {
+    const deferred = () => {
+      let resolve!: (value: { default: TailwindSource }) => void;
+      const promise = new Promise<{ default: TailwindSource }>((r) => (resolve = r));
+      return { promise, resolve };
+    };
+    const first = deferred();
+    const second = deferred();
+    const other = { ...source, id: 'other', file: 'src/other.css', version: '4.9.9' };
+    const tailwind = [
+      { ...item(source), load: () => first.promise },
+      { ...item(other), load: () => second.promise }
+    ];
+    const screen = await render(App, { props: props('#/tailwind?source=app', tailwind) });
+    await setHash('#/tailwind?source=other');
+    second.resolve({ default: other });
+    await expect.element(screen.getByRole('main').getByText('v4.9.9', { exact: false })).toBeInTheDocument();
+    first.resolve({ default: source });
+    await new Promise((r) => setTimeout(r, 50));
+    await expect.element(screen.getByRole('main').getByText('v4.9.9', { exact: false })).toBeInTheDocument();
+    await expect.element(screen.getByRole('link', { name: 'Background Color' })).toBeInTheDocument();
+  });
+
   it('keeps samples light in the dark catalog theme', async () => {
     localStorage.setItem('svelte-zukan:theme', 'dark');
     // the catalog page sets it from its theme; here App is rendered into a container, which that rule does not match

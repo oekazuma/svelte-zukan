@@ -45,8 +45,18 @@
 </script>
 
 {#snippet copyButton(label: string, value: string)}
-  <button type="button" class="zukan-copy" aria-label="{label}: {value}" title={label} onclick={() => copy(value)}>
+  {@const failed = copied?.text === value && !copied.ok}
+  <button
+    type="button"
+    class={['zukan-copy', failed && 'zukan-failed']}
+    aria-label="{label}: {value}"
+    title={label}
+    onclick={() => copy(value)}
+  >
     <code>{value}</code>
+    {#if failed}
+      <span class="zukan-status">{t.copyFailed}</span>
+    {/if}
     <svg
       width="14"
       height="14"
@@ -117,6 +127,7 @@
     --_accent: #0969da;
     --_code-bg: #f6f8fa;
     --_success: #1a7f37;
+    --_danger: #cf222e;
 
     color: var(--_text);
     font-family: system-ui, sans-serif;
@@ -132,6 +143,7 @@
     --_accent: #4493f8;
     --_code-bg: #151b23;
     --_success: #3fb950;
+    --_danger: #ff7b72;
   }
 
   .zukan-cards {
@@ -280,6 +292,15 @@
   .zukan-copy:focus-visible {
     outline: 2px solid var(--_accent);
     outline-offset: 1px;
+  }
+
+  .zukan-failed {
+    border-color: var(--_danger);
+    color: var(--_danger);
+  }
+
+  .zukan-status {
+    font-size: 12px;
   }
 
   .zukan-copy svg {

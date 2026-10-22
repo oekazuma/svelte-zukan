@@ -38,10 +38,17 @@
   $effect(() => {
     const current = item;
     if (current.error) return;
+    // a load that finishes after another entry was selected must not replace that entry's
+    let stale = false;
     current.load().then(
-      ({ default: data }) => (loaded = { item: current, data }),
-      (e) => (loaded = { item: current, error: e instanceof Error ? e.message : String(e) })
+      ({ default: data }) => {
+        if (!stale) loaded = { item: current, data };
+      },
+      (e) => {
+        if (!stale) loaded = { item: current, error: e instanceof Error ? e.message : String(e) };
+      }
     );
+    return () => (stale = true);
   });
   const data = $derived(loaded?.item === item ? loaded.data : undefined);
   const error = $derived(item.error ?? (loaded?.item === item ? (loaded.error ?? loaded.data?.error) : undefined));
