@@ -83,6 +83,63 @@ describe('extractTokens', () => {
     });
   });
 
+  describe('order', () => {
+    const classes = (result: Awaited<ReturnType<typeof load>>['result'], id: TailwindCategoryId) =>
+      result.categories.find((c) => c.id === id)?.tokens.map((t) => t.class ?? t.cssVariable) ?? [];
+
+    it("follows the theme's scale, not the alphabet", async () => {
+      const { result } = await load('@import "tailwindcss";');
+      expect(classes(result, 'font-size').slice(0, 6)).toEqual([
+        'text-xs',
+        'text-sm',
+        'text-base',
+        'text-lg',
+        'text-xl',
+        'text-2xl'
+      ]);
+      expect(classes(result, 'font-weight').slice(0, 3)).toEqual(['font-thin', 'font-extralight', 'font-light']);
+      expect(classes(result, 'letter-spacing')[0]).toBe('tracking-tighter');
+      expect(classes(result, 'line-height').slice(-5)).toEqual([
+        'leading-tight',
+        'leading-snug',
+        'leading-normal',
+        'leading-relaxed',
+        'leading-loose'
+      ]);
+      expect(classes(result, 'border-radius').filter((c) => c !== 'rounded-full' && c !== 'rounded-none')).toEqual(
+        ['xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl'].map((size) => `rounded-${size}`)
+      );
+      expect(classes(result, 'box-shadow').slice(0, 7)).toEqual([
+        'shadow',
+        'shadow-none',
+        'shadow-2xs',
+        'shadow-xs',
+        'shadow-sm',
+        'shadow-md',
+        'shadow-lg'
+      ]);
+      expect(classes(result, 'drop-shadow')).toEqual(
+        ['none', 'xs', 'sm', 'md', 'lg', 'xl', '2xl'].map((size) => `drop-shadow-${size}`)
+      );
+      expect(classes(result, 'breakpoints')).toEqual(
+        ['sm', 'md', 'lg', 'xl', '2xl'].map((size) => `--breakpoint-${size}`)
+      );
+    });
+
+    it('lists project colors in their @theme order and leaves spacing scales alone', async () => {
+      const { result } = await load('@import "tailwindcss"; @theme { --color-zeta: red; --color-alpha: blue; }');
+      const colors = classes(result, 'background-color');
+      expect(colors.indexOf('bg-zeta')).toBe(colors.indexOf('bg-alpha') - 1);
+      expect(colors.slice(colors.indexOf('bg-red-50'), colors.indexOf('bg-red-50') + 3)).toEqual([
+        'bg-red-50',
+        'bg-red-100',
+        'bg-red-200'
+      ]);
+      expect(classes(result, 'padding').slice(0, 5)).toEqual(['p-0', 'p-0.5', 'p-1', 'p-1.5', 'p-2']);
+      expect(classes(result, 'spacing')[0]).toBe('--spacing');
+    });
+  });
+
   it('drops empty categories', async () => {
     const { result } = await load('@theme { --*: initial; --color-only: red; }');
     const ids = result.categories.map((c) => c.id);

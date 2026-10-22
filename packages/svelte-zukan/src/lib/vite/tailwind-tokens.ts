@@ -149,6 +149,8 @@ export const CATEGORIES: readonly {
   stem: string;
   property: string;
   kind: Kind;
+  /** theme namespace of tokens that carry no variable of their own (the shadow classes) */
+  namespace?: string;
 }[] = [
   { id: 'background-color', title: 'Background Color', stem: 'bg', property: 'background-color', kind: 'color' },
   { id: 'text-color', title: 'Text Color', stem: 'text', property: 'color', kind: 'text-color' },
@@ -160,12 +162,26 @@ export const CATEGORIES: readonly {
   { id: 'font-family', title: 'Font Family', stem: 'font', property: 'font-family', kind: 'text' },
   { id: 'letter-spacing', title: 'Letter Spacing', stem: 'tracking', property: 'letter-spacing', kind: 'text' },
   { id: 'line-height', title: 'Line Height', stem: 'leading', property: 'line-height', kind: 'text' },
-  { id: 'drop-shadow', title: 'Drop Shadow', stem: 'drop-shadow', property: 'filter', kind: 'box' },
+  {
+    id: 'drop-shadow',
+    title: 'Drop Shadow',
+    stem: 'drop-shadow',
+    property: 'filter',
+    kind: 'box',
+    namespace: 'drop-shadow'
+  },
   { id: 'border-radius', title: 'Border Radius', stem: 'rounded', property: 'border-radius', kind: 'box' },
   { id: 'border-width', title: 'Border Width', stem: 'border', property: 'border-width', kind: 'border' },
   { id: 'width', title: 'Width', stem: 'w', property: 'width', kind: 'width' },
   { id: 'height', title: 'Height', stem: 'h', property: 'height', kind: 'height' },
-  { id: 'box-shadow', title: 'Box Shadow', stem: 'shadow', property: 'box-shadow', kind: 'box' },
+  {
+    id: 'box-shadow',
+    title: 'Box Shadow',
+    stem: 'shadow',
+    property: 'box-shadow',
+    kind: 'box',
+    namespace: 'shadow'
+  },
   { id: 'opacity', title: 'Opacity', stem: 'opacity', property: 'opacity', kind: 'box' },
   { id: 'breakpoints', title: 'Breakpoints', stem: 'breakpoint', property: '', kind: 'value' },
   { id: 'z-index', title: 'Z-index', stem: 'z', property: 'z-index', kind: 'value' },
@@ -214,17 +230,32 @@ export function extractTokens(
     return { class: classPrefix + name, cssVariable, value: resolveValue(shown, values) };
   };
 
+  const themeIndex = new Map(Object.keys(variables).map((key, i) => [key, i]));
   const byCategory = new Map<TailwindCategoryId, TailwindToken[]>();
-  for (const { id, stem, property } of stems) {
-    const tokens: TailwindToken[] = [];
+  for (const { id, stem, property, namespace } of stems) {
+    const tokens: [index: number, TailwindToken][] = [];
     for (const name of names) {
       if (!matches(name, stem)) continue;
       const rule = declarations.get(name);
       const value = rule?.find(([p]) => p === property)?.[1];
       const shown = rule?.find(([p]) => p === SHADOW_VALUE[property])?.[1];
-      if (value !== undefined) tokens.push(token(name, stem, value, shown));
+      if (value === undefined) continue;
+      const t = token(name, stem, value, shown);
+      // `getClassList()` sorts names alphabetically, so `text-2xl` precedes `text-xs`. The theme lists a scale in its own
+      // order. A variable that does not end in the class suffix (`p-1` reads `--spacing`) says nothing about the position.
+      const suffix = name.slice(stem.length + 1);
+      const key = t.cssVariable?.endsWith(`-${suffix}`)
+        ? t.cssVariable
+        : namespace && suffix
+          ? `${variablePrefix}${namespace}-${suffix}`
+          : '';
+      tokens.push([themeIndex.get(key) ?? -1, t]);
     }
-    byCategory.set(id, tokens);
+    // stable: tokens outside the theme (`p-4`, `rounded-full`, `shadow-none`) stay first, in class-list order
+    byCategory.set(
+      id,
+      tokens.sort((a, b) => a[0] - b[0]).map(([, t]) => t)
+    );
   }
 
   const named = (key: string): TailwindToken => ({
