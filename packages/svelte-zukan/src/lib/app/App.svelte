@@ -89,6 +89,7 @@
   });
 
   let shortcuts: HTMLDialogElement | undefined = $state();
+  let main: HTMLElement | undefined = $state();
   let detail: ReturnType<typeof Detail> | undefined = $state();
 
   function onkeydown(e: KeyboardEvent) {
@@ -149,6 +150,15 @@
   {/if}
 {:else}
   <div class="zukan" data-theme={theme}>
+    <!-- focuses main without a hash: the hash is the catalog's route -->
+    <a
+      class="skip"
+      href="#zukan-main"
+      onclick={(e) => {
+        e.preventDefault();
+        main?.focus();
+      }}>{t.skipToContent}</a
+    >
     <Sidebar
       entries={catalog}
       current={entry?.path}
@@ -159,7 +169,7 @@
       onshortcuts={() => shortcuts?.showModal()}
       {t}
     />
-    <main>
+    <main id="zukan-main" tabindex="-1" bind:this={main}>
       {#if route.view === 'list'}
         <List entries={catalog} {searched} {uncataloged} {theme} {t} />
       {:else if entry}
@@ -248,6 +258,28 @@
     background: var(--_bg);
     color: var(--_text);
     font-family: var(--_font);
+  }
+
+  .skip {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 10;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--_text);
+    color: var(--_bg);
+    font-weight: 600;
+    text-decoration: none;
+    transform: translateY(calc(-100% - 16px));
+  }
+
+  .skip:focus {
+    transform: none;
+  }
+
+  main:focus {
+    outline: none;
   }
 
   .zukan[data-theme='dark'] {

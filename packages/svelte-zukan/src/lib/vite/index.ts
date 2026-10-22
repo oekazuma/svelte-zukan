@@ -232,6 +232,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         const html = renderHtml({
           title: resolved.title,
           locale: resolved.locale,
+          theme: resolved.theme,
           entrySrc: './' + entry.fileName,
           icon
         });
@@ -323,7 +324,13 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         }
         if (path !== `${base}__zukan/`) return next();
         const icon = readFileSync(appFile('icon.svg'), 'utf-8');
-        const html = renderHtml({ title: resolved.title, locale: resolved.locale, entrySrc: ENTRY_SRC, icon });
+        const html = renderHtml({
+          title: resolved.title,
+          locale: resolved.locale,
+          theme: resolved.theme,
+          entrySrc: ENTRY_SRC,
+          icon
+        });
         server
           .transformIndexHtml(path, html)
           .then((out) => {

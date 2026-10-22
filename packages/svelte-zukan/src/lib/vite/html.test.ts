@@ -16,6 +16,12 @@ describe('renderHtml', () => {
     expect(html).toContain('<script type="module" src="/@id/__x00__virtual:svelte-zukan/entry"></script>');
   });
 
+  it('sets color-scheme only for a fixed theme', () => {
+    expect(html).not.toContain('name="color-scheme"');
+    const dark = renderHtml({ title: 'zukan', locale: 'en', entrySrc: '/e.js', icon, theme: 'dark' });
+    expect(dark).toContain('<meta name="color-scheme" content="dark">');
+  });
+
   it('embeds the icon as a data URL', () => {
     const href = html.match(/<link rel="icon" type="image\/svg\+xml" href="data:image\/svg\+xml,([^"]*)">/)?.[1];
     expect(href).toBeDefined();

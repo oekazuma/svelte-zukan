@@ -170,6 +170,18 @@ describe('App', () => {
     }
   });
 
+  it('the skip link moves focus to the main content without changing the route', async () => {
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    await userEvent.keyboard('{Tab}');
+    const skip = screen.getByRole('link', { name: 'Skip to content' });
+    await expect.element(skip).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await expect.element(screen.getByRole('main')).toHaveFocus();
+    expect(location.hash).toBe('#/ui/Card');
+  });
+
   it('an unknown ID is not found', async () => {
     const { props } = setup('#/ui/Nope');
     const screen = await render(App, { props });
