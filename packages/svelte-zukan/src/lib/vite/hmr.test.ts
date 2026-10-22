@@ -46,8 +46,9 @@ async function start(options: Parameters<typeof zukan>[0] = {}, config: InlineCo
 }
 
 beforeEach(async () => {
-  // realpath: on macOS the tmpdir is a symlink and the watcher reports resolved paths
-  tmp = realpathSync(await mkdtemp(join(tmpdir(), 'zukan-hmr-')));
+  // native realpath: on macOS the tmpdir is a symlink and the watcher reports resolved paths, and on Windows it
+  // can be an 8.3 short name (RUNNER~1) that Vite fails to load the Tailwind CSS entry from
+  tmp = realpathSync.native(await mkdtemp(join(tmpdir(), 'zukan-hmr-')));
   await mkdir(join(tmp, 'app/src'), { recursive: true });
   writeFileSync(join(tmp, 'pnpm-workspace.yaml'), '');
   writeFileSync(join(tmp, 'app/package.json'), JSON.stringify({ name: 'app' }));
