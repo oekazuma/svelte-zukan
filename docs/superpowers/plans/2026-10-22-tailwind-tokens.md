@@ -54,7 +54,7 @@
 **Files:**
 
 - Create: `packages/svelte-zukan/src/lib/vite/tailwind-tokens.ts`
-- Modify: `packages/svelte-zukan/src/lib/types.ts`, `pnpm-workspace.yaml` (catalog: `tailwindcss`, `@tailwindcss/node`, `@tailwindcss/vite`, one 4.x version), `packages/svelte-zukan/package.json` (`devDependencies`)
+- Modify: `packages/svelte-zukan/src/lib/types.ts`, `pnpm-workspace.yaml` (catalog: `tailwindcss`, `@tailwindcss/node`, `@tailwindcss/vite`, one version 4.1.0 or later), `packages/svelte-zukan/package.json` (`devDependencies`)
 - Test: `packages/svelte-zukan/src/lib/vite/tailwind-tokens.test.ts`
 
 **Interfaces:**
@@ -179,7 +179,7 @@ it('loads an entry with relative paths', async () => {
 });
 it('adds the defaults to an @theme-only entry', ...);
 it('loads a TypeScript @plugin', ...);
-it('reports a 4.0.x Tailwind as too old', ...);                    // fake @tailwindcss/node whose tailwindcss package.json says 4.0.17 → error 'Tailwind CSS 4.0.17 is older than 4.1.0, the first version svelte-zukan supports'
+it('reports a 4.0.x Tailwind as too old', ...);                    // fake @tailwindcss/node plus a fake tailwindcss package (version 4.0.17, with an `exports` entry that resolves) → error 'Tailwind CSS 4.0.17 is older than 4.1.0, the first version svelte-zukan supports'
 it('watches relative imports outside the searched dirs', ...);     // ../tokens.css is in watch
 it('reports an unsupported API as the entry\'s error', ...);      // fake @tailwindcss/node without compile → error matches /does not expose the design-system API/
 it('keeps absolute paths out of errors', ...);                      // '@import "./missing.css"' → error does not contain the temp root

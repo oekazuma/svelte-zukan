@@ -16,7 +16,7 @@ People use svelte-zukan as the place where a design system lives. When the app s
 - Show the resolved Tailwind theme of the project: Tailwind's defaults plus everything the project's CSS adds or overrides with `@theme` (and `@plugin` / `@config`, as far as Tailwind resolves them).
 - Same categories and the same "one representative utility per category" rule as Histoire, so each token appears once per category with a live sample.
 - Search within a category; copy the class name and the CSS variable.
-- Works with no configuration: it appears when Tailwind CSS 4.1.0 or later is installed and a Tailwind CSS entry is found, and is absent otherwise.
+- Works with no configuration: it appears when Tailwind CSS 4.1.0 or later is installed and a Tailwind CSS entry is found. It is absent without Tailwind or below v4; a 4.0.x install shows the page with an error asking to upgrade.
 - Agents can read the tokens from `catalog.json` and through a WebMCP tool.
 - Dev updates when the CSS changes; `build: true` includes it in the static catalog.
 
