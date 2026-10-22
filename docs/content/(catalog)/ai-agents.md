@@ -1,7 +1,7 @@
 ---
 title: Using it with AI agents
 sidebar:
-  order: 4
+  order: 5
 ---
 
 An AI coding agent can write catalog files and check them without a browser. svelte-zukan gives it these docs as text, the catalog as data (also as WebMCP tools in the browser), and a skill that says how to work with them.
@@ -30,6 +30,20 @@ The dev server serves `/__zukan/catalog.json`, and `vite build` with `build: tru
 | `components[].sections[]` | Each section's `title`, its `code` as the code view shows it, and `preview`, the hash of its preview page                                                                         |
 | `components[].error`      | Set when the catalog file is not plain Svelte markup or breaks a [`<Section>` rule](/catalog-files#sections), with the message of that build error; its `sections` are then empty |
 | `uncataloged[]`           | `.svelte` files in the scanned directories with no catalog file next to them                                                                                                      |
+| `tailwind`                | `null` when no [Tailwind CSS entry](/tailwind) was loaded, else one object per entry, described below                                                                             |
+
+Each `tailwind` object has:
+
+| Field          | What it holds                                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `file`         | The entry, relative to Vite's root                                                                                                                |
+| `version`      | The Tailwind CSS version                                                                                                                          |
+| `prefix`       | The `prefix` of the theme, or `null`                                                                                                              |
+| `categories[]` | The utility classes by category: `id`, `title`, and `tokens[]` with `class` (with the prefix; `null` for a breakpoint), `cssVariable` and `value` |
+| `variables`    | Every theme variable and its value, as `{ "--color-brand-500": "#ff3e00" }`                                                                       |
+| `error`        | Set when the entry could not be loaded, with the message; `categories` and `variables` are then empty                                             |
+
+The classes in `categories` are the ones the theme defines, so an agent that styles a component should use only those. Dark-mode values, arbitrary values and variants are [not part of it](/tailwind#what-it-does-not-show).
 
 `preview` is a hash on the catalog page: `/__zukan/#/preview/ui/Button?section=Primary` shows only that section, so it is a good page for a screenshot. Add `&theme=dark` for the dark theme, unless the [`theme` option](/options) fixes it. The page fills the window, so set the window's width for a phone or tablet layout.
 
@@ -37,12 +51,13 @@ The dev server serves `/__zukan/catalog.json`, and `vite build` with `build: tru
 
 In a browser that implements [WebMCP](https://webmachinelearning.github.io/webmcp/), the catalog page also offers its data as tools, so an agent driving the browser does not have to read the screen:
 
-| Tool                  | What it does                                                                                                         |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `list_components`     | Lists the components (ID, name, group, section titles, the first line of each description) and the uncataloged files |
-| `get_component`       | Returns one component as `catalog.json` has it                                                                       |
-| `open_component`      | Shows a component's page, optionally at a section, with that section's preview at a width and in a theme             |
-| `check_accessibility` | Renders one section on its own and returns axe-core's violations                                                     |
+| Tool                   | What it does                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_components`      | Lists the components (ID, name, group, section titles, the first line of each description) and the uncataloged files                                                                                                                                                                                                                                        |
+| `get_component`        | Returns one component as `catalog.json` has it                                                                                                                                                                                                                                                                                                              |
+| `open_component`       | Shows a component's page, optionally at a section, with that section's preview at a width and in a theme                                                                                                                                                                                                                                                    |
+| `check_accessibility`  | Renders one section on its own and returns axe-core's violations                                                                                                                                                                                                                                                                                            |
+| `list_tailwind_tokens` | With Tailwind CSS data only. Without a `category`, lists each entry's categories and their token counts. With one of the category IDs (`background-color`, `padding`, `font-size`, …), returns its tokens, and with `full-config`, every theme variable as `{ variable: value }`. `query` keeps the tokens whose class, variable or value contains the text |
 
 Browsers without WebMCP ignore them, and nothing is loaded for them.
 
