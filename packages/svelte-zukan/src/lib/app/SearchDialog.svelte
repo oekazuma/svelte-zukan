@@ -94,6 +94,8 @@
       }
     ])
   );
+  // only several entries need telling apart, as the group and directory do for components
+  const files = $derived(tailwind.length > 1 ? new Map(tailwind.map((s) => [s.id, s.file])) : null);
   const groups = $derived([
     null,
     ...new Set(entries.map((e) => e.group)),
@@ -168,7 +170,7 @@
       aria-controls="{id}-results"
       aria-autocomplete="list"
       aria-activedescendant={hits.length ? `${id}-${active}` : undefined}
-      placeholder={t.searchPlaceholder}
+      placeholder={tailwind.length ? t.searchPlaceholderTailwind : t.searchPlaceholder}
       autocomplete="off"
       spellcheck="false"
     />
@@ -212,9 +214,12 @@
                           <span class="swatch" style:background-color={hit.value}></span>
                         {/if}
                         <span class="name code">{hit.label}</span>
-                        <span class="group">{hit.item.title}</span>
+                        <span class="group"
+                          >{[hit.item.title, files?.get(hit.item.source)].filter(Boolean).join(' · ')}</span
+                        >
                       {:else}
                         <span class="name">{hit.item.title}</span>
+                        {#if files}<span class="group">{files.get(hit.item.source)}</span>{/if}
                       {/if}
                     </span>
                   {:else}

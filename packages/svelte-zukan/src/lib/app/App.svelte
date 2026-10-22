@@ -242,7 +242,7 @@
         <dt><kbd>/</kbd></dt>
         <dd>{t.shortcutSearch}</dd>
         <dt><kbd>{modifier}</kbd> <kbd>K</kbd></dt>
-        <dd>{t.shortcutSearchCatalog}</dd>
+        <dd>{tailwind.length ? t.shortcutSearchCatalogTailwind : t.shortcutSearchCatalog}</dd>
         <dt><kbd>J</kbd></dt>
         <dd>{t.shortcutNext}</dd>
         <dt><kbd>K</kbd></dt>

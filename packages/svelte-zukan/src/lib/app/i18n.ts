@@ -85,6 +85,7 @@ export type Messages = {
   openInEditor: string;
   searchCatalog: string;
   searchPlaceholder: string;
+  searchPlaceholderTailwind: string;
   searchResults: string;
   searchGroups: string;
   searchAllGroups: string;
@@ -93,6 +94,7 @@ export type Messages = {
   searchProps: string;
   searchDescriptions: string;
   shortcutSearchCatalog: string;
+  shortcutSearchCatalogTailwind: string;
   tailwind: string;
   filterTokens: string;
   sampleText: string;
@@ -204,6 +206,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     openInEditor: 'Open in editor',
     searchCatalog: 'Search the catalog',
     searchPlaceholder: 'Names, sections, props and descriptions',
+    searchPlaceholderTailwind: 'Names, sections, props, descriptions and Tailwind CSS tokens',
     searchResults: 'Results',
     searchGroups: 'Groups',
     searchAllGroups: 'All',
@@ -212,6 +215,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     searchProps: 'Props',
     searchDescriptions: 'Descriptions',
     shortcutSearchCatalog: 'Search names, sections, props and descriptions',
+    shortcutSearchCatalogTailwind: 'Search names, sections, props, descriptions and Tailwind CSS tokens',
     tailwind: 'Tailwind CSS',
     filterTokens: 'Filter tokens',
     sampleText: 'Sample text',
@@ -321,6 +325,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     openInEditor: 'エディターで開く',
     searchCatalog: 'カタログを検索',
     searchPlaceholder: '名前・セクション・Props・説明',
+    searchPlaceholderTailwind: '名前・セクション・Props・説明・Tailwind CSS のトークン',
     searchResults: '検索結果',
     searchGroups: 'グループ',
     searchAllGroups: 'すべて',
@@ -329,6 +334,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     searchProps: 'Props',
     searchDescriptions: '説明',
     shortcutSearchCatalog: '名前・セクション・Props・説明から探す',
+    shortcutSearchCatalogTailwind: '名前・セクション・Props・説明・Tailwind CSS のトークンから探す',
     tailwind: 'Tailwind CSS',
     filterTokens: 'トークンを絞り込む',
     sampleText: 'サンプルテキスト',
