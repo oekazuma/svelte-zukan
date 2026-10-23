@@ -211,9 +211,14 @@
     resized.observe(doc.documentElement);
     const changed = new view.MutationObserver(draw);
     changed.observe(root, { subtree: true, childList: true, attributes: true });
+    // a scroll inside the preview moves elements, and picking a radio moves its group's stop, with no DOM change
+    doc.addEventListener('scroll', draw, true);
+    root.addEventListener('change', draw);
     return () => {
       resized.disconnect();
       changed.disconnect();
+      doc.removeEventListener('scroll', draw, true);
+      root.removeEventListener('change', draw);
       layer.remove();
     };
   });

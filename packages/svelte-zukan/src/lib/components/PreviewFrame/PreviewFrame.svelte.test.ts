@@ -445,12 +445,39 @@ describe('PreviewFrame resizing', () => {
     await expect.poll(badges).toEqual(['1', '2', '3']);
     // the link has tabindex="1", so its badge comes first and sits at its corner
     const link = doc.querySelector('a')!.getBoundingClientRect();
-    const first = doc.querySelector('[aria-hidden="true"] > span')!.getBoundingClientRect();
-    expect(Math.round(first.left + 9)).toBe(Math.round(link.left));
+    const badge = doc.querySelector('[aria-hidden="true"] > span')!.getBoundingClientRect();
+    expect(Math.round(badge.left + 9)).toBe(Math.round(link.left));
     root.append(doc.createElement('textarea'));
     await expect.poll(badges).toEqual(['1', '2', '3', '4']);
     await screen.getByRole('button', { name: 'Tab order' }).click();
     await expect.poll(badges).toEqual([]);
+  });
+
+  it('numbers the elements again on a scroll inside the preview and on a radio pick, which change no DOM', async () => {
+    const screen = await render(PreviewFrame, {
+      props: { ...props, axe: () => Promise.resolve('window.axe = { run: async () => ({ violations: [] }) };') }
+    });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    const doc = frame.contentDocument!;
+    const root = doc.createElement('div');
+    root.setAttribute('data-zukan-preview', '');
+    root.innerHTML = `<div style="height: 40px; overflow: auto"><div style="height: 100px"></div><button>a</button>
+      <div style="height: 100px"></div></div><input type="radio" name="r" checked><input type="radio" name="r">`;
+    doc.body.append(root);
+    const badge = (n: number) => doc.querySelectorAll('[aria-hidden="true"] > span')[n]?.getBoundingClientRect();
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await screen.getByRole('button', { name: 'Tab order' }).click();
+    await expect.poll(() => badge(1)).toBeTruthy();
+    // the preview's height settles first, so only the scroll below can draw the badges again
+    await new Promise((r) => setTimeout(r, 500));
+    const before = badge(0)!.top;
+    root.querySelector('div')!.scrollTop = 60;
+    await expect.poll(() => badge(0)!.top).toBeCloseTo(before - 60, 0);
+    const [one, two] = root.querySelectorAll('input');
+    expect(badge(1)!.left).toBeCloseTo(one.getBoundingClientRect().left - 9, 0);
+    two.click();
+    await expect.poll(() => badge(1)!.left).toBeCloseTo(two.getBoundingClientRect().left - 9, 0);
   });
 
   it('says when nothing is found, and when the check fails', async () => {

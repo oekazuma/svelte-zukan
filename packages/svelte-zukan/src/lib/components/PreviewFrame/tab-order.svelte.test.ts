@@ -14,8 +14,9 @@ const order = (html: string) => {
 it('puts a positive tabindex first, by its value, then the rest in document order', () => {
   expect(
     order(`<a id="a" href="#">a</a><button id="b">b</button><div id="c" tabindex="2">c</div>
-      <span id="d" tabindex="1">d</span><input id="e" /><a id="f">no href</a>`)
-  ).toEqual(['d', 'c', 'a', 'b', 'e']);
+      <span id="d" tabindex="1">d</span><input id="e" /><a id="f">no href</a>
+      <div id="g" contenteditable>g</div><div id="h" contenteditable tabindex="-1">h</div>`)
+  ).toEqual(['d', 'c', 'a', 'b', 'e', 'g']);
 });
 
 it('leaves out what the Tab key skips', () => {
