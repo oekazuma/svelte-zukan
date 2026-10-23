@@ -410,14 +410,19 @@
       margin-right: 16px;
     }
 
-    .props td[data-label]::before {
+    .props td[data-label]:not(:empty)::before {
       content: attr(data-label) ' ';
       color: var(--_muted);
       font-size: 12px;
     }
 
+    /* hidden by sight only: a screen reader still finds every row's four cells */
     .props td:empty {
-      display: none;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
     }
   }
 

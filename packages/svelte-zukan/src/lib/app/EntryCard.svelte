@@ -11,6 +11,8 @@
   const LAYOUT_HEIGHT = 500;
   /** a thumbnail is a picture of the first example: it never scrolls */
   const TRANSPARENT = /^(rgba\(0, 0, 0, 0\)|transparent)$/;
+  /** elements that draw their own content, whatever their background */
+  const DRAWN = ['img', 'svg', 'video', 'canvas', 'iframe', 'input', 'select', 'textarea', 'progress', 'meter'];
   const THUMB_CSS = 'html,body{overflow:hidden !important}[data-zukan-preview]{box-sizing:border-box;padding:24px}';
 
   let { entry, theme }: { entry: Entry; theme: Theme } = $props();
@@ -57,23 +59,33 @@
         }
       }
       let [left, top, right, bottom] = [Infinity, Infinity, -Infinity, -Infinity];
-      for (const el of root.querySelectorAll('*')) {
-        const box = el.getBoundingClientRect();
-        if (!box.width || !box.height || !el.checkVisibility({ visibilityProperty: true, opacityProperty: true }))
-          continue;
-        // a wrapper that only holds space, such as one with a min-height for a modal, is not content
-        if (el.firstElementChild) {
-          const style = view.getComputedStyle(el);
-          const painted =
-            style.backgroundImage !== 'none' ||
-            !TRANSPARENT.test(style.backgroundColor) ||
-            [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth].some(
-              (w) => parseFloat(w) > 0
-            );
-          if (!painted) continue;
-        }
+      const grow = (box: DOMRect) => {
+        if (!box.width || !box.height) return;
         [left, top] = [Math.min(left, box.left), Math.min(top, box.top)];
         [right, bottom] = [Math.max(right, box.right), Math.max(bottom, box.bottom)];
+      };
+      const shown = (el: Element) => el.checkVisibility({ visibilityProperty: true, opacityProperty: true });
+      // a box counts when it is drawn; a wrapper that only holds space, such as a min-height for a modal, does not
+      for (const el of root.querySelectorAll('*')) {
+        if (!shown(el)) continue;
+        const style = view.getComputedStyle(el);
+        if (
+          DRAWN.includes(el.localName) ||
+          style.backgroundImage !== 'none' ||
+          !TRANSPARENT.test(style.backgroundColor) ||
+          [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth].some(
+            (w) => parseFloat(w) > 0
+          )
+        )
+          grow(el.getBoundingClientRect());
+      }
+      // text by its own extent: the box of a paragraph spans the whole width however short its line is
+      const range = doc!.createRange();
+      const texts = doc!.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let node = texts.nextNode(); node; node = texts.nextNode()) {
+        if (!node.textContent?.trim() || !node.parentElement || !shown(node.parentElement)) continue;
+        range.selectNodeContents(node);
+        grow(range.getBoundingClientRect());
       }
       if (left === Infinity) return;
       // the page never scrolls, so these are its own coordinates, which the whole frame is moved by

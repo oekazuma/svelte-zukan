@@ -407,7 +407,7 @@
     .zukan-card:has(> :is(.zukan-color, .zukan-text-color)) {
       display: grid;
       grid-template-columns: 72px minmax(0, 1fr);
-      grid-template-areas: 'sample names' 'sample value';
+      grid-template-areas: 'sample names';
       align-items: center;
     }
 
@@ -428,10 +428,6 @@
       line-height: 40px;
       white-space: nowrap;
       text-overflow: ellipsis;
-    }
-
-    .zukan-card:has(> :is(.zukan-color, .zukan-text-color)) .zukan-values {
-      padding: 0 10px 8px;
     }
   }
 

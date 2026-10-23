@@ -553,7 +553,7 @@ describe('App', () => {
             {
               name: 'cover',
               type: 'string',
-              default: "'none'",
+              default: null,
               required: false,
               bindable: false,
               description: 'A CSS background for the cover area, such as a gradient'
@@ -565,6 +565,7 @@ describe('App', () => {
     const screen = await render(App, { props });
     const table = screen.getByRole('table');
     await expect.element(table).toBeInTheDocument();
+    // the empty default is hidden by sight only, so the row keeps its four cells
     expect(table.getByRole('cell').all()).toHaveLength(4);
     // the description gets the whole width instead of a squeezed fourth column
     const description = table.getByRole('cell').nth(3).element();
