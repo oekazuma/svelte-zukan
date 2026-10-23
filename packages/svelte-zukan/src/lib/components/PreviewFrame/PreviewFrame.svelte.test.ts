@@ -376,6 +376,25 @@ describe('PreviewFrame resizing', () => {
     await expect.poll(() => frame.contentDocument!.head.textContent).toContain('body{outline:2px dashed');
   });
 
+  it('names and outlines an element inside a shadow root, not the elements its selectors match outside', async () => {
+    // axe-core gives a node inside a shadow root as a path: the host, then the selector inside it
+    const source = `window.axe = { run: async () => {
+      const host = document.body.appendChild(document.createElement('my-el'));
+      host.attachShadow({ mode: 'open' }).innerHTML = '<span>inside</span>';
+      document.body.appendChild(document.createElement('span'));
+      return { violations: [{ id: 'color-contrast', impact: 'serious', help: 'Contrast', helpUrl: 'https://example.com/c',
+        nodes: [{ target: [['my-el', 'span']] }] }] };
+    } };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.element(screen.getByRole('button', { name: 'my-el >>> span' })).toBeInTheDocument();
+    const shadow = () => frame.contentDocument!.querySelector('my-el')!.shadowRoot!.querySelector('style')?.textContent;
+    await expect.poll(shadow).toContain('span{outline:2px solid');
+    expect(frame.contentDocument!.head.textContent).not.toContain('span{outline');
+  });
+
   it('says when nothing is found, and when the check fails', async () => {
     const axe = () =>
       Promise.resolve(
