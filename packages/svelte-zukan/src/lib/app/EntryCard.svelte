@@ -2,25 +2,26 @@
   import { BACKGROUNDS, type Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
   import { formatHash } from './hash.js';
+  import { fitThumb } from './thumb-fit.js';
 
-  /** the width a thumbnail is laid out at; it is scaled down to the card */
+  /** the width a thumbnail is laid out at, whatever it is scaled to, so the example's layout never depends on the card */
   const LAYOUT_WIDTH = 480;
   const THUMB_HEIGHT = 150;
-  /**
-   * a thumbnail is a picture of the first example: it never scrolls, and its content sits in the middle unless it is
-   * taller. `display` must beat the preview's own scoped `display: flow-root`, which is injected after this. Centring
-   * across too would shrink every block to its content, so a full-width card or field would look narrower than it is
-   */
-  const THUMB_CSS =
-    'html,body{overflow:hidden !important}' +
-    '[data-zukan-preview]{box-sizing:border-box;min-height:100vh;padding:24px;' +
-    'display:flex !important;flex-direction:column;justify-content:safe center}';
+  /** tall enough to cover the card at the smallest scale `fitThumb` gives */
+  const LAYOUT_HEIGHT = 500;
+  /** a thumbnail is a picture of the first example: it never scrolls */
+  const TRANSPARENT = /^(rgba\(0, 0, 0, 0\)|transparent)$/;
+  const THUMB_CSS = 'html,body{overflow:hidden !important}[data-zukan-preview]{box-sizing:border-box;padding:24px}';
 
   let { entry, theme }: { entry: Entry; theme: Theme } = $props();
 
   let width = $state(0);
   let doc = $state.raw<Document>();
-  const scale = $derived(width ? width / LAYOUT_WIDTH : 1);
+  /** where the example's content is drawn; until it is measured, the page fills the card's width */
+  let fit = $state.raw<ReturnType<typeof fitThumb>>();
+  const scale = $derived(fit?.scale ?? (width ? width / LAYOUT_WIDTH : 1));
+  /** the background behind the example, such as the page's own body color; the card and the page's edges take it */
+  let paint = $state<string>();
   const hue = $derived([...entry.name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 11));
 
   /** the first paragraph of the .md, as text */
@@ -33,13 +34,74 @@
   $effect(() => {
     if (!doc) return;
     doc.documentElement.style.colorScheme = theme;
-    doc.documentElement.style.backgroundColor = BACKGROUNDS[theme];
+    doc.documentElement.style.backgroundColor = paint ?? BACKGROUNDS[theme];
+  });
+
+  /** measures the visible content of the example, again whenever it mounts, loads or changes size */
+  $effect(() => {
+    // the theme changes the page's colors, and so the paint
+    if (!doc || !width || !theme) return;
+    const view = doc.defaultView!;
+    let pending = 0;
+    const measure = () => {
+      pending = 0;
+      const root = doc!.querySelector('[data-zukan-preview]');
+      if (!root) return;
+      // the html element is left out: this card colors it
+      paint = undefined;
+      for (let el: Element | null = root; el && el !== doc!.documentElement; el = el.parentElement) {
+        const color = view.getComputedStyle(el).backgroundColor;
+        if (!TRANSPARENT.test(color)) {
+          paint = color;
+          break;
+        }
+      }
+      let [left, top, right, bottom] = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const el of root.querySelectorAll('*')) {
+        const box = el.getBoundingClientRect();
+        if (!box.width || !box.height || !el.checkVisibility({ visibilityProperty: true, opacityProperty: true }))
+          continue;
+        // a wrapper that only holds space, such as one with a min-height for a modal, is not content
+        if (el.firstElementChild) {
+          const style = view.getComputedStyle(el);
+          const painted =
+            style.backgroundImage !== 'none' ||
+            !TRANSPARENT.test(style.backgroundColor) ||
+            [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth].some(
+              (w) => parseFloat(w) > 0
+            );
+          if (!painted) continue;
+        }
+        [left, top] = [Math.min(left, box.left), Math.min(top, box.top)];
+        [right, bottom] = [Math.max(right, box.right), Math.max(bottom, box.bottom)];
+      }
+      if (left === Infinity) return;
+      // the page never scrolls, so these are its own coordinates, which the whole frame is moved by
+      fit = fitThumb({ left, top, width: right - left, height: bottom - top }, width, THUMB_HEIGHT);
+    };
+    const later = () => (pending ||= view.requestAnimationFrame(measure));
+    measure();
+    const resized = new view.ResizeObserver(later);
+    resized.observe(doc.body);
+    const changed = new view.MutationObserver(later);
+    changed.observe(doc.body, { subtree: true, childList: true });
+    return () => {
+      view.cancelAnimationFrame(pending);
+      resized.disconnect();
+      changed.disconnect();
+    };
   });
 </script>
 
 <article class="card">
   <!-- inert: a picture of the example, not something to use or tab into -->
-  <div class="thumb" inert bind:clientWidth={width}>
+  <!-- the preview's own background, so the card shows no edge where the scaled page ends -->
+  <div
+    class="thumb"
+    inert
+    bind:clientWidth={width}
+    style:background-color={doc ? (paint ?? BACKGROUNDS[theme]) : undefined}
+  >
     {#await entry.meta() then { default: meta }}
       {#if meta.sections.length}
         <iframe
@@ -47,8 +109,9 @@
           title={entry.name}
           loading="lazy"
           style:width="{LAYOUT_WIDTH}px"
-          style:height="{THUMB_HEIGHT / scale}px"
+          style:height="{fit ? LAYOUT_HEIGHT : THUMB_HEIGHT / scale}px"
           style:scale
+          style:translate={fit ? `${fit.x * scale}px ${fit.y * scale}px` : undefined}
           style:color-scheme={theme}
           onload={(e) => {
             const loaded = (e.currentTarget as HTMLIFrameElement).contentDocument;
