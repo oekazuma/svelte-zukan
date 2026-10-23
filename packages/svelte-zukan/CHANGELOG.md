@@ -1,5 +1,16 @@
 # svelte-zukan
 
+## 0.11.0
+
+### Minor Changes
+
+- cfd65c6: feat: list what axe-core cannot decide on its own, such as the contrast of text over an image, under "Needs a manual check" in the accessibility panel, and as `review` in the `check_accessibility` WebMCP tool, whose result is now `{ violations, review }`.
+
+### Patch Changes
+
+- 12a89b8: fix: the catalog UI keeps its logo and search box in a landmark, stops its own transitions when the system asks for reduced motion, and keeps selections and color samples visible in forced colors mode.
+- 96b03b2: fix: the accessibility panel finds and outlines an element inside a shadow root, listed as `host >>> inner`, instead of outlining the elements outside that its selectors also match.
+
 ## 0.10.0
 
 ### Minor Changes
