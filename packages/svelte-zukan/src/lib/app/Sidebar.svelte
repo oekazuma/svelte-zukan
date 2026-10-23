@@ -105,7 +105,7 @@
 
 <svelte:window {onkeydown} onhashchange={() => (open = false)} />
 
-<div class="sidebar">
+<header class="sidebar">
   <div class="header">
     <a class="logo" href="#/">
       {#if logo}
@@ -216,7 +216,7 @@
       {/if}
     </nav>
   </div>
-</div>
+</header>
 
 <style>
   .sidebar {

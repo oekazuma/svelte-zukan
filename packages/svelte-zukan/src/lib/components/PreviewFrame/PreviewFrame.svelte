@@ -650,12 +650,6 @@
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .skeleton span {
-      animation: none;
-    }
-  }
-
   .toolbar {
     container-type: inline-size;
     display: flex;
@@ -811,13 +805,6 @@
 
   .frame.dragging {
     transition: none;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .stage,
-    .frame {
-      transition: none;
-    }
   }
 
   iframe {

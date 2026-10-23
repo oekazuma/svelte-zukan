@@ -92,7 +92,9 @@ describe('WebMCP tools', () => {
         axe: () =>
           Promise.resolve(`window.axe = { run: async () => ({ violations: [{ id: 'image-alt', impact: 'critical',
             help: 'Images must have alternative text', helpUrl: 'https://example.com/image-alt',
-            nodes: [{ target: ['img'] }] }] }) };`)
+            nodes: [{ target: ['img'] }] }], incomplete: [{ id: 'color-contrast', impact: 'serious',
+            help: 'Elements must meet minimum color contrast ratio thresholds',
+            helpUrl: 'https://example.com/color-contrast', nodes: [{ target: ['p'] }] }] }) };`)
       });
       try {
         return await tool(withAxe, 'check_accessibility').execute({ id: 'ui/Button', section: 'Primary' });
@@ -104,15 +106,26 @@ describe('WebMCP tools', () => {
     it('renders the section and returns what axe-core finds', async () => {
       const result = await check('<div data-zukan-preview><img src=""></div>');
       expect(result.isError).toBeUndefined();
-      expect(JSON.parse(body(result))).toEqual([
-        {
-          id: 'image-alt',
-          impact: 'critical',
-          help: 'Images must have alternative text',
-          helpUrl: 'https://example.com/image-alt',
-          targets: ['img']
-        }
-      ]);
+      expect(JSON.parse(body(result))).toEqual({
+        violations: [
+          {
+            id: 'image-alt',
+            impact: 'critical',
+            help: 'Images must have alternative text',
+            helpUrl: 'https://example.com/image-alt',
+            targets: ['img']
+          }
+        ],
+        review: [
+          {
+            id: 'color-contrast',
+            impact: 'serious',
+            help: 'Elements must meet minimum color contrast ratio thresholds',
+            helpUrl: 'https://example.com/color-contrast',
+            targets: ['p']
+          }
+        ]
+      });
       expect(document.querySelectorAll('iframe').length).toBe(0);
     });
 

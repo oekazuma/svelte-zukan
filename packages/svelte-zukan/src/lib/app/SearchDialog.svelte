@@ -345,6 +345,15 @@
     box-shadow: inset 2px 0 var(--_accent);
   }
 
+  /* forced colors mode drops the background, shadow and border color that mark these, but keeps an outline */
+  @media (forced-colors: active) {
+    [role='option'][aria-selected='true'],
+    .groups button[aria-pressed='true'] {
+      outline: 2px solid Highlight;
+      outline-offset: -2px;
+    }
+  }
+
   .line {
     display: flex;
     align-items: baseline;
@@ -368,6 +377,8 @@
   }
 
   .swatch {
+    /* a color sample: forced colors mode would replace it with the system's */
+    forced-color-adjust: none;
     flex: none;
     align-self: center;
     width: 14px;

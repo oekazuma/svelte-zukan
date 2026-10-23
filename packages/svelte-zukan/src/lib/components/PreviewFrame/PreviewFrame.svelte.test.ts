@@ -362,6 +362,20 @@ describe('PreviewFrame resizing', () => {
     expect(frame.contentDocument!.querySelector('#zukan-vision')).toBeNull();
   });
 
+  it('lists what axe-core could not decide as needing a manual check, outlined dashed', async () => {
+    const source = `window.axe = { run: async () => ({ violations: [], incomplete: [{ id: 'color-contrast', impact: 'serious',
+      help: 'Elements must meet minimum color contrast ratio thresholds', helpUrl: 'https://example.com/c',
+      nodes: [{ target: ['body'] }] }] }) };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.element(screen.getByText('Needs a manual check (1)')).toBeInTheDocument();
+    expect(screen.getByText('No accessibility issues found').query()).toBeNull();
+    await expect.element(screen.getByRole('button', { name: 'body' })).toBeInTheDocument();
+    await expect.poll(() => frame.contentDocument!.head.textContent).toContain('body{outline:2px dashed');
+  });
+
   it('says when nothing is found, and when the check fails', async () => {
     const axe = () =>
       Promise.resolve(

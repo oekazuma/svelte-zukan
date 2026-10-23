@@ -290,6 +290,14 @@
     color-scheme: dark;
   }
 
+  /* the catalog's own motion only: a preview is a separate document, so the component's motion is shown as it is */
+  @media (prefers-reduced-motion: reduce) {
+    .zukan :global(*) {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+
   /* internal theme; the catalog page loads no app CSS, so these are not meant to be overridden */
   .zukan {
     --_bg: #fff;
