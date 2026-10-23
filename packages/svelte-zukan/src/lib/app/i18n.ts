@@ -182,7 +182,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     a11yIssues: 'Accessibility issues',
     a11yReview: 'Needs a manual check',
     a11yReviewHint:
-      'axe-core could not decide these on its own, for example the contrast of text over an image or a gradient. Check them by eye.',
+      'axe-core could not decide these on its own, for example the contrast of text over an image or a gradient. Read about each rule and check it yourself.',
     a11yFailed: 'Could not run the check:',
     a11yLearnMore: 'Learn more',
     a11yRerun: 'Check again',
@@ -302,9 +302,9 @@ export const messages: Record<'en' | 'ja', Messages> = {
     a11yChecking: '検査中…',
     a11yPassed: 'アクセシビリティの問題は見つかりませんでした',
     a11yIssues: 'アクセシビリティの問題',
-    a11yReview: '目視での確認が必要',
+    a11yReview: '手動での確認が必要',
     a11yReviewHint:
-      'axe-core だけでは判定できなかった項目です。画像やグラデーションの上にある文字のコントラストなどが当たります。目で見て確かめてください。',
+      'axe-core だけでは判定できなかった項目です。画像やグラデーションの上にある文字のコントラストなどが当たります。ルールごとの説明を読み、自分で確かめてください。',
     a11yFailed: '検査を実行できませんでした:',
     a11yLearnMore: '詳しく',
     a11yRerun: 'もう一度検査',
