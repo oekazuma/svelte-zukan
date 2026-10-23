@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import type { Messages } from '../../app/i18n.js';
   import { findTarget, messageOf, runAxe, type AxeResult, type Impact, type Violation } from './run-axe.js';
+  import { tabOrder } from './tab-order.js';
 
   type Vision = keyof typeof VISION_FILTERS;
 
@@ -70,6 +71,8 @@
   /** under the pointer or the focus in the list; it is emphasized like the selected one */
   let hovered = $state<string | null>(null);
   let vision = $state<Vision>('none');
+  let textZoom = $state(false);
+  let showTabOrder = $state(false);
   const uid = $props.id();
 
   /** a radio group: arrow keys, Home and End move the choice, and the focus with it */
@@ -163,6 +166,55 @@
     return () => {
       svg.remove();
       style.remove();
+    };
+  });
+
+  /** doubles the root font size, as raising the browser's default font size does: text sized in px stays as it is */
+  $effect(() => {
+    if (!textZoom) return;
+    const base = parseFloat(doc.defaultView!.getComputedStyle(doc.documentElement).fontSize);
+    const style = doc.createElement('style');
+    style.textContent = `html{font-size:${base * 2}px !important}`;
+    doc.head.append(style);
+    return () => style.remove();
+  });
+
+  /** numbers the elements the Tab key moves to, drawn again whenever the preview's layout or content changes */
+  $effect(() => {
+    // the root must not hold the badges, or drawing them would set off the observer below again
+    const root = doc.querySelector('[data-zukan-preview]');
+    if (!showTabOrder || !root) return;
+    const view = doc.defaultView!;
+    // outside the checked root, so axe-core never sees the badges
+    const layer = doc.createElement('div');
+    layer.setAttribute('aria-hidden', 'true');
+    layer.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:2147483647';
+    doc.body.append(layer);
+    const draw = () => {
+      // relative to the layer itself, whatever its containing block is (a positioned body, the vision filter)
+      const origin = layer.getBoundingClientRect();
+      layer.replaceChildren(
+        ...tabOrder(root).map((el, i) => {
+          const box = el.getBoundingClientRect();
+          const badge = doc.createElement('span');
+          badge.textContent = String(i + 1);
+          // on the element's top left corner, kept inside the page for an element at its edge
+          const left = Math.max(box.left - 9, -view.scrollX) - origin.left;
+          const top = Math.max(box.top - 9, -view.scrollY) - origin.top;
+          badge.style.cssText = `position:absolute;left:${left}px;top:${top}px;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:#0969da;color:#fff;font:600 11px/18px system-ui,sans-serif;text-align:center;box-shadow:0 0 0 2px #fff;forced-color-adjust:none`;
+          return badge;
+        })
+      );
+    };
+    draw();
+    const resized = new view.ResizeObserver(draw);
+    resized.observe(doc.documentElement);
+    const changed = new view.MutationObserver(draw);
+    changed.observe(root, { subtree: true, childList: true, attributes: true });
+    return () => {
+      resized.disconnect();
+      changed.disconnect();
+      layer.remove();
     };
   });
 </script>
@@ -266,6 +318,23 @@
       </button>
     {/each}
   </div>
+  <div class="vision" role="group" aria-labelledby="{uid}-tools">
+    <span class="caption" id="{uid}-tools">{labels.a11yTools}</span>
+    <button
+      type="button"
+      class="chip tool"
+      aria-pressed={textZoom}
+      title={labels.a11yTextZoomHint}
+      onclick={() => (textZoom = !textZoom)}>{labels.a11yTextZoom}</button
+    >
+    <button
+      type="button"
+      class="chip tool"
+      aria-pressed={showTabOrder}
+      title={labels.a11yTabOrderHint}
+      onclick={() => (showTabOrder = !showTabOrder)}>{labels.a11yTabOrder}</button
+    >
+  </div>
   {#if result.status === 'done' && (result.violations.length || result.review.length)}
     <label class="toggle">
       <input type="checkbox" role="switch" bind:checked={highlight} />
@@ -344,7 +413,12 @@
     background: var(--_code-bg);
   }
 
-  .chip[aria-checked='true'] {
+  .tool {
+    padding: 3px 10px;
+  }
+
+  .chip[aria-checked='true'],
+  .chip[aria-pressed='true'] {
     border-color: var(--_accent);
     background: color-mix(in srgb, var(--_accent) 12%, var(--_bg));
     box-shadow: inset 0 0 0 1px var(--_accent);
@@ -453,6 +527,7 @@
   /* forced colors mode drops the background, shadow and border color that mark these, but keeps an outline */
   @media (forced-colors: active) {
     .chip[aria-checked='true'],
+    .chip[aria-pressed='true'],
     .target[aria-pressed='true'] {
       outline: 2px solid Highlight;
       outline-offset: 1px;

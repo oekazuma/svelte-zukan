@@ -25,6 +25,10 @@ The accessibility button runs [axe-core](https://github.com/dequelabs/axe-core) 
 - What axe-core cannot decide on its own, such as the contrast of text over an image or a gradient, is listed separately under "Needs a manual check" and outlined with a dashed line. Read about each rule (Learn more) and check it yourself: some are visual, such as contrast, and some are not, such as an ARIA attribute. When nothing else is found, the panel says so instead of reporting no issues
 - The check runs again each time the preview reloads after an edit, while the panel is open
 - "Simulate vision" shows the preview as seen with blurred vision or a color vision deficiency (protanopia, deuteranopia, tritanopia, achromatopsia). Each chip shows a sample of its colors
+- "Check" has two switches for what axe-core cannot see:
+  - "Text 200%" doubles the root font size of the preview, as raising the browser's default font size does, so text that overflows or overlaps shows up. Text with a fixed `px` size does not grow, which is worth fixing too ([WCAG 1.4.4](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html))
+  - "Tab order" numbers the elements the Tab key moves to, in that order, and numbers them again when the preview changes. Elements inside a shadow root or an iframe are left out
+- The vision simulation and both switches go back to off when the panel closes or the preview reloads
 - With `locale: 'ja'`, axe-core's messages are in Japanese too
 
 axe-core is loaded only when a check runs. The rule about landmarks around all page content is off, since a component on its own has none.
