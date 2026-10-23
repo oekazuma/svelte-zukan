@@ -314,6 +314,8 @@
 
   /* an inset panel, always light like the rest of the sample document */
   .zukan-sample {
+    /* a sample of the token: forced colors mode would replace its colors and backgrounds with the system's */
+    forced-color-adjust: none;
     min-width: 0;
     border: 1px solid var(--_border);
     border-radius: 6px;

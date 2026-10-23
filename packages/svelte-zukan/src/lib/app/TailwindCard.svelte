@@ -85,6 +85,8 @@
   }
 
   .thumb {
+    /* the theme colors: forced colors mode would replace them with the system's */
+    forced-color-adjust: none;
     display: flex;
     height: 56px;
     border-bottom: 1px solid var(--_border);

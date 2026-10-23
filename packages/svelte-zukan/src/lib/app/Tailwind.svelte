@@ -464,6 +464,8 @@
   }
 
   .swatch {
+    /* a color sample: forced colors mode would replace it with the system's */
+    forced-color-adjust: none;
     display: inline-block;
     width: 14px;
     height: 14px;

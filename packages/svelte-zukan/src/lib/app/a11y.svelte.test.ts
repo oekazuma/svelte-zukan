@@ -1,7 +1,7 @@
 import axe from 'axe-core';
 import axeSource from 'axe-core/axe.min.js?raw';
 import { afterEach, describe, expect, it } from 'vitest';
-import { page, userEvent } from 'vitest/browser';
+import { cdp, page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import type { TailwindListItem, ZukanMeta } from '../types.js';
 import App from './App.svelte';
@@ -115,6 +115,49 @@ async function frameViolations(container: HTMLElement) {
 afterEach(() => {
   localStorage.clear();
   history.replaceState(null, '', location.pathname + location.search);
+});
+
+// `violations()` checks inside `.zukan`, so it cannot see content left outside every landmark of the page
+it('keeps all of the catalog page in landmarks', async () => {
+  await page.viewport(1280, 800);
+  const screen = await render(App, { props: props('', 'light') });
+  await expect.element(screen.getByRole('heading', { level: 1, name: 'Components' })).toBeInTheDocument();
+  const result = await axe.run(document, { runOnly: ['region'] });
+  expect(result.violations.flatMap((v) => v.nodes.map((n) => n.target.join(' ')))).toEqual([]);
+});
+
+it('stops its own transitions when the system asks for reduced motion', async () => {
+  const media = (value: string) =>
+    cdp().send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value }] });
+  await media('reduce');
+  try {
+    const screen = await render(App, { props: props('', 'light') });
+    await expect.element(screen.getByRole('heading', { level: 1, name: 'Components' })).toBeInTheDocument();
+    const card = document.querySelector('.zukan .card')!;
+    expect(
+      getComputedStyle(card)
+        .transitionDuration.split(', ')
+        .every((d) => d === '0s')
+    ).toBe(true);
+  } finally {
+    await media('');
+  }
+});
+
+it('marks the picked search result with an outline in forced colors mode, which drops its background', async () => {
+  const media = (value: string) =>
+    cdp().send('Emulation.setEmulatedMedia', { features: [{ name: 'forced-colors', value }] });
+  await media('active');
+  try {
+    const screen = await render(App, { props: props('#/ui/Card', 'light') });
+    await userEvent.keyboard(modifier === '⌘' ? '{Meta>}k{/Meta}' : '{Control>}k{/Control}');
+    await screen.getByRole('combobox').fill('t');
+    const option = screen.getByRole('option', { selected: true });
+    await expect.element(option).toBeInTheDocument();
+    expect(getComputedStyle(option.element()).outlineStyle).toBe('solid');
+  } finally {
+    await media('');
+  }
 });
 
 describe.each(['light', 'dark'] as const)('the catalog UI in %s has no axe violations', (theme) => {
