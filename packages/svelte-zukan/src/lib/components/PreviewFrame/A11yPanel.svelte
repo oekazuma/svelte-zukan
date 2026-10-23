@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { Messages } from '../../app/i18n.js';
-  import { messageOf, runAxe, type Impact, type Violation } from './run-axe.js';
+  import { messageOf, runAxe, type AxeResult, type Impact, type Violation } from './run-axe.js';
 
   type Vision = keyof typeof VISION_FILTERS;
 
@@ -62,9 +62,9 @@
     onclose: () => void;
   } = $props();
 
-  let result = $state<
-    { status: 'running' } | { status: 'done'; violations: Violation[] } | { status: 'failed'; message: string }
-  >({ status: 'running' });
+  let result = $state<{ status: 'running' } | ({ status: 'done' } & AxeResult) | { status: 'failed'; message: string }>(
+    { status: 'running' }
+  );
   let highlight = $state(true);
   let selected = $state<string | null>(null);
   /** under the pointer or the focus in the list; it is emphasized like the selected one */
@@ -95,7 +95,7 @@
     result = { status: 'running' };
     selected = null;
     try {
-      result = { status: 'done', violations: await runAxe(doc, axe) };
+      result = { status: 'done', ...(await runAxe(doc, axe)) };
     } catch (e) {
       result = { status: 'failed', message: messageOf(e) };
     }
@@ -111,18 +111,25 @@
     const el = doc.querySelector(target);
     if (!el || !frame) return;
     const top = frame.getBoundingClientRect().top + el.getBoundingClientRect().top;
-    if (top < 0 || top > innerHeight - 40) scrollTo({ top: scrollY + top - innerHeight / 3, behavior: 'smooth' });
+    if (top < 0 || top > innerHeight - 40)
+      scrollTo({
+        top: scrollY + top - innerHeight / 3,
+        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'
+      });
   }
 
-  /** outlines every reported element in its impact's color; the selected one thicker */
+  /** outlines every reported element in its impact's color, dashed when it needs a manual check; the selected one thicker */
   $effect(() => {
     if (!highlight || result.status !== 'done') return;
-    const rules = result.violations.flatMap((v) =>
-      v.targets.map(
-        (t) =>
-          `${t}{outline:${t === selected || t === hovered ? 4 : 2}px solid ${IMPACT_COLORS[v.impact ?? 'minor']} !important;outline-offset:2px !important}`
-      )
-    );
+    const outline = (list: Violation[], style: string) =>
+      list.flatMap((v) =>
+        v.targets.map(
+          (t) =>
+            `${t}{outline:${t === selected || t === hovered ? 4 : 2}px ${style} ${IMPACT_COLORS[v.impact ?? 'minor']} !important;outline-offset:2px !important}`
+        )
+      );
+    // a violation's outline wins over a review's on the same element
+    const rules = [...outline(result.review, 'dashed'), ...outline(result.violations, 'solid')];
     const style = doc.createElement('style');
     style.textContent = rules.join('\n');
     doc.head.append(style);
@@ -148,6 +155,36 @@
     };
   });
 </script>
+
+{#snippet rules(list: Violation[], review: boolean)}
+  <ul class={{ review }}>
+    {#each list as v (v.id)}
+      <li>
+        {#if v.impact}<span class={['impact', !review && v.impact]}>{labels[IMPACT_LABELS[v.impact]]}</span>{/if}
+        {v.help}
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+        <a href={v.helpUrl} target="_blank" rel="noopener">{labels.a11yLearnMore}</a>
+        <ul class="targets">
+          {#each v.targets as target, i (i)}
+            <li>
+              <button
+                type="button"
+                class="target"
+                aria-pressed={selected === target}
+                style:--impact={IMPACT_COLORS[v.impact ?? 'minor']}
+                onclick={() => select(target)}
+                onpointerenter={() => (hovered = target)}
+                onpointerleave={() => (hovered = null)}
+                onfocus={() => (hovered = target)}
+                onblur={() => (hovered = null)}><code>{target}</code></button
+              >
+            </li>
+          {/each}
+        </ul>
+      </li>
+    {/each}
+  </ul>
+{/snippet}
 
 {#snippet icon(paths: readonly string[])}
   <svg
@@ -180,10 +217,12 @@
         {labels.a11yChecking}
       {:else if result.status === 'failed'}
         {labels.a11yFailed} {result.message}
-      {:else if !result.violations.length}
-        <span class="passed">{labels.a11yPassed}</span>
-      {:else}
+      {:else if result.violations.length}
         {labels.a11yIssues} ({result.violations.length})
+      {:else if result.review.length}
+        {labels.a11yReview} ({result.review.length})
+      {:else}
+        <span class="passed">{labels.a11yPassed}</span>
       {/if}
     </p>
     <button type="button" class="action" disabled={result.status === 'running'} onclick={check}>
@@ -216,38 +255,22 @@
       </button>
     {/each}
   </div>
-  {#if result.status === 'done' && result.violations.length}
+  {#if result.status === 'done' && (result.violations.length || result.review.length)}
     <label class="toggle">
       <input type="checkbox" role="switch" bind:checked={highlight} />
       {labels.a11yHighlight}
     </label>
-    <ul>
-      {#each result.violations as v (v.id)}
-        <li>
-          {#if v.impact}<span class={['impact', v.impact]}>{labels[IMPACT_LABELS[v.impact]]}</span>{/if}
-          {v.help}
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-          <a href={v.helpUrl} target="_blank" rel="noopener">{labels.a11yLearnMore}</a>
-          <ul class="targets">
-            {#each v.targets as target, i (i)}
-              <li>
-                <button
-                  type="button"
-                  class="target"
-                  aria-pressed={selected === target}
-                  style:--impact={IMPACT_COLORS[v.impact ?? 'minor']}
-                  onclick={() => select(target)}
-                  onpointerenter={() => (hovered = target)}
-                  onpointerleave={() => (hovered = null)}
-                  onfocus={() => (hovered = target)}
-                  onblur={() => (hovered = null)}><code>{target}</code></button
-                >
-              </li>
-            {/each}
-          </ul>
-        </li>
-      {/each}
-    </ul>
+    {#if result.violations.length}
+      {@render rules(result.violations, false)}
+    {/if}
+    {#if result.review.length}
+      <p class="review-head">
+        <!-- without violations, the status line above already says this -->
+        {#if result.violations.length}<strong>{labels.a11yReview} ({result.review.length})</strong>{/if}
+        <span>{labels.a11yReviewHint}</span>
+      </p>
+      {@render rules(result.review, true)}
+    {/if}
   {/if}
 </div>
 
@@ -326,6 +349,8 @@
 
   /* four hues that the simulations tell apart differently */
   .swatch {
+    /* a color sample: forced colors mode would replace it with the system's */
+    forced-color-adjust: none;
     width: 28px;
     height: 16px;
     border-radius: 999px;
@@ -376,6 +401,20 @@
     margin: 4px 0 0;
   }
 
+  .review-head {
+    margin: 16px 0 0;
+  }
+
+  .review-head span {
+    display: block;
+    margin-top: 2px;
+    color: var(--_muted);
+  }
+
+  .review .target {
+    border-left-style: dashed;
+  }
+
   .targets li {
     margin: 2px 0 0;
   }
@@ -398,6 +437,15 @@
   .target[aria-pressed='true'] {
     background: var(--_code-bg);
     color: var(--_text);
+  }
+
+  /* forced colors mode drops the background, shadow and border color that mark these, but keeps an outline */
+  @media (forced-colors: active) {
+    .chip[aria-checked='true'],
+    .target[aria-pressed='true'] {
+      outline: 2px solid Highlight;
+      outline-offset: 1px;
+    }
   }
 
   .impact {

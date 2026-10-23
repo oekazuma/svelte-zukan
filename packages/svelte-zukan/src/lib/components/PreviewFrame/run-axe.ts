@@ -1,25 +1,32 @@
 export type Impact = 'critical' | 'serious' | 'moderate' | 'minor';
 export type Violation = { id: string; impact: Impact | null; help: string; helpUrl: string; targets: string[] };
+/** `review` is what axe-core could not decide on its own, such as the contrast of text over an image or a gradient */
+export type AxeResult = { violations: Violation[]; review: Violation[] };
+
+type AxeRule = {
+  id: string;
+  impact?: Impact | null;
+  help: string;
+  helpUrl: string;
+  nodes: { target: unknown[] }[];
+};
 
 type AxeWindow = Window & {
   axe?: {
-    run(
-      context: Element,
-      options: object
-    ): Promise<{
-      violations: {
-        id: string;
-        impact?: Impact | null;
-        help: string;
-        helpUrl: string;
-        nodes: { target: unknown[] }[];
-      }[];
-    }>;
+    run(context: Element, options: object): Promise<{ violations: AxeRule[]; incomplete?: AxeRule[] }>;
   };
 };
 
-/** Runs axe-core inside a preview page, or throws the preview's own error when it failed to load, injecting its source on the first run, and returns the violations. */
-export async function runAxe(doc: Document, source: () => Promise<string>): Promise<Violation[]> {
+const toViolation = (v: AxeRule): Violation => ({
+  id: v.id,
+  impact: v.impact ?? null,
+  help: v.help,
+  helpUrl: v.helpUrl,
+  targets: v.nodes.map((n) => n.target.join(' '))
+});
+
+/** Runs axe-core inside a preview page, or throws the preview's own error when it failed to load, injecting its source on the first run. */
+export async function runAxe(doc: Document, source: () => Promise<string>): Promise<AxeResult> {
   const failed = doc.querySelector('[data-zukan-error]');
   if (failed) throw new Error(failed.textContent ?? '');
   const win = doc.defaultView as AxeWindow;
@@ -30,16 +37,10 @@ export async function runAxe(doc: Document, source: () => Promise<string>): Prom
   }
   // `region` asks for landmarks around all content, which a component on its own never has
   const found = await win.axe!.run(doc.querySelector('[data-zukan-preview]') ?? doc.body, {
-    resultTypes: ['violations'],
+    resultTypes: ['violations', 'incomplete'],
     rules: { region: { enabled: false } }
   });
-  return found.violations.map((v) => ({
-    id: v.id,
-    impact: v.impact ?? null,
-    help: v.help,
-    helpUrl: v.helpUrl,
-    targets: v.nodes.map((n) => n.target.join(' '))
-  }));
+  return { violations: found.violations.map(toViolation), review: (found.incomplete ?? []).map(toViolation) };
 }
 
 /** An error thrown by axe comes from the preview page's realm, so `instanceof Error` does not see it. */
