@@ -28,12 +28,18 @@ const toViolation = (v: AxeRule): Violation => ({
   targets: v.nodes.map((n) => n.target.flat().join(SHADOW))
 });
 
-/** The element a target of `runAxe` names, the document or shadow root it is in, and its selector there; null when it is gone or behind a closed shadow root. */
+/** The element a target of `runAxe` names, the document or shadow root it is in, and its selector there; null when it is gone, behind a closed shadow root, or not found because an attribute value in its selector contains ` >>> `. */
 export function findTarget(doc: Document, target: string) {
   let root: Document | ShadowRoot = doc;
   const selectors = target.split(SHADOW);
   for (const [i, selector] of selectors.entries()) {
-    const el: Element | null = root.querySelector(selector);
+    let el: Element | null;
+    try {
+      el = root.querySelector(selector);
+    } catch {
+      // a split inside an attribute value leaves an invalid selector
+      return null;
+    }
     if (!el) return null;
     if (i === selectors.length - 1) return { el, root, selector };
     if (!el.shadowRoot) return null;

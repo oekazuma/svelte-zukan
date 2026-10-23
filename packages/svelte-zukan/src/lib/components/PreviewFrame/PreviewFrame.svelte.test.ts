@@ -395,6 +395,22 @@ describe('PreviewFrame resizing', () => {
     expect(frame.contentDocument!.head.textContent).not.toContain('span{outline');
   });
 
+  it('still outlines the other elements when a selector has ` >>> ` inside an attribute value', async () => {
+    // split, the first half still matches a host here (an unclosed string ends at the selector's end), and the second throws
+    const source = `window.axe = { run: async () => {
+      const host = document.body.appendChild(document.createElement('my-el'));
+      host.title = 'go';
+      host.attachShadow({ mode: 'open' });
+      return { violations: [{ id: 'button-name', impact: 'critical', help: 'Buttons must have discernible text',
+        helpUrl: 'https://example.com/b', nodes: [{ target: ['my-el[title="go >>> next"]'] }, { target: ['body'] }] }] };
+    } };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.poll(() => frame.contentDocument!.head.textContent).toContain('body{outline:2px solid');
+  });
+
   it('says when nothing is found, and when the check fails', async () => {
     const axe = () =>
       Promise.resolve(
