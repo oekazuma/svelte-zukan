@@ -17,13 +17,36 @@ type AxeWindow = Window & {
   };
 };
 
+/** a target goes into a shadow root at each of these; axe-core gives such a path as a nested list of selectors */
+const SHADOW = ' >>> ';
+
 const toViolation = (v: AxeRule): Violation => ({
   id: v.id,
   impact: v.impact ?? null,
   help: v.help,
   helpUrl: v.helpUrl,
-  targets: v.nodes.map((n) => n.target.join(' '))
+  targets: v.nodes.map((n) => n.target.flat().join(SHADOW))
 });
+
+/** The element a target of `runAxe` names, the document or shadow root it is in, and its selector there; null when it is gone, behind a closed shadow root, or not found because an attribute value in its selector contains ` >>> `. */
+export function findTarget(doc: Document, target: string) {
+  let root: Document | ShadowRoot = doc;
+  const selectors = target.split(SHADOW);
+  for (const [i, selector] of selectors.entries()) {
+    let el: Element | null;
+    try {
+      el = root.querySelector(selector);
+    } catch {
+      // a split inside an attribute value leaves an invalid selector
+      return null;
+    }
+    if (!el) return null;
+    if (i === selectors.length - 1) return { el, root, selector };
+    if (!el.shadowRoot) return null;
+    root = el.shadowRoot;
+  }
+  return null;
+}
 
 /** Runs axe-core inside a preview page, or throws the preview's own error when it failed to load, injecting its source on the first run. */
 export async function runAxe(doc: Document, source: () => Promise<string>): Promise<AxeResult> {

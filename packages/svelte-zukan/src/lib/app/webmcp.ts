@@ -123,7 +123,7 @@ export function buildTools(opts: {
     tools.push({
       name: 'check_accessibility',
       description:
-        "Runs axe-core on one section of a component, rendered on its own. Returns `violations` and `review` (what axe-core could not decide on its own, such as the contrast of text over an image, to check by other means), each a list of rules with their impact, help text and the elements' selectors. Two empty lists mean axe-core found nothing.",
+        "Runs axe-core on one section of a component, rendered on its own. Returns `violations` and `review` (what axe-core could not decide on its own, such as the contrast of text over an image, to check by other means), each a list of rules with their impact, help text and the elements' selectors (`host >>> inner` for an element inside a shadow root). Two empty lists mean axe-core found nothing.",
       inputSchema: {
         type: 'object',
         properties: { id: ID, section: SECTION, width: { ...WIDTH, default: 1280 }, ...withTheme },

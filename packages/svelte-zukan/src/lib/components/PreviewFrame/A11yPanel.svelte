@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { Messages } from '../../app/i18n.js';
-  import { messageOf, runAxe, type AxeResult, type Impact, type Violation } from './run-axe.js';
+  import { findTarget, messageOf, runAxe, type AxeResult, type Impact, type Violation } from './run-axe.js';
 
   type Vision = keyof typeof VISION_FILTERS;
 
@@ -108,7 +108,7 @@
   function select(target: string) {
     selected = selected === target ? null : target;
     if (!selected) return;
-    const el = doc.querySelector(target);
+    const el = findTarget(doc, target)?.el;
     if (!el || !frame) return;
     const top = frame.getBoundingClientRect().top + el.getBoundingClientRect().top;
     if (top < 0 || top > innerHeight - 40)
@@ -123,17 +123,28 @@
     if (!highlight || result.status !== 'done') return;
     const outline = (list: Violation[], style: string) =>
       list.flatMap((v) =>
-        v.targets.map(
-          (t) =>
-            `${t}{outline:${t === selected || t === hovered ? 4 : 2}px ${style} ${IMPACT_COLORS[v.impact ?? 'minor']} !important;outline-offset:2px !important}`
-        )
+        v.targets.flatMap((t) => {
+          const found = findTarget(doc, t);
+          if (!found) return [];
+          const width = t === selected || t === hovered ? 4 : 2;
+          const rule = `${found.selector}{outline:${width}px ${style} ${IMPACT_COLORS[v.impact ?? 'minor']} !important;outline-offset:2px !important}`;
+          return [{ root: found.root, rule }];
+        })
       );
     // a violation's outline wins over a review's on the same element
     const rules = [...outline(result.review, 'dashed'), ...outline(result.violations, 'solid')];
-    const style = doc.createElement('style');
-    style.textContent = rules.join('\n');
-    doc.head.append(style);
-    return () => style.remove();
+    // the page's styles do not reach into a shadow root, so each root gets its own
+    const roots = rules.map((r) => r.root).filter((root, i, all) => all.indexOf(root) === i);
+    const styles = roots.map((root) => {
+      const style = doc.createElement('style');
+      style.textContent = rules
+        .filter((r) => r.root === root)
+        .map((r) => r.rule)
+        .join('\n');
+      (root === doc ? doc.head : root).append(style);
+      return style;
+    });
+    return () => styles.forEach((s) => s.remove());
   });
 
   $effect(() => {
