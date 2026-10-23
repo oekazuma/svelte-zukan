@@ -68,6 +68,11 @@ export type Messages = {
   impactModerate: string;
   impactMinor: string;
   a11yHighlight: string;
+  a11yTools: string;
+  a11yTextZoom: string;
+  a11yTextZoomHint: string;
+  a11yTabOrder: string;
+  a11yTabOrderHint: string;
   vision: string;
   visionNone: string;
   visionBlurred: string;
@@ -190,7 +195,13 @@ export const messages: Record<'en' | 'ja', Messages> = {
     impactSerious: 'serious',
     impactModerate: 'moderate',
     impactMinor: 'minor',
-    a11yHighlight: 'Highlight issues',
+    a11yHighlight: 'Outline where issues were found',
+    a11yTools: 'Check',
+    a11yTextZoom: 'Text 200%',
+    a11yTextZoomHint:
+      "Doubles the text size in the preview, as raising the browser's default font size does. Text with a fixed px size stays as it is",
+    a11yTabOrder: 'Tab order',
+    a11yTabOrderHint: 'Numbers the elements the Tab key moves to, in that order',
     vision: 'Simulate vision',
     visionNone: 'Normal',
     visionBlurred: 'Blurred',
@@ -312,7 +323,13 @@ export const messages: Record<'en' | 'ja', Messages> = {
     impactSerious: '深刻',
     impactModerate: '中程度',
     impactMinor: '軽微',
-    a11yHighlight: '問題を強調',
+    a11yHighlight: '問題が見つかった箇所を枠で囲む',
+    a11yTools: '確かめる',
+    a11yTextZoom: '文字 200%',
+    a11yTextZoomHint:
+      'ブラウザーの既定の文字サイズを上げたときと同じように、プレビューの文字を 2 倍にします。px で大きさを固定した文字は変わりません',
+    a11yTabOrder: 'Tab の順番',
+    a11yTabOrderHint: 'Tab キーでフォーカスが移る要素に、移る順の番号を付けます',
     vision: '見え方',
     visionNone: '通常',
     visionBlurred: 'ぼやけ',
