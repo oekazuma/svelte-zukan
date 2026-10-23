@@ -1,5 +1,11 @@
 # svelte-zukan
 
+## 0.10.0
+
+### Minor Changes
+
+- d645eed: feat: show the project's Tailwind CSS v4 theme in the catalog and in catalog.json.
+
 ## 0.9.1
 
 ### Patch Changes
