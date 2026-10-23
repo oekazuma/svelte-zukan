@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { relative } from 'node:path';
 import { normalizePath } from 'vite';
 import { formatHash } from '../app/hash.js';
-import type { CatalogItem, ZukanProp } from '../types.js';
+import type { CatalogItem, TailwindSource, ZukanProp } from '../types.js';
 import { extractSections } from './extract.js';
 import { extractProps } from './props.js';
 
@@ -31,6 +31,8 @@ export type CatalogJson = {
   }[];
   /** `.svelte` files in the scanned directories with no catalog file next to them */
   uncataloged: { group: string; file: string }[];
+  /** one item per Tailwind CSS entry, without its sample CSS; null when none was loaded */
+  tailwind: Omit<TailwindSource, 'id' | 'css'>[] | null;
 };
 
 export function catalogJson(opts: {
@@ -40,6 +42,7 @@ export function catalogJson(opts: {
   uncataloged: { group: string; file: string }[];
   docFileOf: (file: string) => string;
   componentFileOf: (file: string) => string;
+  tailwind: TailwindSource[];
 }): CatalogJson {
   const rel = (file: string) => normalizePath(relative(opts.root, file));
   const read = (file: string) => readFileSync(file, 'utf-8');
@@ -74,6 +77,16 @@ export function catalogJson(opts: {
         ...(error !== undefined && { error })
       };
     }),
-    uncataloged: opts.uncataloged.map((u) => ({ group: u.group, file: rel(u.file) }))
+    uncataloged: opts.uncataloged.map((u) => ({ group: u.group, file: rel(u.file) })),
+    tailwind: opts.tailwind.length
+      ? opts.tailwind.map(({ file, version, prefix, categories, variables, error }) => ({
+          file,
+          version,
+          prefix,
+          categories,
+          variables,
+          ...(error !== undefined && { error })
+        }))
+      : null
   };
 }

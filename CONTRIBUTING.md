@@ -6,7 +6,7 @@ Hi! We are really excited that you are interested in contributing to svelte-zuka
 
 svelte-zukan is a component catalog and nothing else. Its users pick it because it is small, needs no setup beyond one line, and has little to keep up to date. Before proposing a feature, check it against these:
 
-- **It helps someone look at, check, or document a component.** Previews, widths, themes, the code view, the props table, accessibility checks and the data for agents do. Props controls, an event log, interaction or visual tests, and an addon system do not; those are what Storybook is for
+- **It helps someone look at, check, or document a component, or the design tokens the components are built from** (the Tailwind CSS theme, for example). Previews, widths, themes, the code view, the props table, accessibility checks and the data for agents do. Props controls, an event log, interaction or visual tests, and an addon system do not; those are what Storybook is for
 - **It works without configuration.** A new `zukan()` option is the last resort, not the first: the option set is small on purpose (`suffix`, `groups`, `wrapper`, `logo`, `title`, `locale`, `theme`, `build`)
 - **It adds no dependency for something a few lines can do.** A runtime dependency reaches every user's install and every user's upgrade
 - **Catalog files stay plain Svelte.** No story format, no special syntax beyond `<Section>`, nothing an agent or a person has to learn first

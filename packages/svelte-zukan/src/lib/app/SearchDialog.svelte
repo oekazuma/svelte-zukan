@@ -4,23 +4,38 @@
 </script>
 
 <script lang="ts">
-  import type { Entry } from '../types.js';
-  import { formatHash } from './hash.js';
-  import type { Messages } from './i18n.js';
-  import { search, type SearchHit, type SearchItem, type SearchKind } from './search.js';
+  import type { Entry, TailwindListItem, TailwindSource } from '../types.js';
+  import { formatHash, formatTailwindHash } from './hash.js';
+  import { categoryTitles, type Messages } from './i18n.js';
+  import { search, type SearchHit, type SearchItem, type SearchKind, type TailwindSearchItem } from './search.js';
+  import { isColor } from './tailwind-filter.js';
 
-  let { entries, t }: { entries: Entry[]; t: Messages } = $props();
+  let {
+    entries,
+    tailwind,
+    locale,
+    t
+  }: {
+    entries: Entry[];
+    /** the entries without an error */
+    tailwind: TailwindListItem[];
+    locale: 'en' | 'ja';
+    t: Messages;
+  } = $props();
 
   let dialog: HTMLDialogElement;
   let input: HTMLInputElement;
+  // the Tailwind CSS filter option; no group name can equal it
+  const TAILWIND = Symbol('tailwind');
   let query = $state('');
-  let group = $state<string | null>(null);
+  let group = $state<string | typeof TAILWIND | null>(null);
   let active = $state(0);
   const id = $props.id();
 
   type Meta = Pick<SearchItem, 'sections' | 'doc' | 'props'>;
   // loaded on the first open only, so the catalog page does not import every metadata module up front
   let metas = $state.raw<Map<string, Meta>>();
+  let sources = $state.raw<TailwindSource[]>([]);
   let loading = false;
 
   // DOMParser documents are inert: no scripts run and no images load
@@ -45,6 +60,18 @@
       metas = new Map(pairs.filter((p): p is [string, Meta] => p[1] !== null));
       active = 0;
     });
+    // an entry that fails to load shows its error on its own page
+    Promise.all(
+      tailwind.map((s) =>
+        s.load().then(
+          ({ default: data }) => (data.error ? [] : [data]),
+          () => []
+        )
+      )
+    ).then((found) => {
+      sources = found.flat();
+      active = 0;
+    });
   }
 
   const items = $derived(
@@ -55,14 +82,46 @@
       ...(metas?.get(e.path) ?? { sections: [], doc: '', props: [] })
     }))
   );
-  const groups = $derived([...new Set(entries.map((e) => e.group))]);
-  const hits = $derived(search(items, query, group === null ? null : new Set([group])));
+  const tailwindItems = $derived(
+    sources.flatMap((data): TailwindSearchItem[] => [
+      ...data.categories.map((c) => ({
+        source: data.id,
+        category: c.id,
+        title: categoryTitles[locale][c.id],
+        tokens: c.tokens
+      })),
+      {
+        source: data.id,
+        category: 'full-config',
+        title: categoryTitles[locale]['full-config'],
+        tokens: Object.entries(data.variables).map(([name, value]) => ({ class: null, cssVariable: name, value }))
+      }
+    ])
+  );
+  // only several entries need telling apart, as the group and directory do for components
+  const files = $derived(tailwind.length > 1 ? new Map(tailwind.map((s) => [s.id, s.file])) : null);
+  const groups = $derived([
+    null,
+    ...new Set(entries.map((e) => e.group)),
+    ...(tailwind.length ? ([TAILWIND] as const) : [])
+  ]);
   const kinds = $derived<[SearchKind, string][]>([
     ['component', t.searchComponents],
     ['section', t.searchSections],
     ['prop', t.searchProps],
-    ['description', t.searchDescriptions]
+    ['description', t.searchDescriptions],
+    ['tailwind', t.tailwind]
   ]);
+  // already in the order of `kinds`, so ↑ and ↓ move down the list as shown
+  const hits = $derived(
+    search(
+      group === TAILWIND ? [] : items,
+      query,
+      typeof group === 'string' ? new Set([group]) : null,
+      undefined,
+      group === null || group === TAILWIND ? tailwindItems : []
+    )
+  );
 
   export function open() {
     if (!dialog.open) dialog.showModal();
@@ -74,7 +133,10 @@
 
   function go(hit: SearchHit) {
     dialog.close();
-    location.hash = formatHash('detail', hit.item.path, hit.kind === 'section' ? hit.label : undefined);
+    location.hash =
+      hit.kind === 'tailwind'
+        ? formatTailwindHash(hit.item.source, hit.item.category, hit.label)
+        : formatHash('detail', hit.item.path, hit.kind === 'section' ? hit.label : undefined);
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -112,20 +174,20 @@
       aria-controls="{id}-results"
       aria-autocomplete="list"
       aria-activedescendant={hits.length ? `${id}-${active}` : undefined}
-      placeholder={t.searchPlaceholder}
+      placeholder={tailwind.length ? t.searchPlaceholderTailwind : t.searchPlaceholder}
       autocomplete="off"
       spellcheck="false"
     />
-    {#if groups.length > 1}
+    {#if groups.length > 2}
       <div class="groups" role="group" aria-label={t.searchGroups}>
-        {#each [null, ...groups] as g (g)}
+        {#each groups as g (g)}
           <button
             type="button"
             aria-pressed={group === g}
             onclick={() => {
               group = g;
               active = 0;
-            }}>{g ?? t.searchAllGroups}</button
+            }}>{g === null ? t.searchAllGroups : g === TAILWIND ? t.tailwind : g}</button
           >
         {/each}
       </div>
@@ -148,13 +210,31 @@
                   onmousemove={() => (active = i)}
                   onclick={() => go(hit)}
                 >
-                  <span class="line">
-                    <span class="name">{hit.item.name}</span>
-                    {#if hit.label}<span class="label" class:code={hit.kind === 'prop'}>{hit.label}</span>{/if}
-                    <!-- the group and the directory, so two components with one name tell apart -->
-                    <span class="group">{hit.item.path.slice(0, hit.item.path.lastIndexOf('/'))}</span>
-                  </span>
-                  {#if hit.snippet}<span class="snippet">{hit.snippet}</span>{/if}
+                  {#if hit.kind === 'tailwind'}
+                    <span class="line">
+                      {#if hit.label}
+                        <!-- a plain colour, not the entry's CSS, so it can be drawn in the catalog document -->
+                        {#if hit.value && isColor(hit.value)}
+                          <span class="swatch" style:background-color={hit.value}></span>
+                        {/if}
+                        <span class="name code">{hit.label}</span>
+                        <span class="group"
+                          >{[hit.item.title, files?.get(hit.item.source)].filter(Boolean).join(' · ')}</span
+                        >
+                      {:else}
+                        <span class="name">{hit.item.title}</span>
+                        {#if files}<span class="group">{files.get(hit.item.source)}</span>{/if}
+                      {/if}
+                    </span>
+                  {:else}
+                    <span class="line">
+                      <span class="name">{hit.item.name}</span>
+                      {#if hit.label}<span class="label" class:code={hit.kind === 'prop'}>{hit.label}</span>{/if}
+                      <!-- the group and the directory, so two components with one name tell apart -->
+                      <span class="group">{hit.item.path.slice(0, hit.item.path.lastIndexOf('/'))}</span>
+                    </span>
+                    {#if hit.snippet}<span class="snippet">{hit.snippet}</span>{/if}
+                  {/if}
                 </div>
               {/if}
             {/each}
@@ -285,6 +365,16 @@
   .code {
     font-family: var(--_mono);
     font-size: 13px;
+  }
+
+  .swatch {
+    flex: none;
+    align-self: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    /* white and black stay visible on either catalog theme */
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--_text) 25%, transparent);
   }
 
   .group {

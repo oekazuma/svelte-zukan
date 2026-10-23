@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
-import type { ZukanMeta } from '../types.js';
+import type { TailwindListItem, TailwindSource, ZukanMeta } from '../types.js';
 import App from './App.svelte';
+import { messages } from './i18n.js';
 import { modifier } from './SearchDialog.svelte';
 import Catalog from './Catalog.test.svelte';
 
@@ -188,5 +189,215 @@ describe('the search dialog', () => {
     await openSearch();
     expect(document.querySelector('dialog')).toBeNull();
     expect(catalog[1].meta).not.toHaveBeenCalled();
+  });
+});
+
+const tailwindSource: TailwindSource = {
+  id: 'app',
+  file: 'src/app.css',
+  version: '4.3.3',
+  prefix: null,
+  categories: [
+    {
+      id: 'background-color',
+      title: 'Background Color',
+      tokens: [
+        { class: 'bg-brand-500', cssVariable: '--color-brand-500', value: '#ff3e00' },
+        { class: 'bg-white', cssVariable: '--color-white', value: '#fff' }
+      ]
+    },
+    { id: 'font-size', title: 'Font Size', tokens: [{ class: 'text-lg', cssVariable: '--text-lg', value: '1.125rem' }] }
+  ],
+  variables: { '--color-brand-500': '#ff3e00', '--color-white': '#fff', '--text-lg': '1.125rem' },
+  css: [
+    ':root { --color-brand-500: #ff3e00; --color-white: #fff; --text-lg: 1.125rem }',
+    '.bg-brand-500 { background-color: var(--color-brand-500) }',
+    '.bg-white { background-color: var(--color-white) }',
+    '.text-lg { font-size: var(--text-lg) }'
+  ].join('\n')
+};
+
+function setupTailwind(hash?: string, locale: 'en' | 'ja' = 'en') {
+  const { catalog, props } = setup(hash);
+  const tailwind: TailwindListItem[] = [
+    { id: 'app', file: 'src/app.css', error: null, load: vi.fn(() => Promise.resolve({ default: tailwindSource })) },
+    { id: 'broken', file: 'src/broken.css', error: null, load: vi.fn(() => Promise.reject(new Error('broken'))) }
+  ];
+  return { catalog, tailwind, props: { ...props, locale, tailwind } };
+}
+
+describe('Tailwind CSS in the search dialog', () => {
+  it('loads the entries on the first open only and finds a class, with a swatch', async () => {
+    const { tailwind, props } = setupTailwind();
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    for (const s of tailwind) expect(s.load).not.toHaveBeenCalled();
+    await openSearch();
+    for (const s of tailwind) expect(s.load).toHaveBeenCalledOnce();
+    await screen.getByRole('combobox').fill('brand');
+    const group = screen.getByRole('listbox').getByRole('group', { name: 'Tailwind CSS' });
+    const option = group.getByRole('option', { name: /bg-brand-500/ });
+    await expect.element(option).toMatchTextContent('Background Color');
+    const swatch = option.element().querySelector<HTMLElement>('.swatch');
+    expect(swatch && getComputedStyle(swatch).backgroundColor).toBe('rgb(255, 62, 0)');
+    await screen.getByRole('combobox').fill('text-lg');
+    await expect.element(screen.getByRole('option', { name: /text-lg/ }).first()).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole('option', { name: /text-lg/ })
+        .first()
+        .element()
+        .querySelector('.swatch')
+    ).toBeNull();
+  });
+
+  it('finds a category by its title in the catalog language and opens it unfiltered', async () => {
+    const { props } = setupTailwind(undefined, 'ja');
+    const screen = await render(App, { props });
+    await openSearch();
+    await screen.getByRole('combobox').fill('フォントサイズ');
+    await screen.getByRole('option', { name: /フォントサイズ/ }).click();
+    await expect.poll(() => location.hash).toBe('#/tailwind?source=app&category=font-size');
+    await expect.element(screen.getByRole('searchbox', { name: messages.ja.filterTokens })).toHaveValue('');
+  });
+
+  it('the Tailwind CSS filter narrows to Tailwind results', async () => {
+    const { props } = setupTailwind();
+    const screen = await render(App, { props });
+    await openSearch();
+    await screen.getByRole('combobox').fill('c');
+    const results = screen.getByRole('listbox');
+    await expect.element(results.getByRole('group', { name: 'Tailwind CSS' })).toBeInTheDocument();
+    await expect.element(results.getByRole('group', { name: 'Components' })).toBeInTheDocument();
+    const filter = screen.getByRole('group', { name: 'Groups' });
+    await filter.getByRole('button', { name: 'Tailwind CSS' }).click();
+    await expect.element(results.getByRole('group', { name: 'Components' })).not.toBeInTheDocument();
+    await expect.element(results.getByRole('group', { name: 'Sections' })).not.toBeInTheDocument();
+    await expect.element(results.getByRole('group', { name: 'Tailwind CSS' })).toBeInTheDocument();
+    await filter.getByRole('button', { name: 'ui' }).click();
+    await expect.element(results.getByRole('group', { name: 'Tailwind CSS' })).not.toBeInTheDocument();
+  });
+
+  it('Enter opens the Tailwind page filtered to the token', async () => {
+    const { props } = setupTailwind();
+    const screen = await render(App, { props });
+    await openSearch();
+    await screen.getByRole('combobox').fill('brand');
+    await expect.element(screen.getByRole('option', { name: /bg-brand-500/ })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => location.hash).toBe('#/tailwind?source=app&category=background-color&q=bg-brand-500');
+    await expect.element(screen.getByRole('searchbox', { name: 'Filter tokens' })).toHaveValue('bg-brand-500');
+    await expect
+      .poll(() =>
+        [...(screen.container.querySelector('iframe')?.contentDocument?.querySelectorAll('[data-token]') ?? [])].map(
+          (el) => el.getAttribute('data-token')
+        )
+      )
+      .toEqual(['bg-brand-500']);
+  });
+
+  it('says it covers Tailwind CSS tokens, in the input and in the shortcuts', async () => {
+    const { props } = setupTailwind();
+    const screen = await render(App, { props });
+    await userEvent.keyboard('?');
+    await expect
+      .element(screen.getByRole('dialog', { name: 'Keyboard shortcuts' }))
+      .toMatchTextContent('Search names, sections, props, descriptions and Tailwind CSS tokens');
+    await userEvent.keyboard('{Escape}');
+    await openSearch();
+    await expect
+      .element(screen.getByRole('combobox'))
+      .toHaveAttribute('placeholder', 'Names, sections, props, descriptions and Tailwind CSS tokens');
+  });
+
+  it('shows the file of each entry only when there are several', async () => {
+    const { props } = setupTailwind();
+    const entry = (id: string, file: string): TailwindListItem => ({
+      id,
+      file,
+      error: null,
+      load: () => Promise.resolve({ default: { ...tailwindSource, id, file } })
+    });
+    const two = await render(App, {
+      props: { ...props, tailwind: [entry('app', 'src/app.css'), entry('theme', 'src/theme.css')] }
+    });
+    await openSearch();
+    await two.getByRole('combobox').fill('bg-brand');
+    const options = two.getByRole('option', { name: /bg-brand-500/ });
+    await expect
+      .poll(() => options.elements().map((o) => o.textContent!.replace(/\s+/g, ' ').trim()))
+      .toEqual(['bg-brand-500 Background Color · src/app.css', 'bg-brand-500 Background Color · src/theme.css']);
+    await two.getByRole('combobox').fill('font size');
+    await expect.element(two.getByRole('option', { name: /Font Size/ }).first()).toMatchTextContent('src/app.css');
+    two.unmount();
+    document.querySelector('dialog')?.close();
+
+    const one = await render(App, { props: { ...props, tailwind: [entry('app', 'src/app.css')] } });
+    await openSearch();
+    await one.getByRole('combobox').fill('bg-brand');
+    await expect
+      .poll(() =>
+        one
+          .getByRole('option')
+          .elements()
+          .map((o) => o.textContent!.replace(/\s+/g, ' ').trim())
+      )
+      .toEqual(['bg-brand-500 Background Color']);
+  });
+
+  it('leaves out entries with an error: no Tailwind CSS search when all have one, no file for the only usable one', async () => {
+    const { props } = setupTailwind();
+    const errored = (id: string, file: string): TailwindListItem => ({
+      id,
+      file,
+      error: 'broken',
+      load: vi.fn(() => Promise.resolve({ default: tailwindSource }))
+    });
+    const allErrors = [errored('a', 'src/a.css'), errored('b', 'src/b.css')];
+    const none = await render(App, { props: { ...props, tailwind: allErrors } });
+    await userEvent.keyboard('?');
+    await expect
+      .element(none.getByRole('dialog', { name: 'Keyboard shortcuts' }))
+      .toMatchTextContent('Search names, sections, props and descriptions');
+    await userEvent.keyboard('{Escape}');
+    await openSearch();
+    await expect
+      .element(none.getByRole('combobox'))
+      .toHaveAttribute('placeholder', 'Names, sections, props and descriptions');
+    expect(none.getByRole('button', { name: 'Tailwind CSS' }).query()).toBeNull();
+    for (const s of allErrors) expect(s.load).not.toHaveBeenCalled();
+    none.unmount();
+    document.querySelector('dialog')?.close();
+
+    const usable = {
+      id: 'app',
+      file: 'src/app.css',
+      error: null,
+      load: () => Promise.resolve({ default: tailwindSource })
+    };
+    const one = await render(App, { props: { ...props, tailwind: [usable, errored('b', 'src/b.css')] } });
+    await openSearch();
+    await one.getByRole('combobox').fill('bg-brand');
+    await expect
+      .poll(() =>
+        one
+          .getByRole('option')
+          .elements()
+          .map((o) => o.textContent!.replace(/\s+/g, ' ').trim())
+      )
+      .toEqual(['bg-brand-500 Background Color']);
+  });
+
+  it('has no Tailwind CSS group or filter without Tailwind data', async () => {
+    const { props } = setup();
+    const screen = await render(App, { props: { ...props, tailwind: [] } });
+    await openSearch();
+    await screen.getByRole('combobox').fill('c');
+    await expect.element(screen.getByRole('group', { name: 'Components' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Tailwind CSS' }).query()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Tailwind CSS' }).query()).toBeNull();
+    await expect
+      .element(screen.getByRole('combobox'))
+      .toHaveAttribute('placeholder', 'Names, sections, props and descriptions');
   });
 });

@@ -1,15 +1,21 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { normalizePath, searchForWorkspaceRoot } from 'vite';
+import { BuildEnvironment, normalizePath, resolveConfig, searchForWorkspaceRoot } from 'vite';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as api from './index.js';
 import { zukan } from './index.js';
 import { extendFsAllow, libDir, resolveOptions } from './options.js';
+import { findPackage, loadTailwind } from './tailwind-load.js';
 import { ENTRY, META, metaId } from './virtual.js';
+
+vi.mock('./tailwind-load.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./tailwind-load.js')>();
+  return { ...original, loadTailwind: vi.fn(original.loadTailwind) };
+});
 
 // hooks are called with hand-made fakes, so the plugin is typed loosely
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -935,6 +941,115 @@ describe('build', () => {
     await p.buildApp.handler(builder);
     const app = { client: [client], every: [client, server] }[which];
     expect(builder.build.mock.calls.map(([env]) => env)).toEqual([...app, zukanEnv]);
+  });
+});
+
+describe('Tailwind CSS', () => {
+  // the dev server's environments are never read without an entry, so the fake server has none
+  it('does not load Tailwind until the list module is loaded', async () => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/app.css'), '@import "tailwindcss";');
+    vi.mocked(loadTailwind).mockClear();
+    const { p } = boot(root);
+    p.configureServer(fakeServer(root));
+    p.load('\0virtual:svelte-zukan/entry');
+    p.load('\0virtual:svelte-zukan/catalog');
+    expect(loadTailwind).not.toHaveBeenCalled();
+  });
+
+  it('leaves the Tailwind import out of the entry module without an entry', async () => {
+    const { root } = await makeApp();
+    const entry = boot(root).p.load('\0virtual:svelte-zukan/entry');
+    expect(entry).not.toContain('virtual:svelte-zukan/tailwind');
+    expect(entry).toContain('tailwind: []');
+  });
+
+  it('serves catalog.json with tailwind null without Tailwind', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    const server = fakeServer(root);
+    p.configureServer(server);
+    const res = await request(server.middlewares.use.mock.calls[0][0], '/__zukan/catalog.json');
+    expect(JSON.parse(res.body!).tailwind).toBeNull();
+  });
+
+  it('keeps a failed generation out of hotUpdate and out of the cache', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root);
+    const server = fakeServer(root);
+    p.configureServer(server);
+    const list = { id: '\0virtual:svelte-zukan/tailwind' };
+    const ctx = {
+      environment: {
+        config: { consumer: 'client' },
+        logger: { warn: vi.fn() },
+        hot: { send: vi.fn() },
+        moduleGraph: {
+          getModuleById: vi.fn((id: string) => (id === list.id ? list : undefined)),
+          idToModuleMap: new Map([[list.id, list]]),
+          invalidateModule: vi.fn()
+        }
+      }
+    };
+    vi.mocked(loadTailwind).mockClear();
+    vi.mocked(loadTailwind).mockRejectedValueOnce(new Error('boom'));
+    const result = p.hotUpdate.call(ctx, { type: 'create', file: `${root}/src/new.css`, modules: [], timestamp: 1 });
+    expect(result).toBeUndefined();
+    await vi.waitFor(() =>
+      expect(ctx.environment.logger.warn).toHaveBeenCalledWith(expect.stringMatching(/^svelte-zukan: .*boom/))
+    );
+    expect(ctx.environment.hot.send).not.toHaveBeenCalled();
+    const res = await request(server.middlewares.use.mock.calls[0][0], '/__zukan/catalog.json');
+    expect(JSON.parse(res.body!).tailwind).toBeNull();
+    expect(loadTailwind).toHaveBeenCalledTimes(2);
+  });
+
+  it('writes catalog.json with tailwind null without Tailwind', async () => {
+    const { root } = await makeApp();
+    mkdirSync(`${root}/zukan-dist`);
+    const { p } = await bootBuild(root, { build: true });
+    const builder = {
+      config: { build: { watch: null }, logger: { warn: vi.fn() } },
+      environments: { client: { isBuilt: true }, zukan: { isBuilt: false } },
+      build: vi.fn(async () => ({ output: [{ type: 'chunk', name: 'zukan', fileName: '_zukan/zukan-1.js' }] }))
+    };
+    await p.buildApp.handler(builder);
+    expect(JSON.parse(readFileSync(`${root}/zukan-dist/catalog.json`, 'utf-8')).tailwind).toBeNull();
+    expect(builder.config.logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('warns once per failing entry in the build and writes its error to catalog.json', async () => {
+    const { tmp, root } = await makeApp();
+    for (const name of ['tailwindcss', '@tailwindcss/node']) {
+      const at = path.join(root, 'node_modules', name);
+      mkdirSync(path.dirname(at), { recursive: true });
+      symlinkSync(findPackage(name, import.meta.dirname)!, at, 'junction');
+    }
+    await writeFile(path.join(root, 'src/app.css'), '@import "tailwindcss";\n@theme { --color-brand: red; }');
+    await writeFile(path.join(root, 'src/broken.css'), '@import "tailwindcss";\n@import "./missing.css";');
+    const { p } = await bootBuild(root, { build: true });
+    mkdirSync(`${root}/zukan-dist`);
+    const config = await resolveConfig(
+      { root, configFile: false, logLevel: 'silent', environments: { zukan: {} } },
+      'build'
+    );
+    const zukanEnv = new BuildEnvironment('zukan', config);
+    const builder = {
+      config: { build: { watch: null }, logger: { warn: vi.fn() } },
+      environments: { client: { isBuilt: true }, zukan: zukanEnv },
+      build: vi.fn(async () => ({ output: [{ type: 'chunk', name: 'zukan', fileName: '_zukan/zukan-1.js' }] }))
+    };
+    await p.buildApp.handler(builder);
+    const warned = builder.config.logger.warn.mock.calls.map(([m]) => m);
+    expect(warned).toEqual([
+      expect.stringMatching(/^svelte-zukan: Tailwind CSS entry src\/broken\.css: .*missing\.css/)
+    ]);
+    const json = readFileSync(`${root}/zukan-dist/catalog.json`, 'utf-8');
+    expect(json).not.toContain(tmp);
+    const { tailwind } = JSON.parse(json);
+    expect(tailwind.map((t: { file: string }) => t.file)).toEqual(['src/app.css', 'src/broken.css']);
+    expect(tailwind[0].variables['--color-brand']).toBe('red');
+    expect(tailwind[1].error).toMatch(/missing\.css/);
   });
 });
 

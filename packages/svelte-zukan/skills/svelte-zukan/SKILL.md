@@ -14,6 +14,7 @@ With the dev server running, read `/__zukan/catalog.json` (after `vite build` wi
 - `components[]`: `id`, `file` (the catalog file), `component` (the `.svelte` next to it), `doc` (its `.md`), `props` (read from the component's `$props()`), and `sections[]` with each `title`, `code` and `preview`
 - `components[].error`: why a catalog file does not compile. Fix these first
 - `uncataloged[]`: `.svelte` files with no catalog file next to them yet
+- `tailwind`: `null` when the project has no Tailwind CSS v4 entry, else one object per entry with `file`, `version`, `prefix`, `categories[]` (the utility classes by category, each token with its `class`, `cssVariable` and `value`), `variables` (every theme variable) and `error`. When styling a component, use only the classes listed here (with the entry's `prefix`, if any): they are the ones the theme defines
 
 Paths are relative to the Vite root.
 
@@ -47,5 +48,5 @@ Put `<Name>.zukan.svelte` next to `<Name>.svelte` (the suffix can differ: check 
 - Reload `/__zukan/catalog.json`: the component is listed, has no `error`, and its sections are the ones you wrote
 - Open a section alone: `/__zukan/#/preview/<id>?section=<title>` (add `&theme=dark` for the dark theme; ignored when the `theme` option fixes the theme). The page has only the component and fills the window, so set the window width for a phone or tablet layout. It makes a good target for a screenshot
 - On the detail page, `/__zukan/#/<id>?section=<title>&width=375` opens that section's preview at 375px inside the catalog
-- Run the accessibility check (axe-core) on the sections you wrote: the button in each preview's toolbar, or, in a browser with WebMCP, the catalog page's `check_accessibility` tool (`list_components`, `get_component` and `open_component` are there too)
+- Run the accessibility check (axe-core) on the sections you wrote: the button in each preview's toolbar, or, in a browser with WebMCP, the catalog page's `check_accessibility` tool (`list_components`, `get_component` and `open_component` are there too, and, with Tailwind CSS, `list_tailwind_tokens`)
 - A `vite build` with `build: true` fails on the same catalog file errors, with the file and line

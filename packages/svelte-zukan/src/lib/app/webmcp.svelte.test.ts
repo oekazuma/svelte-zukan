@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { TailwindSource } from '../types.js';
 import { buildTools, registerTools, type WebMcpTool } from './webmcp.js';
 
 const catalog = {
@@ -120,6 +121,81 @@ describe('WebMCP tools', () => {
       expect(result.isError).toBe(true);
       expect(body(result)).toBe('The check could not run: Failed to load: boom');
     });
+  });
+});
+
+describe('list_tailwind_tokens', () => {
+  const tailwind: Omit<TailwindSource, 'id' | 'css'>[] = [
+    {
+      file: 'src/app.css',
+      version: '4.3.3',
+      prefix: null,
+      categories: [
+        {
+          id: 'background-color',
+          title: 'Background Color',
+          tokens: [
+            { class: 'bg-brand-500', cssVariable: '--color-brand-500', value: '#ff3e00' },
+            { class: 'bg-sky-500', cssVariable: '--color-sky-500', value: '#00a6f4' }
+          ]
+        },
+        {
+          id: 'padding',
+          title: 'Padding',
+          tokens: [{ class: 'p-4', cssVariable: null, value: 'calc(var(--spacing) * 4)' }]
+        }
+      ],
+      variables: { '--color-brand-500': '#ff3e00', '--font-sans': 'Inter' }
+    },
+    { file: 'docs/app.css', version: '4.3.3', prefix: 'tw', categories: [], variables: {}, error: 'broken' }
+  ];
+  const tools = buildTools({
+    fetchCatalog: () => Promise.resolve({ ...catalog, tailwind }),
+    page: '/',
+    tailwind: true
+  });
+  const run = async (input: Record<string, unknown>) => {
+    const result = await tool(tools, 'list_tailwind_tokens').execute(input);
+    return { ...result, json: result.isError ? null : JSON.parse(body(result)) };
+  };
+
+  it('registers only with Tailwind data', () => {
+    expect(tools.map((t) => t.name)).toContain('list_tailwind_tokens');
+    expect(tool(tools, 'list_tailwind_tokens').annotations.readOnlyHint).toBe(true);
+    const without = buildTools({ fetchCatalog: () => Promise.resolve(catalog), page: '/' });
+    expect(without.map((t) => t.name)).not.toContain('list_tailwind_tokens');
+  });
+
+  it('summarizes categories without a category', async () => {
+    expect((await run({})).json).toEqual([
+      {
+        file: 'src/app.css',
+        prefix: null,
+        categories: [
+          { id: 'background-color', title: 'Background Color', count: 2 },
+          { id: 'padding', title: 'Padding', count: 1 }
+        ]
+      },
+      { file: 'docs/app.css', prefix: 'tw', error: 'broken', categories: [] }
+    ]);
+  });
+
+  it('returns the filtered tokens of a category', async () => {
+    expect((await run({ category: 'background-color', query: ' SKY ' })).json).toEqual([
+      { file: 'src/app.css', tokens: [{ class: 'bg-sky-500', cssVariable: '--color-sky-500', value: '#00a6f4' }] },
+      { file: 'docs/app.css', error: 'broken', tokens: [] }
+    ]);
+    // a value matches too, and Full config lists the theme variables
+    expect((await run({ category: 'background-color', query: 'ff3e' })).json[0].tokens).toHaveLength(1);
+    expect((await run({ category: 'full-config', query: 'font' })).json[0].variables).toEqual({
+      '--font-sans': 'Inter'
+    });
+  });
+
+  it('answers an unknown category with an error result', async () => {
+    const result = await run({ category: 'nope' });
+    expect(result.isError).toBe(true);
+    expect(body(result)).toContain('nope');
   });
 });
 

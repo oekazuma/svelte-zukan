@@ -1,0 +1,280 @@
+import { __unstable__loadDesignSystem, compile } from '@tailwindcss/node';
+import { describe, expect, it } from 'vitest';
+import type { TailwindCategoryId } from '../types.js';
+import { extractTokens, resolveValue, rootVariables, scanCss, type DesignSystemLike } from './tailwind-tokens.js';
+
+const base = import.meta.dirname;
+
+async function load(css: string) {
+  const system = (await __unstable__loadDesignSystem(css, { base })) as unknown as DesignSystemLike;
+  const built = (await compile(css, { base, onDependency() {} })).build([]);
+  const result = extractTokens(system, rootVariables(built));
+  const token = (id: TailwindCategoryId, cls: string | null) =>
+    result.categories.find((c) => c.id === id)?.tokens.find((t) => t.class === cls);
+  const classesOf = (cls: string) =>
+    result.categories.filter((c) => c.tokens.some((t) => t.class === cls)).map((c) => c.id);
+  return { system, result, token, classesOf };
+}
+
+describe('extractTokens', () => {
+  it('lists a project color once per color category', async () => {
+    const { token } = await load('@import "tailwindcss"; @theme { --color-brand-500: #ff3e00; }');
+    for (const [id, cls] of [
+      ['background-color', 'bg-brand-500'],
+      ['text-color', 'text-brand-500'],
+      ['border-color', 'border-brand-500']
+    ] as const) {
+      expect(token(id, cls)).toEqual({ class: cls, cssVariable: '--color-brand-500', value: '#ff3e00' });
+    }
+  });
+
+  it('resolves @theme inline tokens through :root variables', async () => {
+    const { token } = await load(
+      '@import "tailwindcss";\n:root { --primary: oklch(0.6 0.2 30); }\n@theme inline { --color-primary: var(--primary); }'
+    );
+    expect(token('background-color', 'bg-primary')).toEqual({
+      class: 'bg-primary',
+      cssVariable: '--color-primary',
+      value: 'oklch(0.6 0.2 30)'
+    });
+  });
+
+  it('gives spacing classes no variable and a resolved value', async () => {
+    const { token } = await load('@import "tailwindcss";');
+    expect(token('padding', 'p-4')).toEqual({ class: 'p-4', cssVariable: null, value: 'calc(0.25rem * 4)' });
+  });
+
+  it('keeps text colors and font sizes apart', async () => {
+    const { classesOf } = await load('@import "tailwindcss";');
+    expect(classesOf('text-red-500')).toEqual(['text-color']);
+    expect(classesOf('text-lg')).toEqual(['font-size']);
+  });
+
+  it('leaves out side-specific border colors', async () => {
+    const { classesOf } = await load('@import "tailwindcss";');
+    expect(classesOf('border-red-500')).toEqual(['border-color']);
+    expect(classesOf('border-t-red-500')).toEqual([]);
+  });
+
+  it("reads shadow values from the rule's own shadow variable", async () => {
+    const { token } = await load('@import "tailwindcss";');
+    const box = token('box-shadow', 'shadow-lg');
+    expect(box?.value).toContain('0 10px 15px');
+    expect(box?.value).not.toContain('var(--tw-inset-shadow)');
+    const drop = token('drop-shadow', 'drop-shadow-md');
+    expect(drop?.value).toContain('drop-shadow(0 3px 3px');
+    expect(drop?.value).not.toContain('var(--tw-blur');
+  });
+
+  it('shows fallbacks instead of unknown variables', async () => {
+    const { token } = await load('@import "tailwindcss";');
+    const box = token('box-shadow', 'shadow-md')?.value;
+    expect(box).toContain('rgb(0 0 0 / 0.1)');
+    expect(box).not.toContain('var(--tw-shadow-color');
+    expect(token('drop-shadow', 'drop-shadow-md')?.value).not.toContain('var(');
+  });
+
+  it('shows none for a token with an empty value', async () => {
+    const { result, token } = await load('@import "tailwindcss";');
+    expect(token('drop-shadow', 'drop-shadow-none')?.value).toBe('none');
+    for (const { tokens } of result.categories) for (const t of tokens) expect(t.value.trim()).not.toBe('');
+  });
+
+  it('collapses line breaks and indentation in values', async () => {
+    const { result, token } = await load('@import "tailwindcss";');
+    const family = token('font-family', 'font-mono');
+    expect(family?.value).toContain('"Courier New"');
+    for (const value of [family?.value, ...Object.values(result.variables)]) expect(value).not.toMatch(/\n|\s{2}/);
+  });
+
+  it('lists breakpoints and the spacing base without a class', async () => {
+    const { result, token } = await load('@import "tailwindcss";');
+    expect(token('breakpoints', null)).toEqual({ class: null, cssVariable: '--breakpoint-sm', value: '40rem' });
+    expect(result.categories.find((c) => c.id === 'spacing')?.tokens[0]).toEqual({
+      class: null,
+      cssVariable: '--spacing',
+      value: '0.25rem'
+    });
+  });
+
+  describe('order', () => {
+    it('lists keyword colors after the theme colors', async () => {
+      const { result } = await load('@import "tailwindcss";');
+      for (const [id, stem] of [
+        ['background-color', 'bg'],
+        ['text-color', 'text'],
+        ['border-color', 'border']
+      ] as const) {
+        const tokens = result.categories.find((c) => c.id === id)?.tokens ?? [];
+        expect(tokens[0].class).toBe(`${stem}-red-50`);
+        expect(tokens.slice(-3).map((t) => t.class)).toEqual([
+          `${stem}-current`,
+          `${stem}-inherit`,
+          `${stem}-transparent`
+        ]);
+      }
+    });
+
+    const classes = (result: Awaited<ReturnType<typeof load>>['result'], id: TailwindCategoryId) =>
+      result.categories.find((c) => c.id === id)?.tokens.map((t) => t.class ?? t.cssVariable) ?? [];
+
+    it("follows the theme's scale, not the alphabet", async () => {
+      const { result } = await load('@import "tailwindcss";');
+      expect(classes(result, 'font-size').slice(0, 6)).toEqual([
+        'text-xs',
+        'text-sm',
+        'text-base',
+        'text-lg',
+        'text-xl',
+        'text-2xl'
+      ]);
+      expect(classes(result, 'font-weight').slice(0, 3)).toEqual(['font-thin', 'font-extralight', 'font-light']);
+      expect(classes(result, 'letter-spacing')[0]).toBe('tracking-tighter');
+      expect(classes(result, 'line-height').slice(-5)).toEqual([
+        'leading-tight',
+        'leading-snug',
+        'leading-normal',
+        'leading-relaxed',
+        'leading-loose'
+      ]);
+      expect(classes(result, 'border-radius')).toEqual(
+        ['none', 'xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', 'full'].map((size) => `rounded-${size}`)
+      );
+      expect(classes(result, 'border-width').slice(0, 3)).toEqual(['border-0', 'border', 'border-2']);
+      expect(classes(result, 'box-shadow').slice(0, 7)).toEqual([
+        'shadow',
+        'shadow-none',
+        'shadow-2xs',
+        'shadow-xs',
+        'shadow-sm',
+        'shadow-md',
+        'shadow-lg'
+      ]);
+      expect(classes(result, 'drop-shadow')).toEqual(
+        ['none', 'xs', 'sm', 'md', 'lg', 'xl', '2xl'].map((size) => `drop-shadow-${size}`)
+      );
+      expect(classes(result, 'breakpoints')).toEqual(
+        ['sm', 'md', 'lg', 'xl', '2xl'].map((size) => `--breakpoint-${size}`)
+      );
+    });
+
+    it('lists project colors in their @theme order and leaves spacing scales alone', async () => {
+      const { result } = await load('@import "tailwindcss"; @theme { --color-zeta: red; --color-alpha: blue; }');
+      const colors = classes(result, 'background-color');
+      expect(colors.indexOf('bg-zeta')).toBe(colors.indexOf('bg-alpha') - 1);
+      expect(colors.slice(colors.indexOf('bg-red-50'), colors.indexOf('bg-red-50') + 3)).toEqual([
+        'bg-red-50',
+        'bg-red-100',
+        'bg-red-200'
+      ]);
+      expect(classes(result, 'padding').slice(0, 5)).toEqual(['p-0', 'p-0.5', 'p-1', 'p-1.5', 'p-2']);
+      expect(classes(result, 'spacing')[0]).toBe('--spacing');
+    });
+  });
+
+  it('drops empty categories', async () => {
+    const { result } = await load('@theme { --*: initial; --color-only: red; }');
+    const ids = result.categories.map((c) => c.id);
+    expect(ids).toContain('background-color');
+    for (const id of ['font-size', 'font-weight', 'font-family', 'letter-spacing', 'breakpoints'] as const) {
+      expect(ids).not.toContain(id);
+    }
+  });
+
+  it('prefixes classes and variables', async () => {
+    const { result, token } = await load('@import "tailwindcss" prefix(tw);');
+    expect(result.prefix).toBe('tw');
+    expect(token('background-color', 'tw:bg-red-500')).toEqual({
+      class: 'tw:bg-red-500',
+      cssVariable: '--tw-color-red-500',
+      value: expect.stringMatching(/^(oklch|#)/)
+    });
+    expect(token('padding', 'tw:p-4')?.value).toBe('calc(0.25rem * 4)');
+    expect(token('breakpoints', null)).toEqual({ class: null, cssVariable: '--tw-breakpoint-sm', value: '40rem' });
+    expect(result.categories.find((c) => c.id === 'spacing')?.tokens[0].cssVariable).toBe('--tw-spacing');
+    expect(result.classes).toContain('tw:bg-red-500');
+    expect(result.classes).not.toContain('bg-red-500');
+  });
+});
+
+describe('scanCss', () => {
+  it('scans real Tailwind output', async () => {
+    const { system } = await load('@import "tailwindcss";');
+    const rules = scanCss(system.candidatesToCss(['shadow-lg'])[0] ?? '');
+    expect(rules).toHaveLength(1);
+    expect(rules[0].selector).toBe('.shadow-lg');
+    expect(rules[0].atRules).toEqual([]);
+    expect(rules[0].declarations.map(([p]) => p)).toContain('box-shadow');
+  });
+
+  it('keeps at-rule ancestry and skips strings and comments', () => {
+    const rules = scanCss(
+      '/* { */@layer a{@media (x){.a{content:"};";background:url(data:x;y)}}}@import "z";.b{--c:1;--d:2}'
+    );
+    expect(rules).toEqual([
+      {
+        selector: '.a',
+        atRules: ['@layer a', '@media (x)'],
+        declarations: [
+          ['content', '"};"'],
+          ['background', 'url(data:x;y)']
+        ]
+      },
+      {
+        selector: '.b',
+        atRules: [],
+        declarations: [
+          ['--c', '1'],
+          ['--d', '2']
+        ]
+      }
+    ]);
+  });
+});
+
+describe('rootVariables', () => {
+  it('reads :root variables from real compile() output', async () => {
+    const css = '@import "tailwindcss"; :root { --primary: red; }';
+    const compiler = await compile(css, { base, onDependency() {} });
+    const used = rootVariables(compiler.build(['bg-red-500']));
+    expect(used['--primary']).toBe('red');
+    expect(used).toHaveProperty('--color-red-500');
+    // build() accumulates candidates, so the empty build needs a fresh compiler
+    const none = rootVariables((await compile(css, { base, onDependency() {} })).build([]));
+    expect(none['--primary']).toBe('red');
+    expect(none).not.toHaveProperty('--color-red-500');
+  });
+
+  it('reads :root variables only from unconditional rules', () => {
+    expect(
+      rootVariables(
+        ':root{--a:1}\n@layer base{:root,:host{--b:2}}\n@media (x){:root{--c:3}}\n.dark{--d:4}\nhtml{--e:5}'
+      )
+    ).toEqual({ '--a': '1', '--b': '2', '--e': '5' });
+  });
+});
+
+describe('resolveValue', () => {
+  it('resolves var() chains and survives cycles', () => {
+    expect(resolveValue('var(--a)', { '--a': 'var(--b)', '--b': 'red' })).toBe('red');
+    expect(resolveValue('calc(var(--s) * 4)', { '--s': '0.25rem' })).toBe('calc(0.25rem * 4)');
+    expect(resolveValue('var(--x)', { '--x': 'var(--x)' })).toBe('var(--x)');
+  });
+
+  it('takes the fallback of an unknown variable', () => {
+    expect(resolveValue('0 1px var(--u, rgb(0 0 0 / 0.1)), 0 2px var(--u, red)', {})).toBe(
+      '0 1px rgb(0 0 0 / 0.1), 0 2px red'
+    );
+    expect(resolveValue('var(--a, var(--b, red))', {})).toBe('red');
+    expect(resolveValue('var(--a, var(--b, red))', { '--b': 'blue' })).toBe('blue');
+    expect(resolveValue('var(--a, calc(var(--s) * 2))', { '--s': '1px' })).toBe('calc(1px * 2)');
+    expect(resolveValue('blur(2px) var(--tw-blur,) var(--tw-x, )', {})).toBe('blur(2px)');
+    expect(resolveValue('var(--x, 1px)', { '--x': 'var(--x)' })).toBe('var(--x)');
+  });
+
+  it('keeps an unknown variable without a fallback', () => {
+    expect(resolveValue('var(--u)', {})).toBe('var(--u)');
+    expect(resolveValue('1px var(--u) var(--v, 2px)', {})).toBe('1px var(--u) 2px');
+    expect(resolveValue('var(--x)', { '--x': 'var(--x)' })).toBe('var(--x)');
+  });
+});

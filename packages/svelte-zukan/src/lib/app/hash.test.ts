@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatHash, parseHash } from './hash.js';
+import { formatHash, formatTailwindHash, parseHash } from './hash.js';
 
 describe('parseHash / formatHash', () => {
   it.each(['', '#', '#/'])('%j is the list', (hash) => {
@@ -73,5 +73,32 @@ describe('shared view', () => {
     const route = parseHash('#/ui/Card?width=-3&theme=blue');
     expect(route).toMatchObject({ width: undefined, theme: undefined });
     expect(parseHash('#/ui/Card?width=12.5')).toMatchObject({ width: undefined });
+  });
+});
+
+describe('the Tailwind page', () => {
+  it('parses the Tailwind page', () => {
+    expect(parseHash('#/tailwind?source=abc&category=spacing')).toEqual({
+      view: 'tailwind',
+      source: 'abc',
+      category: 'spacing',
+      q: null
+    });
+    expect(parseHash('#/tailwind')).toEqual({ view: 'tailwind', source: null, category: null, q: null });
+    expect(parseHash('#/tailwind/Button').view).toBe('detail');
+  });
+
+  it('round-trips a source and a category', () => {
+    expect(formatTailwindHash()).toBe('#/tailwind');
+    const hash = formatTailwindHash('a b', 'font-size');
+    expect(hash).toBe('#/tailwind?source=a%20b&category=font-size');
+    expect(parseHash(hash)).toEqual({ view: 'tailwind', source: 'a b', category: 'font-size', q: null });
+  });
+
+  it('round-trips a filter, with %20 for a space; an empty one is left out', () => {
+    const hash = formatTailwindHash('app', 'background-color', 'bg brand+500&x');
+    expect(hash).toBe('#/tailwind?source=app&category=background-color&q=bg%20brand%2B500%26x');
+    expect(parseHash(hash)).toMatchObject({ source: 'app', category: 'background-color', q: 'bg brand+500&x' });
+    expect(formatTailwindHash('app', undefined, '')).toBe('#/tailwind?source=app');
   });
 });

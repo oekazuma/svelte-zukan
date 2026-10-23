@@ -309,6 +309,44 @@ describe('App', () => {
     await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
   });
 
+  it('has no Tailwind item without Tailwind data', async () => {
+    const { props } = setup('');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('navigation', { name: 'Components' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Tailwind/ }).query()).toBeNull();
+  });
+
+  it('links one Tailwind item per entry, with the file when there are several', async () => {
+    const tw = (id: string, file: string) => ({
+      id,
+      file,
+      error: null,
+      load: () => new Promise<never>(() => {})
+    });
+    const { props } = setup('');
+    const one = await render(App, { props: { ...props, tailwind: [tw('a', 'src/app.css')] } });
+    const nav = one.getByRole('navigation', { name: 'Components' });
+    await expect
+      .element(nav.getByRole('link', { name: 'Tailwind CSS', exact: true }))
+      .toHaveAttribute('href', '#/tailwind?source=a');
+    one.unmount();
+    const two = await render(App, {
+      props: { ...props, tailwind: [tw('a', 'src/app.css'), tw('b', 'src/theme.css')] }
+    });
+    const link = two.getByRole('link', { name: 'Tailwind CSS (src/theme.css)' });
+    await expect.element(link).toHaveAttribute('href', '#/tailwind?source=b');
+    await expect.element(link).not.toHaveAttribute('aria-current');
+    await setHash('#/tailwind');
+    // without a source the first entry is shown
+    await expect
+      .element(two.getByRole('link', { name: 'Tailwind CSS (src/app.css)' }))
+      .toHaveAttribute('aria-current', 'page');
+    // J and K do nothing on the Tailwind page
+    await userEvent.keyboard('j');
+    await userEvent.keyboard('k');
+    expect(location.hash).toBe('#/tailwind');
+  });
+
   it('T switches the theme and F expands the preview in view', async () => {
     const { props } = setup('#/ui/Card');
     props.catalog[0].meta = () =>
