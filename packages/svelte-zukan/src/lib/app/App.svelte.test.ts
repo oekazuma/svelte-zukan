@@ -380,6 +380,73 @@ describe('App', () => {
     await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(0);
   });
 
+  const withProps =
+    (doc: string | null = null) =>
+    () =>
+      Promise.resolve({
+        default: {
+          sections: [
+            { title: 'One', code: '' },
+            { title: 'Two', code: '' }
+          ],
+          doc,
+          props: [{ name: 'a', type: 'string', default: null, required: true, bindable: false, description: null }],
+          propsType: null
+        }
+      });
+
+  // the observer marks the heading in the top third of the window
+  async function scrollToProps(screen: Awaited<ReturnType<typeof render>>) {
+    const link = screen.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Props' });
+    await expect.element(link).toBeInTheDocument();
+    document.getElementById('zukan-props')!.scrollIntoView();
+    await expect.element(link).toHaveAttribute('aria-current', 'location');
+  }
+
+  it('F with the props in view expands the last section', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = withProps();
+    const screen = await render(App, { props });
+    document.body.style.minHeight = '5000px';
+    try {
+      await scrollToProps(screen);
+      await userEvent.keyboard('f');
+      await expect.poll(() => document.querySelector('.preview.expanded iframe')?.getAttribute('title')).toBe('Two');
+    } finally {
+      document.body.style.minHeight = '';
+    }
+  });
+
+  it('the next page starts with nothing marked or expanded', async () => {
+    const props = three();
+    props.catalog[1].meta = withProps();
+    // the doc keeps every heading of the next page below the top third
+    props.catalog[2].meta = withProps('<div style="height: 1000px"></div>');
+    const screen = await render(App, { props });
+    document.body.style.minHeight = '5000px';
+    try {
+      await scrollToProps(screen);
+      await userEvent.keyboard('j');
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+      const link = screen.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Props' });
+      await expect.element(link).toBeInTheDocument();
+      await expect.element(link).not.toHaveAttribute('aria-current');
+      await userEvent.keyboard('k');
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+      await userEvent.keyboard('f');
+      await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(1);
+      await userEvent.keyboard('j');
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+      await expect.element(screen.getByTitle('One')).toBeInTheDocument();
+      expect(document.querySelectorAll('.preview.expanded').length).toBe(0);
+      // one press, not two
+      await userEvent.keyboard('f');
+      await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(1);
+    } finally {
+      document.body.style.minHeight = '';
+    }
+  });
+
   it('arrow keys move through the component list and fold folders', async () => {
     const { props } = setup('#/ui/Card');
     props.catalog.push({ group: 'ui', name: 'Button', dir: 'forms', path: 'ui/forms/Button', load, meta });
@@ -665,6 +732,23 @@ describe('App', () => {
       expect(spy.mock.contexts[0]).toBe(node);
       expect(one.element()).toBe(node);
       expect(document.title).toBe('Card | zukan');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('a link to the section already in the URL scrolls to it again', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card?section=Two');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      const two = screen.getByRole('heading', { level: 2, name: 'Two' });
+      await expect.element(two).toBeInTheDocument();
+      expect(spy).toHaveBeenCalledOnce();
+      await screen.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Two' }).click();
+      await expect.poll(() => spy.mock.calls.length).toBe(2);
+      expect(spy.mock.contexts[1]).toBe(two.element());
     } finally {
       spy.mockRestore();
     }

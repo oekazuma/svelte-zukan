@@ -246,17 +246,20 @@
           {t}
         />
       {:else if entry}
-        <Detail
-          bind:this={detail}
-          {entry}
-          section={route.view === 'detail' ? route.section : null}
-          width={route.view === 'detail' ? route.width : undefined}
-          {previous}
-          {next}
-          {theme}
-          {axe}
-          {t}
-        />
+        <!-- a new page per entry, so no PreviewFrame keeps the previous entry's size and no state carries over -->
+        {#key entry.path}
+          <Detail
+            bind:this={detail}
+            {entry}
+            section={route.view === 'detail' ? route.section : null}
+            width={route.view === 'detail' ? route.width : undefined}
+            {previous}
+            {next}
+            {theme}
+            {axe}
+            {t}
+          />
+        {/key}
       {:else}
         <h1>{t.notFound}</h1>
         <p class="missing">{t.notFoundHint}</p>
