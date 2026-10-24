@@ -197,7 +197,10 @@ it(
   }
 );
 
-it('changing an imported props type updates the metadata', { timeout: 25_000 }, async () => {
+const errors = () => send.mock.calls.filter(([p]: unknown[]) => (p as { type?: string })?.type === 'error');
+
+/** restarts the server with A.svelte reading its props type from types.ts */
+async function withPropsType() {
   await server.close();
   const types = join(tmp, 'app/src/types.ts');
   writeFileSync(types, 'export type Props = { a: number };\n');
@@ -206,12 +209,63 @@ it('changing an imported props type updates the metadata', { timeout: 25_000 }, 
     '<script lang="ts">\n  import type { Props } from \'./types\';\n  let { a }: Props = $props();\n</script>\n<p>{a}</p>'
   );
   await start();
-  expect(await meta('app/A')).toContain('"name":"a","type":"number"');
+  return types;
+}
+
+// the catalog page imports the list, which imports each meta module: an import of types.ts by the meta module would
+// end its update in `full-reload`
+it.each([false, true])(
+  'changing an imported props type updates the metadata (list loaded: %s)',
+  { timeout: 25_000 },
+  async (withList) => {
+    const types = await withPropsType();
+    if (withList) await list();
+    expect(await meta('app/A')).toContain('"name":"a","type":"number"');
+    send.mockClear();
+    writeFileSync(types, 'export type Props = { a: number; /** new */ b?: string };\n');
+    await waitForReload();
+    // Vite would send `full-reload` right after the plugin's hook
+    await new Promise((r) => setTimeout(r, 300));
+    expect(fullReloads()).toBe(0);
+    expect(await meta('app/A')).toContain('"name":"b","type":"string"');
+  }
+);
+
+it('editing a props type after its component is deleted is not an error', { timeout: 25_000 }, async () => {
+  const types = await withPropsType();
+  await list();
+  expect(await meta('app/A')).toContain('"name":"a"');
   send.mockClear();
-  writeFileSync(types, 'export type Props = { a: number; /** new */ b?: string };\n');
+  rmSync(join(tmp, 'app/src/A.svelte'));
   await waitForReload();
-  expect(fullReloads()).toBe(0);
-  expect(await meta('app/A')).toContain('"name":"b","type":"string"');
+  expect(await meta('app/A')).toContain('"props":null');
+  for (const b of ['string', 'number']) {
+    writeFileSync(types, `export type Props = { a: number; b?: ${b} };\n`);
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  expect(errors()).toEqual([]);
+});
+
+it('a component created next to a served catalog file gets its props table', { timeout: 15_000 }, async () => {
+  await list();
+  expect(await meta('app/A')).toContain('"props":null');
+  send.mockClear();
+  writeFileSync(join(tmp, 'app/src/A.svelte'), '<script lang="ts">\n  let { a }: { a: number } = $props();\n</script>');
+  await waitForReload();
+  expect(await meta('app/A')).toContain('"name":"a","type":"number"');
+});
+
+it('route files and tests that the list leaves out do not reload the catalog', { timeout: 15_000 }, async () => {
+  await list();
+  send.mockClear();
+  mkdirSync(join(tmp, 'app/src/routes/about'), { recursive: true });
+  writeFileSync(join(tmp, 'app/src/routes/about/+page.svelte'), '<p>about</p>');
+  writeFileSync(join(tmp, 'app/src/routes/Nav.svelte'), '<p>nav</p>');
+  writeFileSync(join(tmp, 'app/src/+layout.svelte'), '<slot />');
+  writeFileSync(join(tmp, 'app/src/A.test.svelte'), '<p>test</p>');
+  // a negative check needs a bounded wait
+  await new Promise((r) => setTimeout(r, 1000));
+  expect(reloaded()).toBe(false);
 });
 
 describe('Tailwind CSS', () => {

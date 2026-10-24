@@ -65,18 +65,26 @@ When `Button.svelte` sits next to `Button.zukan.svelte`, the detail page lists i
 ```svelte
 <!-- src/lib/Button/Button.svelte -->
 <script lang="ts">
+  import type { HTMLButtonAttributes } from 'svelte/elements';
+
   let {
     variant = 'primary',
-    disabled = false
-  }: {
+    disabled = false,
+    children,
+    ...rest
+  }: HTMLButtonAttributes & {
     /** the look of the button: `primary` for the main action */
     variant?: 'primary' | 'secondary';
     disabled?: boolean;
   } = $props();
 </script>
+
+<button class={variant} {disabled} {...rest}>
+  {@render children?.()}
+</button>
 ```
 
-The props are read from the component's source, not by running it. The type can be written inline, or as a type alias or interface declared in the component (an interface's `extends` included). A type imported by a relative path is read too: from a `.ts` file (`./types`, `./types.js`, `./types/index.ts`) or from another component's `<script module>`, following imports up to three files deep. A type the table can not read, such as one from a package (`HTMLButtonAttributes` from `svelte/elements`), is shown by its name, and for it the table lists only the destructured props, without types. Editing a file a props type comes from refreshes the table. A component that does not parse, or that has no `$props()`, gets no table. Like the `.md` file, a JSDoc comment is inserted as HTML, so review it like code before you publish the catalog.
+The props are read from the component's source, not by running it. The type can be written inline, or as a type alias or interface declared in the component (an interface's `extends` included). A type imported by a relative path is read too: from a `.ts` file (`./types`, `./types.js`, `./types/index.ts`, with its `export … from` re-exports) or from another component's `<script module>`, following imports up to three files deep. A type the table can not read, such as one from a package (`HTMLButtonAttributes` from `svelte/elements`) or a union (`{ href: string } | { onclick: () => void }`), is shown as written. In an intersection like the one above, the parts it can read still give their props with types (`variant`, `disabled`); the other destructured props (`children`) are listed without types. Editing a file a props type comes from refreshes the table. A component that does not parse, or that has no `$props()`, gets no table. Like the `.md` file, a JSDoc comment is inserted as HTML, so review it like code before you publish the catalog.
 
 ## Changing the suffix
 

@@ -60,7 +60,7 @@
     }
   },
   "peerDependencies": {
-    "svelte": "^5.20.0",
+    "svelte": "^5.46.4",
     "vite": "^8.0.0"
   },
   "dependencies": {

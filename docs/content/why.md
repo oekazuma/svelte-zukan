@@ -36,7 +36,7 @@ svelte-zukan is a component catalog and nothing else. If a catalog is what you u
 | Interaction and visual tests | No                                                                               | Yes                                                                                              |
 | SvelteKit `$app/*`           | The real modules, in their default state                                         | Mocked, including `$app/state`                                                                   |
 | Static export                | `build: true` in your own `vite build`; works under any path                     | `storybook build`                                                                                |
-| Requirements                 | Vite 8+, Svelte 5.20+, SvelteKit 3+ (or plain Vite + Svelte)                     | Several bundlers and frameworks                                                                  |
+| Requirements                 | Vite 8+, Svelte 5.46.4+, SvelteKit 3+ (or plain Vite + Svelte)                   | Several bundlers and frameworks                                                                  |
 
 <sup>1</sup> Measured with `npm install` in an empty directory, leaving out the peer dependencies both share (`svelte`, `vite`, `@sveltejs/kit`): svelte-zukan 0.7.0 on 2026-10-21, Storybook on 2026-10-19 (`storybook` and `@storybook/sveltekit`, without any addon).
 

@@ -178,6 +178,17 @@ describe('discoverGroups', () => {
     // only a prefix of the whole name is reserved
     expect(discoverGroups(tmp, { previews: 'app', 'x/preview': 'app' })).toHaveLength(2);
   });
+
+  it('an empty group name or directory list throws', () => {
+    mkdirSync(join(tmp, 'app'));
+    for (const name of ['', ' '])
+      expect(() => discoverGroups(tmp, { [name]: 'app' })).toThrow(
+        'svelte-zukan: a group name in `groups` must not be empty'
+      );
+    expect(() => discoverGroups(tmp, { ui: [] })).toThrow(
+      'svelte-zukan: group "ui" in `groups` needs at least one directory'
+    );
+  });
 });
 
 describe('listCatalog IDs', () => {

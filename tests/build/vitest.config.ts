@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     expect: { requireAssertions: true },
     environment: 'node',
-    // both files relink the fixtures with monorepo/setup.mjs
+    // one file at a time: each test of build.test.ts runs a full `vite build`, and dev.test.ts starts a browser
     fileParallelism: false,
     include: ['*.test.ts']
   }

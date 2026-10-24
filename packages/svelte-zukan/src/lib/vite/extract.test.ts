@@ -150,6 +150,21 @@ describe('extractSections', () => {
     ]);
   });
 
+  it('does not take a <style> in a script or a comment for a style block', () => {
+    const source = `<script>
+  // the <style> below is SCSS
+  const css = '<style>';
+</script>
+
+<!-- <style> -->
+<Section title="a"><p>{css}</p></Section>
+
+<style lang="scss">
+  $c: red;
+</style>`;
+    expect(extractSections(source, FILE).map((s) => s.title)).toEqual(['a']);
+  });
+
   it('names the file and the cause when the markup does not parse', () => {
     expect(() => extractSections('<Section title="a">\n<A />', FILE)).toThrow(
       /^svelte-zukan: could not parse Button\.zukan\.svelte \(catalog files must be plain Svelte markup; preprocessor languages are only supported inside <style>\): .+/
@@ -279,6 +294,15 @@ describe('extractSections', () => {
 
 <Section title="a"><A {items} /></Section>`;
     expect(extractSections(source, FILE)[0].code).toMatch(/^<script lang="ts" generics="T">\n/);
+  });
+
+  it('keeps the quotes of the script attributes', () => {
+    const source = `<script lang='ts' generics='T extends "a" | "b"'>
+  let items: T[] = [];
+</script>
+
+<Section title="a"><A {items} /></Section>`;
+    expect(extractSections(source, FILE)[0].code).toMatch(/^<script lang='ts' generics='T extends "a" \| "b"'>\n/);
   });
 
   it('returns [] when no sections', () => {

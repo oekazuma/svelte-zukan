@@ -1,29 +1,43 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { chromium, type Browser } from 'playwright';
-import { createServer, type ViteDevServer } from 'vite';
+import { createLogger, createServer, type ViteDevServer } from 'vite';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 
 const fixtures = import.meta.dirname;
-const dir = join(fixtures, 'vite-svelte');
+const pkg = join(fixtures, '../../packages/svelte-zukan');
 
+let app: string | undefined;
 let server: ViteDevServer | undefined;
 let browser: Browser | undefined;
+const logged: string[] = [];
 
 beforeAll(async () => {
-  if (!existsSync(join(fixtures, '../../packages/svelte-zukan/dist/index.js')))
+  if (!existsSync(join(pkg, 'dist/index.js')))
     throw new Error('run `pnpm run package` first: this test uses the built package');
-  execFileSync(process.execPath, [join(fixtures, 'monorepo/setup.mjs')]);
-  process.env.ZUKAN_FROM_DIST = '1';
+  // the vite-svelte fixture with the package installed as npm installs it: copied into node_modules, not linked,
+  // so that the plugin finds itself installed. Its dependencies and the app's are linked
+  app = realpathSync(mkdtempSync(join(tmpdir(), 'zukan-dev-')));
+  for (const file of ['index.html', 'package.json', 'src'])
+    cpSync(join(fixtures, 'vite-svelte', file), join(app, file), { recursive: true });
+  const installed = join(app, 'node_modules/svelte-zukan');
+  mkdirSync(installed, { recursive: true });
+  for (const file of ['package.json', 'dist']) cpSync(join(pkg, file), join(installed, file), { recursive: true });
+  symlinkSync(join(pkg, 'node_modules'), join(installed, 'node_modules'), 'junction');
+  symlinkSync(join(fixtures, 'node_modules/svelte'), join(app, 'node_modules/svelte'), 'junction');
+
+  const { zukan } = await import(pathToFileURL(join(installed, 'dist/vite/index.js')).href);
+  const logger = createLogger('error');
+  logger.info = (message) => void logged.push(message);
   server = await createServer({
-    root: dir,
-    configFile: join(dir, 'vite.config.ts'),
-    logLevel: 'error',
+    root: app,
+    configFile: false,
+    customLogger: logger,
     server: { port: 0 },
-    // linked packages are not prebundled by default; an npm install is. `force`: the dist changes
-    // without the lockfile changing, and a cached prebundle would hide the change
-    optimizeDeps: { include: ['svelte-zukan'], force: true }
+    plugins: [zukan({ build: true }), svelte()]
   });
   await server.listen();
   browser = await chromium.launch();
@@ -32,7 +46,15 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close();
   await server?.close();
-  delete process.env.ZUKAN_FROM_DIST;
+  // node_modules holds links into the repository: remove them before the recursive delete
+  if (app) {
+    for (const link of ['node_modules/svelte', 'node_modules/svelte-zukan/node_modules']) rmSync(join(app, link));
+    rmSync(app, { recursive: true, force: true });
+  }
+});
+
+test('the installed package is prebundled before the first visit', () => {
+  expect(server!.config.optimizeDeps.include).toContain('svelte-zukan');
 });
 
 test('a preview of the prebundled package renders only its section', { timeout: 60_000 }, async () => {
@@ -41,6 +63,8 @@ test('a preview of the prebundled package renders only its section', { timeout: 
   await page.goto(`${url}__zukan/#/preview/vite-svelte/lib/Counter?section=Basic`);
   await expect.poll(() => page.locator('button', { hasText: 'count:' }).count(), { timeout: 30_000 }).toBe(1);
   expect(await page.getByText('second section').count()).toBe(0);
+  // found only on the first visit, it would be optimized then and the page reloaded
+  expect(logged.join('\n')).not.toMatch(/optimized: .*svelte-zukan/);
 });
 
 test('the accessibility check runs the real axe-core in a preview', { timeout: 60_000 }, async () => {
