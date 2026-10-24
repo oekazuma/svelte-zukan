@@ -12,7 +12,10 @@ type Scope = {
   file: string;
   text: (n: Node) => string;
   declarations: Node[];
+  /** imported names, and the names a barrel re-exports (`export type { Props } from './button'`) */
   imports: Map<string, { from: string; name: string }>;
+  /** the sources of `export * from './button'` */
+  stars: string[];
 };
 
 const keyName = (key: Node) => (key.type === 'Identifier' ? (key.name as string) : String(key.value));
@@ -34,20 +37,25 @@ function jsdocOf(node: Node) {
 
 function scopeOf(file: string, lf: string, body: Node[]): Scope {
   const imports = new Map<string, { from: string; name: string }>();
+  const stars: string[] = [];
   for (const n of body) {
-    if (n.type !== 'ImportDeclaration') continue;
-    for (const s of n.specifiers as { type: string; imported?: Node; local: Node }[])
-      if (s.type === 'ImportSpecifier' && s.imported)
-        imports.set(s.local.name as string, {
-          from: (n.source as { value: string }).value,
-          name: keyName(s.imported)
-        });
+    const from = (n.source as { value: string } | null | undefined)?.value;
+    if (from === undefined) continue;
+    if (n.type === 'ImportDeclaration') {
+      for (const s of n.specifiers as { type: string; imported?: Node; local: Node }[])
+        if (s.type === 'ImportSpecifier' && s.imported)
+          imports.set(s.local.name as string, { from, name: keyName(s.imported) });
+    } else if (n.type === 'ExportNamedDeclaration') {
+      for (const s of n.specifiers as { local: Node; exported: Node }[])
+        imports.set(keyName(s.exported), { from, name: keyName(s.local) });
+    } else if (n.type === 'ExportAllDeclaration' && !n.exported) stars.push(from);
   }
   return {
     file,
     text: (n) => lf.slice(n.start, n.end).replace(/\s+/g, ' ').trim(),
     declarations: body.map((n) => (n.type === 'ExportNamedDeclaration' && n.declaration ? (n.declaration as Node) : n)),
-    imports
+    imports,
+    stars
   };
 }
 
@@ -130,26 +138,31 @@ export function extractProps(
         (d.type === 'TSTypeAliasDeclaration' || d.type === 'TSInterfaceDeclaration') && (d.id as Node).name === name
     );
 
-  /** the declaration a name refers to in a scope: its own, or one it imports from a relative path */
+  /** the declaration a name refers to in a scope: its own, or one it imports or re-exports from a relative path */
   function lookup(scope: Scope, name: string, depth: number): { node: Node; scope: Scope; depth: number } | null {
     const local = declared(scope, name);
     if (local) return { node: local, scope, depth };
+    if (depth >= MAX_DEPTH) return null;
     const imported = scope.imports.get(name);
-    if (!imported || depth >= MAX_DEPTH) return null;
-    const file = resolveImport(scope.file, imported.from);
-    if (!file) return null;
-    if (!scopes.has(file)) scopes.set(file, readScope(file));
-    const target = scopes.get(file);
-    if (!target) return null;
-    files.add(file);
-    return lookup(target, imported.name, depth + 1);
+    for (const { from, name: target } of imported ? [imported] : scope.stars.map((from) => ({ from, name }))) {
+      const file = resolveImport(scope.file, from);
+      if (!file) continue;
+      if (!scopes.has(file)) scopes.set(file, readScope(file));
+      const next = scopes.get(file);
+      if (!next) continue;
+      files.add(file);
+      const found = lookup(next, target, depth + 1);
+      if (found) return found;
+    }
+    return null;
   }
 
   /** `depth` counts the files followed to reach `scope`; `seen` stops types that refer to themselves */
   const seen = new Set<Node>();
   function collect(type: Node | undefined, scope: Scope, depth: number) {
     if (!type) return;
-    if (type.type === 'TSTypeLiteral') members.push(...(type.members as Node[]).map((node) => ({ node, scope })));
+    if (type.type === 'TSParenthesizedType') collect(type.typeAnnotation as Node, scope, depth);
+    else if (type.type === 'TSTypeLiteral') members.push(...(type.members as Node[]).map((node) => ({ node, scope })));
     else if (type.type === 'TSIntersectionType') for (const t of type.types as Node[]) collect(t, scope, depth);
     else if (type.type === 'TSTypeReference' && (type.typeName as Node).type === 'Identifier') {
       const found = lookup(scope, (type.typeName as Node).name as string, depth);
@@ -165,6 +178,8 @@ export function extractProps(
           collect({ ...h, type: 'TSTypeReference', typeName: h.expression }, found.scope, found.depth);
       }
     }
+    // a union, a qualified name (`Foo.Props`) and the like: the reader gets the type as written
+    else typeName ??= scope.text(type);
   }
   collect((id.typeAnnotation as Node | undefined)?.typeAnnotation as Node | undefined, own, 0);
 

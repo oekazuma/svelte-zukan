@@ -96,6 +96,29 @@ describe('extractProps', () => {
     });
   });
 
+  it('reads a parenthesized type, and names a union it can not list', () => {
+    expect(extractProps(ts('  let { a }: ({ a: number }) = $props();'), 'P.svelte')?.props[0].type).toBe('number');
+    const union = extractProps(
+      ts(`  type Props = { href: string } | { onclick: () => void };
+  let { href, onclick }: Props = $props();`),
+      'U.svelte'
+    );
+    expect(union?.typeName).toBe('{ href: string } | { onclick: () => void }');
+    expect(union?.props.map((p) => [p.name, p.type])).toEqual([
+      ['href', null],
+      ['onclick', null]
+    ]);
+    expect(extractProps(ts('  let { a }: Foo.Props = $props();'), 'Q.svelte')?.typeName).toBe('Foo.Props');
+  });
+
+  it('is not misled by a <style> written in the script', () => {
+    const source = ts(
+      "  // <style> is below\n  const css = '<style>';\n  let { a }: { a: number } = $props();",
+      '<style lang="scss">\n  $x: 1;\n</style>'
+    );
+    expect(extractProps(source, 'S.svelte')?.props[0].type).toBe('number');
+  });
+
   it('reads untyped props and a module script declaration', () => {
     expect(extractProps('<script>\n  let { a = 1, b } = $props();\n</script>', 'D.svelte')?.props).toEqual([
       { name: 'a', type: null, default: '1', required: false, bindable: false, description: null },
@@ -177,6 +200,27 @@ describe('extractProps with imported types', () => {
     expect(found.typeName).toBe('HTMLButtonAttributes');
     expect(found.props.map((p) => p.name)).toEqual(['a']);
     expect(found.files).toEqual([]);
+  });
+
+  it('follows the re-exports of a barrel', () => {
+    const button = write('lib/button.ts', 'export type ButtonProps = { label: string };\n');
+    const extra = write('lib/extra.ts', 'export type Extra = { hint?: string };\n');
+    const inner = write('lib/inner.ts', 'export type Inner = { size: number };\n');
+    const index = write(
+      'lib/types/index.ts',
+      "export type { ButtonProps } from '../button';\nexport * from '../extra';\nexport type { Inner as Sized } from '../inner';\n"
+    );
+    const file = component(
+      "  import type { ButtonProps, Extra, Sized } from './types';\n  let { label, hint, size }: ButtonProps & Extra & Sized = $props();"
+    );
+    const found = read(file)!;
+    expect(found.props.map((p) => [p.name, p.type])).toEqual([
+      ['label', 'string'],
+      ['hint', 'string'],
+      ['size', 'number']
+    ]);
+    expect(found.typeName).toBeNull();
+    expect(found.files.sort()).toEqual([button, extra, inner, index].sort());
   });
 
   it('stops at types that refer to each other', () => {

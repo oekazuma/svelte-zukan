@@ -80,14 +80,13 @@ function sectionName(ast: Ast) {
   return 'Section';
 }
 
-function scriptTagOf(script: { attributes: unknown[] } | null | undefined, module: boolean) {
-  const attr = (name: string) =>
-    (
-      (script?.attributes as Node[] | undefined)?.find((a) => a.name === name)?.value as { data: string }[] | undefined
-    )?.[0]?.data;
-  const lang = attr('lang');
-  const generics = attr('generics');
-  return `<script${module ? ' module' : ''}${lang ? ` lang="${lang}"` : ''}${generics ? ` generics="${generics}"` : ''}>`;
+function scriptTagOf(script: { attributes: unknown[] } | null | undefined, module: boolean, source: string) {
+  // as written: `generics='T extends "a"'` can not be put back in double quotes
+  const attr = (name: string) => {
+    const a = (script?.attributes as Node[] | undefined)?.find((a) => a.name === name);
+    return a ? ` ${source.slice(a.start, a.end)}` : '';
+  };
+  return `<script${module ? ' module' : ''}${attr('lang')}${attr('generics')}>`;
 }
 
 function lineOf(source: string, pos: number) {
@@ -145,8 +144,8 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
       text: textOf(node)
     }));
   const defs = [...scriptDefs(ast.module, 'module'), ...scriptDefs(ast.instance, 'script'), ...snippetDefs];
-  const moduleTag = scriptTagOf(ast.module, true);
-  const scriptTag = scriptTagOf(ast.instance, false);
+  const moduleTag = scriptTagOf(ast.module, true, source);
+  const scriptTag = scriptTagOf(ast.instance, false, source);
   const block = (tag: string, list: typeof defs) =>
     list.length
       ? `${tag}\n${list
@@ -206,13 +205,15 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
 
 /**
  * Runs before vite-plugin-svelte preprocesses the file, so the contents of `<style>` (e.g. SCSS) are blanked out first.
- * Same length, newlines kept: offsets and line numbers still point into `source`.
+ * Same length, newlines kept: offsets and line numbers still point into `source`. Comments and `<script>` are matched
+ * in the same pass and left alone, so a `<style>` written inside them does not start a style block.
  */
 export const parseSvelte = (source: string, filename: string): Ast =>
   parse(
     source.replace(
-      /(<style(?=[\s/>])[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
-      (_, open: string, css: string, close: string) => open + css.replace(/[^\r\n]/g, ' ') + close
+      /<!--[\s\S]*?-->|<script(?=[\s/>])[^>]*>[\s\S]*?<\/script\s*>|(<style(?=[\s/>])[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
+      (match, open?: string, css?: string, close?: string) =>
+        open === undefined ? match : open + css!.replace(/[^\r\n]/g, ' ') + close
     ),
     { modern: true, filename }
   );
