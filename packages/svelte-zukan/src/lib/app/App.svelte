@@ -39,14 +39,26 @@
     axe?: () => Promise<string>;
   } = $props();
 
-  // an ignored hash stays in the URL; the history entry keeps the catalog route so a reload can return to it
+  // each history entry the app has shown keeps its catalog route: an ignored hash stays in the URL, so a reload
+  // returns to the route, and a hashchange onto an entry that has one is Back or Forward (popstate fires on every
+  // hash change, so it can not tell)
   const KEY = 'zukanHash';
   const remembered = () => {
     const state = history.state as Record<string, unknown> | null;
     return typeof state?.[KEY] === 'string' ? (state[KEY] as string) : null;
   };
+  function remember(route: string) {
+    const state = typeof history.state === 'object' && history.state ? history.state : {};
+    try {
+      history.replaceState({ ...state, [KEY]: route }, '');
+    } catch {
+      // Safari throws past about 100 calls in 10 seconds; Back to this entry then scrolls to the top
+    }
+  }
 
-  let hash = $state(remembered() ?? location.hash);
+  const initial = remembered() ?? location.hash;
+  let hash = $state(initial);
+  remember(initial);
 
   // `fixedTheme` comes from the config, so its initial value is all there is
   // svelte-ignore state_referenced_locally
@@ -91,6 +103,7 @@
           axe,
           page: location.pathname,
           themes: !fixedTheme,
+          currentTheme: () => theme,
           tailwind: tailwind.length > 0
         }),
         context
@@ -154,18 +167,23 @@
 
   // components in a preview and links in a doc can change the hash too; only catalog routes navigate
   function onhashchange() {
-    const next = location.hash;
+    const traversal = remembered();
     const foreign =
-      (next !== '' && !next.startsWith('#/')) || (route.view === 'preview' && parseHash(next).view !== 'preview');
-    if (foreign) {
-      const state = typeof history.state === 'object' && history.state ? history.state : {};
-      history.replaceState({ ...state, [KEY]: hash }, '');
+      (location.hash !== '' && !location.hash.startsWith('#/')) ||
+      (route.view === 'preview' && parseHash(location.hash).view !== 'preview');
+    if (foreign && traversal === null) {
+      remember(hash);
       return;
     }
-    hash = next;
+    hash = traversal ?? location.hash;
+    if (traversal === null) remember(hash);
     theme = fixedTheme ?? themeOf(route) ?? theme;
-    // the browser keeps the scroll position on a hash change; the previous page's position means nothing on the next
-    if (route.view === 'list' || route.view === 'tailwind' || (route.view === 'detail' && route.section === null))
+    // the browser keeps the scroll position on a new hash, where the previous page's position means nothing, and
+    // restores the entry's own position on Back and Forward
+    if (
+      traversal === null &&
+      (route.view === 'list' || route.view === 'tailwind' || (route.view === 'detail' && route.section === null))
+    )
       tick().then(() => scrollTo(0, 0));
   }
 </script>
@@ -229,17 +247,20 @@
           {t}
         />
       {:else if entry}
-        <Detail
-          bind:this={detail}
-          {entry}
-          section={route.view === 'detail' ? route.section : null}
-          width={route.view === 'detail' ? route.width : undefined}
-          {previous}
-          {next}
-          {theme}
-          {axe}
-          {t}
-        />
+        <!-- a new page per entry, so no PreviewFrame keeps the previous entry's size and no state carries over -->
+        {#key entry.path}
+          <Detail
+            bind:this={detail}
+            {entry}
+            section={route.view === 'detail' ? route.section : null}
+            width={route.view === 'detail' ? route.width : undefined}
+            {previous}
+            {next}
+            {theme}
+            {axe}
+            {t}
+          />
+        {/key}
       {:else}
         <h1>{t.notFound}</h1>
         <p class="missing">{t.notFoundHint}</p>

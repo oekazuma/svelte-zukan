@@ -31,10 +31,12 @@
   let active = $state<string | null>(null);
   /** the props heading in `active`; section titles are never empty, so it can not clash with one */
   const PROPS = '';
-  /** in page order: the headings mount in order */
-  const headings: string[] = [];
+  /** the section headings by title, in page order: they mount in order */
+  // only read by the handlers, never by the markup, so it needs no reactivity
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const headings = new Map<string, HTMLElement>();
   function track(node: HTMLElement, title: string) {
-    if (title !== PROPS) headings.push(title);
+    if (title !== PROPS) headings.set(title, node);
     const observer = new IntersectionObserver(
       ([e]) => {
         if (e.isIntersecting) active = title;
@@ -45,7 +47,7 @@
     return {
       destroy: () => {
         observer.disconnect();
-        if (title !== PROPS) headings.splice(headings.indexOf(title), 1);
+        if (title !== PROPS) headings.delete(title);
       }
     };
   }
@@ -54,8 +56,16 @@
 
   /** the section in view, or the first one, fills the page; again, it goes back */
   export function toggleExpanded() {
+    const titles = [...headings.keys()];
+    // the props come after the last section
     if (expandedTitle !== null) expandedTitle = null;
-    else expandedTitle = active ?? headings[0] ?? null;
+    else expandedTitle = (active === PROPS ? titles.at(-1) : (active ?? titles[0])) ?? null;
+  }
+
+  // a link to the URL already shown navigates without a hashchange, so `reveal` does not run
+  function onclick(e: MouseEvent) {
+    const link = e.target instanceof Element ? e.target.closest('a') : null;
+    if (section !== null && link?.hash === location.hash) headings.get(section)?.scrollIntoView();
   }
 
   /** Vite's own endpoint, the one its error overlay uses; it is under the app's `base` like the catalog */
@@ -69,6 +79,8 @@
     return { update: (next: boolean) => next && node.scrollIntoView() };
   }
 </script>
+
+<svelte:window {onclick} />
 
 {#snippet pagerLink(to: Entry, rel: 'prev' | 'next')}
   <!-- a hash route of this catalog, not a SvelteKit route -->
@@ -98,142 +110,148 @@
   </div>
 {/if}
 
-<!-- recreate everything on navigation so no PreviewFrame keeps the previous entry's width or height -->
-{#key entry.path}
-  {#await entry.meta() then { default: meta }}
-    {@const hasProps = !!(meta.props?.length || meta.propsType)}
-    {@const toc = meta.sections.length + (hasProps ? 1 : 0) > 1}
-    <div class="page">
-      <div class={['layout', { toc }]}>
-        <div class="content">
-          {#if meta.doc}
-            <!-- the HTML comes from the user's own .md file, rendered by the plugin -->
-            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-            <div class="doc">{@html meta.doc}</div>
+{#await entry.meta() then { default: meta }}
+  {@const hasProps = !!(meta.props?.length || meta.propsType)}
+  {@const toc = meta.sections.length + (hasProps ? 1 : 0) > 1}
+  <div class="page">
+    <div class={['layout', { toc }]}>
+      <div class="content">
+        {#if meta.doc}
+          <!-- the HTML comes from the user's own .md file, rendered by the plugin -->
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+          <div class="doc">{@html meta.doc}</div>
+        {/if}
+        {#if !meta.sections.length}
+          <p class="empty">{t.noSections}</p>
+        {/if}
+        {#each meta.sections as s (s.title)}
+          <h2 use:reveal={section === s.title} use:track={s.title}>
+            <!-- a hash route of this catalog, not a SvelteKit route -->
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+            <a href={formatHash('detail', entry.path, s.title)}>{s.title}</a>
+          </h2>
+          <div class="example">
+            <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
+            <PreviewFrame
+              src={location.pathname + formatHash('preview', entry.path, s.title)}
+              tabHref={location.pathname + formatHash('preview', entry.path, s.title, { theme })}
+              shareUrl={(w) =>
+                location.href.split('#')[0] +
+                formatHash('detail', entry.path, s.title, { width: w ?? undefined, theme })}
+              requestedWidth={section === s.title ? width : undefined}
+              bind:expanded={() => expandedTitle === s.title, (v) => (expandedTitle = v ? s.title : null)}
+              title={s.title}
+              {axe}
+              {theme}
+              labels={t}
+            />
+            <CodeBlock code={s.code} labels={t} />
+          </div>
+        {/each}
+        {#if hasProps}
+          <h2 id="zukan-props" tabindex="-1" use:track={PROPS}>{t.props}</h2>
+          {#if meta.propsType}
+            <p class="props-type">{t.propsType} <code>{meta.propsType}</code></p>
           {/if}
-          {#if !meta.sections.length}
-            <p class="empty">{t.noSections}</p>
-          {/if}
-          {#each meta.sections as s (s.title)}
-            <h2 use:reveal={section === s.title} use:track={s.title}>
-              <!-- a hash route of this catalog, not a SvelteKit route -->
-              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-              <a href={formatHash('detail', entry.path, s.title)}>{s.title}</a>
-            </h2>
-            <div class="example">
-              <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
-              <PreviewFrame
-                src={location.pathname + formatHash('preview', entry.path, s.title)}
-                tabHref={location.pathname + formatHash('preview', entry.path, s.title, { theme })}
-                shareUrl={(w) =>
-                  location.href.split('#')[0] +
-                  formatHash('detail', entry.path, s.title, { width: w ?? undefined, theme })}
-                requestedWidth={section === s.title ? width : undefined}
-                bind:expanded={() => expandedTitle === s.title, (v) => (expandedTitle = v ? s.title : null)}
-                title={s.title}
-                {axe}
-                {theme}
-                labels={t}
-              />
-              <CodeBlock code={s.code} labels={t} />
-            </div>
-          {/each}
-          {#if hasProps}
-            <h2 id="zukan-props" use:track={PROPS}>{t.props}</h2>
-            {#if meta.propsType}
-              <p class="props-type">{t.propsType} <code>{meta.propsType}</code></p>
-            {/if}
-            {#if meta.props?.length}
-              <!-- focusable, so a keyboard can scroll the table when it is wider than the page -->
-              <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-              <div class="props" role="region" aria-label={t.props} tabindex="0">
-                <!-- the roles keep it a table for screen readers when a narrow layout changes its display -->
+          {#if meta.props?.length}
+            <!-- focusable, so a keyboard can scroll the table when it is wider than the page -->
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+            <div class="props" role="region" aria-label={t.props} tabindex="0">
+              <!-- the roles keep it a table for screen readers when a narrow layout changes its display -->
+              <!-- svelte-ignore a11y_no_redundant_roles -->
+              <table role="table">
                 <!-- svelte-ignore a11y_no_redundant_roles -->
-                <table role="table">
+                <thead role="rowgroup">
                   <!-- svelte-ignore a11y_no_redundant_roles -->
-                  <thead role="rowgroup">
+                  <tr role="row">
+                    <th role="columnheader">{t.propName}</th>
+                    <th role="columnheader">{t.propType}</th>
+                    <th role="columnheader">{t.propDefault}</th>
+                    <th role="columnheader">{t.propDescription}</th>
+                  </tr>
+                </thead>
+                <!-- svelte-ignore a11y_no_redundant_roles -->
+                <tbody role="rowgroup">
+                  {#each meta.props as p (p.name)}
                     <!-- svelte-ignore a11y_no_redundant_roles -->
                     <tr role="row">
-                      <th role="columnheader">{t.propName}</th>
-                      <th role="columnheader">{t.propType}</th>
-                      <th role="columnheader">{t.propDefault}</th>
-                      <th role="columnheader">{t.propDescription}</th>
+                      <td role="cell">
+                        <code class="name">{p.name}</code>
+                        {#if p.required}<span class="flag">{t.required}</span>{/if}
+                        {#if p.bindable}<span class="flag">{t.bindable}</span>{/if}
+                      </td>
+                      <!-- a union wraps between its members, never inside one such as `() => void` -->
+                      <!-- the separator is a mustache because Svelte trims the spaces of plain text at the edges of a block, and those spaces are where the union wraps -->
+                      <!-- eslint-disable svelte/no-useless-mustaches -->
+                      <td role="cell" data-label={t.propType}
+                        >{#if p.type}<code
+                            >{#each p.type.split(' | ') as part, i (i)}{#if i}{' | '}{/if}<span class="type-part"
+                                >{part}</span
+                              >{/each}</code
+                          >{/if}</td
+                      >
+                      <!-- eslint-enable svelte/no-useless-mustaches -->
+                      <td role="cell" data-label={t.propDefault}
+                        >{#if p.default}<code>{p.default}</code>{/if}</td
+                      >
+                      <!-- rendered by the plugin from the component's own JSDoc -->
+                      <!-- eslint-disable svelte/no-at-html-tags -->
+                      <td role="cell"
+                        >{#if p.description}{@html p.description}{/if}</td
+                      >
+                      <!-- eslint-enable svelte/no-at-html-tags -->
                     </tr>
-                  </thead>
-                  <!-- svelte-ignore a11y_no_redundant_roles -->
-                  <tbody role="rowgroup">
-                    {#each meta.props as p (p.name)}
-                      <!-- svelte-ignore a11y_no_redundant_roles -->
-                      <tr role="row">
-                        <td role="cell">
-                          <code class="name">{p.name}</code>
-                          {#if p.required}<span class="flag">{t.required}</span>{/if}
-                          {#if p.bindable}<span class="flag">{t.bindable}</span>{/if}
-                        </td>
-                        <!-- a union wraps between its members, never inside one such as `() => void` -->
-                        <!-- the separator is a mustache because Svelte trims the spaces of plain text at the edges of a block, and those spaces are where the union wraps -->
-                        <!-- eslint-disable svelte/no-useless-mustaches -->
-                        <td role="cell" data-label={t.propType}
-                          >{#if p.type}<code
-                              >{#each p.type.split(' | ') as part, i (i)}{#if i}{' | '}{/if}<span class="type-part"
-                                  >{part}</span
-                                >{/each}</code
-                            >{/if}</td
-                        >
-                        <!-- eslint-enable svelte/no-useless-mustaches -->
-                        <td role="cell" data-label={t.propDefault}
-                          >{#if p.default}<code>{p.default}</code>{/if}</td
-                        >
-                        <!-- rendered by the plugin from the component's own JSDoc -->
-                        <!-- eslint-disable svelte/no-at-html-tags -->
-                        <td role="cell"
-                          >{#if p.description}{@html p.description}{/if}</td
-                        >
-                        <!-- eslint-enable svelte/no-at-html-tags -->
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              </div>
-            {/if}
+                  {/each}
+                </tbody>
+              </table>
+            </div>
           {/if}
-          {#if previous || next}
-            <nav class="pager" aria-label="{t.previous} / {t.next}">
-              {#if previous}{@render pagerLink(previous, 'prev')}{/if}
-              {#if next}{@render pagerLink(next, 'next')}{/if}
-            </nav>
-          {/if}
-        </div>
-        {#if toc}
-          <nav class="contents" aria-label={t.onThisPage}>
-            <p>{t.onThisPage}</p>
-            <ul>
-              {#each meta.sections as s (s.title)}
-                <li>
-                  <!-- a hash route of this catalog, not a SvelteKit route -->
-                  <!-- eslint-disable svelte/no-navigation-without-resolve -->
-                  <a
-                    href={formatHash('detail', entry.path, s.title)}
-                    aria-current={active === s.title ? 'location' : undefined}>{s.title}</a
-                  >
-                  <!-- eslint-enable svelte/no-navigation-without-resolve -->
-                </li>
-              {/each}
-              {#if hasProps}
-                <li>
-                  <!-- a plain anchor: the app keeps its route on a hash that is not one of its own -->
-                  <a href="#zukan-props" aria-current={active === PROPS ? 'location' : undefined}>{t.props}</a>
-                </li>
-              {/if}
-            </ul>
+        {/if}
+        {#if previous || next}
+          <nav class="pager" aria-label="{t.previous} / {t.next}">
+            {#if previous}{@render pagerLink(previous, 'prev')}{/if}
+            {#if next}{@render pagerLink(next, 'next')}{/if}
           </nav>
         {/if}
       </div>
+      {#if toc}
+        <nav class="contents" aria-label={t.onThisPage}>
+          <p>{t.onThisPage}</p>
+          <ul>
+            {#each meta.sections as s (s.title)}
+              <li>
+                <!-- a hash route of this catalog, not a SvelteKit route -->
+                <!-- eslint-disable svelte/no-navigation-without-resolve -->
+                <a
+                  href={formatHash('detail', entry.path, s.title)}
+                  aria-current={active === s.title ? 'location' : undefined}>{s.title}</a
+                >
+                <!-- eslint-enable svelte/no-navigation-without-resolve -->
+              </li>
+            {/each}
+            {#if hasProps}
+              <li>
+                <!-- the hash stays the catalog route, which a shared or bookmarked URL needs -->
+                <a
+                  href="#zukan-props"
+                  aria-current={active === PROPS ? 'location' : undefined}
+                  onclick={(e) => {
+                    e.preventDefault();
+                    const heading = document.getElementById('zukan-props')!;
+                    heading.scrollIntoView();
+                    heading.focus({ preventScroll: true });
+                  }}>{t.props}</a
+                >
+              </li>
+            {/if}
+          </ul>
+        </nav>
+      {/if}
     </div>
-  {:catch error}
-    <p>{t.loadFailed} {error instanceof Error ? error.message : String(error)}</p>
-  {/await}
-{/key}
+  </div>
+{:catch error}
+  <p>{t.loadFailed} {error instanceof Error ? error.message : String(error)}</p>
+{/await}
 
 <style>
   h1 {
@@ -279,6 +297,11 @@
   h2 {
     margin: 32px 0 10px;
     font-size: 18px;
+  }
+
+  /* focused only to move the keyboard's starting point, like main */
+  h2:focus {
+    outline: none;
   }
 
   .example {

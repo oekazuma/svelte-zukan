@@ -84,11 +84,12 @@ describe('WebMCP tools', () => {
 
   describe('check_accessibility', () => {
     // a blob: page is same-origin, so the tool can reach into it as it does into a preview
-    const check = async (preview: string) => {
+    const check = async (preview: string, input: Record<string, unknown> = {}) => {
       const page = URL.createObjectURL(new Blob([preview], { type: 'text/html' }));
       const withAxe = buildTools({
         fetchCatalog: () => Promise.resolve(catalog),
         page,
+        currentTheme: () => 'dark',
         axe: () =>
           Promise.resolve(`window.axe = { run: async () => ({ violations: [{ id: 'image-alt', impact: 'critical',
             help: 'Images must have alternative text', helpUrl: 'https://example.com/image-alt',
@@ -97,11 +98,23 @@ describe('WebMCP tools', () => {
             helpUrl: 'https://example.com/color-contrast', nodes: [{ target: ['p'] }] }] }) };`)
       });
       try {
-        return await tool(withAxe, 'check_accessibility').execute({ id: 'ui/Button', section: 'Primary' });
+        return await tool(withAxe, 'check_accessibility').execute({ id: 'ui/Button', section: 'Primary', ...input });
       } finally {
         URL.revokeObjectURL(page);
       }
     };
+
+    it("renders in the catalog's current theme unless the call names one", async () => {
+      const src = vi.spyOn(HTMLIFrameElement.prototype, 'src', 'set');
+      try {
+        await check('<div data-zukan-preview><p>ok</p></div>');
+        expect(src.mock.calls.at(-1)![0]).toMatch(/#\/preview\/ui\/Button\?section=Primary&theme=dark$/);
+        await check('<div data-zukan-preview><p>ok</p></div>', { theme: 'light' });
+        expect(src.mock.calls.at(-1)![0]).toMatch(/&theme=light$/);
+      } finally {
+        src.mockRestore();
+      }
+    });
 
     it('renders the section and returns what axe-core finds', async () => {
       const result = await check('<div data-zukan-preview><img src=""></div>');

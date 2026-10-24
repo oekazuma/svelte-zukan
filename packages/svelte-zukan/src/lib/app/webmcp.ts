@@ -57,6 +57,8 @@ export function buildTools(opts: {
   page: string;
   /** false when the `theme` option fixes the theme: the tools then take no `theme` */
   themes?: boolean;
+  /** the catalog's current theme, for a check that names none: the preview's own default is the OS's */
+  currentTheme?: () => Theme;
   /** whether the catalog has Tailwind CSS data */
   tailwind?: boolean;
 }): WebMcpTool[] {
@@ -140,7 +142,8 @@ export function buildTools(opts: {
         frame.setAttribute('aria-hidden', 'true');
         frame.tabIndex = -1;
         frame.style.cssText = `position:fixed;left:-100000px;top:0;width:${num(input.width) ?? 1280}px;height:800px;border:0`;
-        frame.src = opts.page + formatHash('preview', id!, section, { theme: theme(input.theme) });
+        frame.src =
+          opts.page + formatHash('preview', id!, section, { theme: theme(input.theme) ?? opts.currentTheme?.() });
         try {
           await new Promise((resolve) => {
             frame.addEventListener('load', resolve, { once: true });
