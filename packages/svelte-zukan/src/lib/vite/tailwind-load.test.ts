@@ -89,6 +89,16 @@ describe('findTailwindEntries', () => {
     expect(await findTailwindEntries([src], resolveCss)).toEqual([entry]);
   });
 
+  it('finds partials in a directory reached through a symlink, whose imports resolve to real paths', async () => {
+    const { tmp, src } = fixture('@import "tailwindcss";\n@import "./theme.css";', { tailwind: false });
+    write(join(src, 'theme.css'), '@theme { --color-brand: red; }');
+    const linked = join(tmp, 'linked');
+    symlinkSync(src, linked, 'junction');
+    // Vite's resolver follows symlinks
+    const resolveCss: Resolver = async (id, base) => realpathSync(join(base, id));
+    expect(await findTailwindEntries([linked], resolveCss)).toEqual([normalizePath(join(linked, 'app.css'))]);
+  });
+
   it('ignores @reference imports and unrelated CSS', async () => {
     const { src } = fixture('@reference "tailwindcss";\n.x { color: red; }');
     write(join(src, 'plain.css'), '@import "./other.css";\nbody { margin: 0; }');

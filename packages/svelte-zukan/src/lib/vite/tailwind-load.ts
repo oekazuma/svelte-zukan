@@ -50,14 +50,23 @@ function readCandidates(dirs: string[]): Map<string, string> {
 /** the CSS files that `@import "tailwindcss"` or declare `@theme`, minus those another of them imports */
 export async function findTailwindEntries(dirs: string[], resolveCss: Resolver): Promise<string[]> {
   const candidates = readCandidates(dirs);
+  // Vite's resolver answers with real paths, while the glob keeps a symlinked root or `groups` directory as given
+  const real = (file: string) => {
+    try {
+      return normalizePath(realpathSync(file));
+    } catch {
+      return normalizePath(file);
+    }
+  };
+  const byReal = new Map([...candidates.keys()].map((file) => [real(file), file]));
   const partials = new Set<string>();
   for (const [file, css] of candidates) {
     const base = path.dirname(file);
     for (const id of importIds(css)) {
       if (isTailwindId(id)) continue;
       const resolved = (await resolveCss(id, base).catch(() => undefined)) || path.resolve(base, id);
-      const target = normalizePath(resolved);
-      if (target !== file && candidates.has(target)) partials.add(target);
+      const target = byReal.get(real(resolved));
+      if (target && target !== file) partials.add(target);
     }
   }
   return [...candidates.keys()].filter((file) => !partials.has(file));
