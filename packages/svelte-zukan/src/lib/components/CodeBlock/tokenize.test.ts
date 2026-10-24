@@ -92,4 +92,7 @@ describe('highlight', () => {
         .join('')
     ).toBe(code);
   });
+  it('reads a backtick in a quoted string inside ${} as part of that string', () => {
+    expect(kinds('const x = `a ${"`"} b`;')).toEqual(['keyword:const', 'string:`a ${"`"} b`']);
+  });
 });

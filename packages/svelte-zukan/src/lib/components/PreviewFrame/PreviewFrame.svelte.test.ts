@@ -610,6 +610,18 @@ describe('PreviewFrame resizing', () => {
     await expect.element(screen.getByRole('button', { name: 'button' })).toBeInTheDocument();
     await new Promise((r) => setTimeout(r, 600));
     expect(runs()).toBe(2);
+    // an edit of the component's <style> reaches the page as a stylesheet in <head>, which Vite updates in place
+    const css = doc.createElement('style');
+    css.setAttribute('data-vite-dev-id', '/src/Button.svelte?svelte&type=style&lang.css');
+    css.textContent = 'button { color: red }';
+    doc.head.append(css);
+    await expect.poll(runs).toBe(3);
+    css.textContent = 'button { color: #eee }';
+    await expect.poll(runs).toBe(4);
+    // the panel's and the toolbar's own styles in <head> do not count
+    await screen.getByRole('button', { name: 'Text 200%' }).click();
+    await new Promise((r) => setTimeout(r, 600));
+    expect(runs()).toBe(4);
   });
 
   it('waits for a check still running when the panel is closed and opened again', async () => {
@@ -918,6 +930,23 @@ describe('PreviewFrame tools', () => {
     } finally {
       removeEventListener('keydown', listener);
     }
+  });
+
+  it('leaves Escape to a dialog open inside the preview, so closing it does not leave the expanded view', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.innerHTML = '<dialog><button>ok</button></dialog>';
+    const preview = screen.container.querySelector('.preview')!;
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    doc.querySelector('dialog')!.showModal();
+    doc.querySelector('button')!.focus();
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(() => doc.querySelector('dialog')!.open).toBe(false);
+    expect(preview.classList.contains('expanded')).toBe(true);
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
   });
 
   it('shows a tooltip with the name of a toolbar control on hover, without a native title', async () => {

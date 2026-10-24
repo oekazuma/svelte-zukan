@@ -111,15 +111,23 @@
   // an edit that keeps the component's props is applied in place by HMR, with no reload that would recreate the panel
   $effect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    // only changes inside the checked root count: the panel's outlines, badges and filters go to <head>, <body> or a
-    // shadow root, and axe-core's own additions to <head> and <html>, so a check never sets off another one
+    // only changes inside the checked root count, and the stylesheets Vite updates when a component's <style> is edited:
+    // the panel's outlines, badges and filters and the toolbar's styles go elsewhere in <head>, <body> or a shadow root,
+    // and axe-core's own additions to <head> and <html>, so a check never sets off another one
+    const sheet = (node: Node) =>
+      (node.nodeType === 1 ? (node as Element) : node.parentElement)?.closest(
+        'style[data-vite-dev-id], link[rel~="stylesheet"]'
+      );
     const changed = new doc.defaultView!.MutationObserver((records) => {
       const root = doc.querySelector('[data-zukan-preview]');
-      if (!root || !records.some((r) => root.contains(r.target))) return;
+      const edited = (r: MutationRecord) =>
+        root?.contains(r.target) || sheet(r.target) || [...r.addedNodes, ...r.removedNodes].some(sheet);
+      if (!records.some(edited)) return;
       clearTimeout(timer);
       timer = setTimeout(() => check(true), 300);
     });
-    changed.observe(doc.body, { subtree: true, childList: true, attributes: true, characterData: true });
+    for (const part of [doc.head, doc.body])
+      changed.observe(part, { subtree: true, childList: true, attributes: true, characterData: true });
     return () => {
       changed.disconnect();
       clearTimeout(timer);

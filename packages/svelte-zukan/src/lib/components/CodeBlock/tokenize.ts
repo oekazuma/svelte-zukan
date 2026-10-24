@@ -21,7 +21,11 @@ const template: Rule = (code, i) => {
     else if (code.startsWith('${', j)) {
       let depth = 0;
       for (j += 2; j < code.length && (code[j] !== '}' || depth > 0); j++) {
-        if (code[j] === '{') depth++;
+        if (code[j] === '"' || code[j] === "'") {
+          // a quoted string in the expression may hold a backtick or a brace (`${"`"}`)
+          const quote = code[j];
+          for (j++; j < code.length && code[j] !== quote && code[j] !== '\n'; j++) if (code[j] === '\\') j++;
+        } else if (code[j] === '{') depth++;
         else if (code[j] === '}') depth--;
         else if (code[j] === '`') {
           const end = template(code, j);
