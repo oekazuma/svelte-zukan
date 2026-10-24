@@ -36,7 +36,7 @@ svelte-zukan はコンポーネントカタログで、それ以外のことは�
 | 操作テストとビジュアルテスト | なし                                                                                  | あり                                                                                         |
 | SvelteKit の `$app/*`        | 本物のモジュールを既定の状態で使う                                                    | モック（`$app/state` も含む）                                                                |
 | 静的な書き出し               | 自分の `vite build` で `build: true`。どのパスでも動く                                | `storybook build`                                                                            |
-| 動作環境                     | Vite 8 以上、Svelte 5.20 以上、SvelteKit 3 以上（素の Vite + Svelte も可）            | 複数のバンドラーとフレームワーク                                                             |
+| 動作環境                     | Vite 8 以上、Svelte 5.46.4 以上、SvelteKit 3 以上（素の Vite + Svelte も可）          | 複数のバンドラーとフレームワーク                                                             |
 
 <sup>1</sup> 空のディレクトリで `npm install` して測りました。どちらにも共通する peer dependencies（`svelte`、`vite`、`@sveltejs/kit`）は除いています。svelte-zukan は 0.7.0 を 2026-10-21 に、Storybook は 2026-10-19 に測りました。Storybook は `storybook` と `@storybook/sveltekit` だけで、アドオンは入れていません。
 

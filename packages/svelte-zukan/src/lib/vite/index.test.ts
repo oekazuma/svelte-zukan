@@ -1092,3 +1092,16 @@ describe('public API', () => {
     expect(plugin.transform).toBeUndefined();
   });
 });
+
+it("the svelte peer range starts no lower than Vite's Svelte plugin needs", () => {
+  const floor = (dir: string) => {
+    const range: string = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8')).peerDependencies.svelte;
+    const [major, minor, patch] = range
+      .match(/^\^(\d+)\.(\d+)\.(\d+)$/)!
+      .slice(1)
+      .map(Number);
+    return major * 1e6 + minor * 1e3 + patch;
+  };
+  const sveltePlugin = findPackage('@sveltejs/vite-plugin-svelte', import.meta.dirname)!;
+  expect(floor(fileURLToPath(new URL('../../..', import.meta.url)))).toBeGreaterThanOrEqual(floor(sveltePlugin));
+});
