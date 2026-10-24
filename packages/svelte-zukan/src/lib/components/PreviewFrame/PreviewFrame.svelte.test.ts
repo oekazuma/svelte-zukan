@@ -64,6 +64,14 @@ describe('PreviewFrame', () => {
     await expect.poll(() => frame().head.textContent).not.toContain('gradient');
   });
 
+  it('every preview on the page follows a background change', async () => {
+    const one = await render(PreviewFrame, { props });
+    const two = await render(PreviewFrame, { props: { ...props, src: 'about:blank#two' } });
+    const button = (screen: typeof one) => screen.container.querySelector<HTMLElement>('[aria-label^="Background"]')!;
+    button(one).click();
+    await expect.poll(() => button(two).getAttribute('aria-label')).toBe('Background: Checkerboard');
+  });
+
   it('width presets are a labelled group and the readout is not a live region', async () => {
     const screen = await render(PreviewFrame, { props });
     await expect
@@ -137,6 +145,19 @@ describe('PreviewFrame resizing', () => {
     await expect.element(handle).toHaveAttribute('aria-valuenow', '200');
     await userEvent.keyboard('{End}');
     await expect.element(handle).toHaveAttribute('aria-valuenow', '986');
+  });
+
+  it('arrow keys keep a width wider than the stage, scaled', async () => {
+    const screen = await render(PreviewFrame, { props });
+    screen.container.style.width = '1000px';
+    await screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }).click();
+    const handle = screen.getByRole('separator');
+    await expect.element(handle).toHaveAttribute('aria-valuenow', '1280');
+    handle.element().focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect.element(handle).toHaveAttribute('aria-valuenow', '1290');
+    await userEvent.keyboard('{ArrowLeft}{ArrowLeft}');
+    await expect.element(handle).toHaveAttribute('aria-valuenow', '1270');
   });
 
   it('drag resize', async () => {
@@ -779,6 +800,21 @@ describe('PreviewFrame toolbar', () => {
     await expect.poll(() => doc.documentElement.style.backgroundColor).toBe('rgb(21, 19, 29)');
   });
 
+  it("keeps the page's own html background", async () => {
+    const screen = await render(PreviewFrame, { props: { ...props, theme: 'dark' } });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.documentElement.style.backgroundColor).toBe('rgb(13, 17, 23)');
+    const doc = iframe.contentDocument!;
+    const style = doc.createElement('style');
+    style.textContent = 'html{background:#222}';
+    doc.head.append(style);
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    doc.body.append(target);
+    await expect.poll(() => doc.documentElement.style.backgroundColor).toBe('');
+    expect(doc.defaultView!.getComputedStyle(doc.documentElement).backgroundColor).toBe('rgb(34, 34, 34)');
+  });
+
   it('has no theme buttons of its own', async () => {
     const screen = await render(PreviewFrame, { props });
     await expect.element(screen.getByRole('button', { name: 'Dark', exact: true })).not.toBeInTheDocument();
@@ -850,6 +886,38 @@ describe('PreviewFrame tools', () => {
     await userEvent.keyboard('{Escape}');
     await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
     await expect.element(screen.getByRole('button', { name: 'Expand' })).toHaveFocus();
+  });
+
+  it("passes the catalog's shortcuts on from inside the preview, but not while typing there", async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.innerHTML = '<button>in</button><input><div contenteditable>e</div>';
+    doc.addEventListener('keydown', (e) => e.key === 'x' && e.preventDefault());
+    const keys: string[] = [];
+    const listener = (e: KeyboardEvent) =>
+      keys.push(`${e.key}${e.shiftKey ? '+shift' : ''}:${(e.target as Element).tagName}`);
+    addEventListener('keydown', listener);
+    try {
+      const preview = screen.container.querySelector('.preview')!;
+      await screen.getByRole('button', { name: 'Expand' }).click();
+      doc.querySelector('button')!.focus();
+      await userEvent.keyboard('{Shift>}J{/Shift}x');
+      doc.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true, isComposing: true }));
+      await userEvent.keyboard('{Escape}');
+      await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
+      doc.querySelector('input')!.focus();
+      await userEvent.keyboard('k');
+      doc.querySelector<HTMLElement>('[contenteditable]')!.focus();
+      await userEvent.keyboard('k');
+      expect(keys.filter((k) => k !== 'Shift:IFRAME' && k !== 'Shift+shift:IFRAME')).toEqual([
+        'J+shift:IFRAME',
+        'Escape:IFRAME'
+      ]);
+    } finally {
+      removeEventListener('keydown', listener);
+    }
   });
 
   it('shows a tooltip with the name of a toolbar control on hover, without a native title', async () => {

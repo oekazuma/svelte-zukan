@@ -7,6 +7,7 @@
     BACKGROUND_MODES,
     BACKGROUNDS,
     transparent,
+    onBackground,
     readBackground,
     readWidth,
     writeBackground,
@@ -166,8 +167,9 @@
   function onkeydown(e: KeyboardEvent) {
     if (e.key === 'Home') width = min;
     else if (e.key === 'End') width = null;
-    else if (e.key === 'ArrowRight') width = clamp(current + KEY_STEP);
-    else if (e.key === 'ArrowLeft') width = clamp(current - KEY_STEP);
+    // up to MAX_WIDTH, as a typed width: past the stage, it is scaled down
+    else if (e.key === 'ArrowRight') width = Math.min(MAX_WIDTH, current + KEY_STEP);
+    else if (e.key === 'ArrowLeft') width = Math.max(min, current - KEY_STEP);
     else return;
     e.preventDefault();
   }
@@ -227,12 +229,18 @@
   });
 
   /**
-   * The page's own body color, when it has one, for the whole page: an expanded preview is taller than its content.
+   * The page's own body color, when it has one and its html has none, for the whole page: an expanded preview is taller
+   * than its content.
    * Read after the theme (`light-dark()`) and after a pattern background, which makes the body transparent, changes.
    */
   function paint(page: Document) {
-    const body = page.defaultView!.getComputedStyle(page.body).backgroundColor;
-    page.documentElement.style.backgroundColor = transparent(body) ? BACKGROUNDS[theme] : body;
+    const view = page.defaultView!;
+    const html = page.documentElement;
+    // the app's own html background, without the color set here last time
+    html.style.backgroundColor = '';
+    if (!transparent(view.getComputedStyle(html).backgroundColor)) return;
+    const body = view.getComputedStyle(page.body).backgroundColor;
+    html.style.backgroundColor = transparent(body) ? BACKGROUNDS[theme] : body;
   }
 
   $effect(() => {
@@ -257,9 +265,10 @@
     paint(doc);
   });
 
+  $effect(() => onBackground((value) => (background = value)));
+
   function nextBackground() {
-    background = BACKGROUND_MODES[(BACKGROUND_MODES.indexOf(background) + 1) % BACKGROUND_MODES.length];
-    writeBackground(background);
+    writeBackground(BACKGROUND_MODES[(BACKGROUND_MODES.indexOf(background) + 1) % BACKGROUND_MODES.length]);
   }
 
   const BACKGROUND_LABELS = { theme: 'backgroundTheme', checker: 'backgroundChecker', grid: 'backgroundGrid' } as const;
@@ -276,6 +285,26 @@
 
   $effect(() => {
     if (doc && measuring) return startMeasure(doc);
+  });
+
+  // keys pressed in the preview never reach the catalog's window, so its shortcuts would stop once the preview has the
+  // focus; the copy goes to the iframe, so the catalog's handlers get an element as the target, as for a key on the page
+  $effect(() => {
+    const frame = iframe;
+    if (!doc || !frame) return;
+    const forward = (e: KeyboardEvent) => {
+      const target = e.composedPath()[0] as HTMLElement;
+      const typing = target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+      if (e.defaultPrevented || e.isComposing || typing) return;
+      const { key, code, location, repeat, ctrlKey, shiftKey, altKey, metaKey } = e;
+      const copy = { key, code, location, repeat, ctrlKey, shiftKey, altKey, metaKey, bubbles: true, cancelable: true };
+      // a shortcut the catalog handled (⌘K) must not also do what the browser does with it
+      if (!frame.dispatchEvent(new KeyboardEvent('keydown', copy))) e.preventDefault();
+    };
+    // on the window, after the page's own handlers on its elements and document, which may take the key
+    const view = doc.defaultView!;
+    view.addEventListener('keydown', forward);
+    return () => view.removeEventListener('keydown', forward);
   });
 
   function toggleExpanded() {
