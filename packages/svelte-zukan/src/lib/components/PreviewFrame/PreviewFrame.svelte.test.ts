@@ -548,6 +548,114 @@ describe('PreviewFrame resizing', () => {
     expect(axe).not.toHaveBeenCalled();
   });
 
+  it('keeps the expanded preview visible and scrolls a long list of issues', async () => {
+    const source = `window.axe = { run: async () => ({ violations: Array.from({ length: 40 }, (_, i) => ({ id: 'r' + i,
+      impact: 'minor', help: 'Rule ' + i, helpUrl: 'https://example.com/' + i, nodes: [{ target: ['body'] }] })) }) };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.poll(() => screen.container.querySelectorAll('.a11y > ul > li').length).toBe(40);
+    const stage = screen.container.querySelector('.stage')!;
+    const panel = screen.container.querySelector<HTMLElement>('.a11y')!;
+    expect(stage.getBoundingClientRect().height).toBeGreaterThan(100);
+    expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight);
+    expect(getComputedStyle(panel).overflowY).toBe('auto');
+  });
+
+  it('checks again when the preview changes in place, but not for its own outlines and badges', async () => {
+    const source = `window.runs = 0; window.axe = { run: async () => (window.runs++, { violations: [{ id: 'x',
+      impact: 'minor', help: 'X', helpUrl: 'https://example.com/x', nodes: [{ target: ['button'] }] }] }) };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    const doc = frame.contentDocument!;
+    const root = doc.createElement('div');
+    root.setAttribute('data-zukan-preview', '');
+    root.innerHTML = '<button>a</button>';
+    doc.body.append(root);
+    const runs = () => (frame.contentWindow as Window & { runs?: number }).runs;
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.poll(runs).toBe(1);
+    await screen.getByRole('button', { name: 'Tab order' }).click();
+    await screen.getByRole('radio', { name: 'Deuteranopia' }).click();
+    await new Promise((r) => setTimeout(r, 600));
+    expect(runs()).toBe(1);
+    root.querySelector('button')!.textContent = 'b';
+    root.append(doc.createElement('input'));
+    await expect.poll(runs).toBe(2);
+    // the previous results stay while it runs again, so an edit does not empty the list
+    await expect.element(screen.getByRole('button', { name: 'button' })).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 600));
+    expect(runs()).toBe(2);
+  });
+
+  it('waits for a check still running when the panel is closed and opened again', async () => {
+    // axe-core rejects a run while another one is running in the same page
+    const source = `let busy = false; window.axe = { run: async () => {
+      if (busy) throw new Error('Axe is already running');
+      busy = true;
+      await new Promise((r) => setTimeout(r, 300));
+      busy = false;
+      return { violations: [] };
+    } };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    const button = screen.getByRole('button', { name: 'Check accessibility' });
+    await button.click();
+    await expect.element(screen.getByText('Checking…')).toBeInTheDocument();
+    await button.click();
+    await button.click();
+    await expect.element(screen.getByText('No accessibility issues found')).toBeInTheDocument();
+  });
+
+  it('scrolls to a picked element by its scaled position', async () => {
+    const source = `window.axe = { run: async () => ({ violations: [{ id: 'x', impact: 'minor', help: 'X',
+      helpUrl: 'https://example.com/x', nodes: [{ target: ['#t'] }] }] }) };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    screen.container.style.width = '600px';
+    await screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }).click();
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    const doc = frame.contentDocument!;
+    const root = doc.createElement('div');
+    root.setAttribute('data-zukan-preview', '');
+    root.innerHTML = '<div style="height: 2000px"></div><button id="t">t</button><div style="height: 4000px"></div>';
+    doc.body.append(root);
+    await expect.poll(() => frame.getBoundingClientRect().height).toBeGreaterThan(2000);
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await screen.getByRole('button', { name: '#t' }).click();
+    const scale = frame.getBoundingClientRect().width / frame.offsetWidth;
+    const top = () => frame.getBoundingClientRect().top + doc.getElementById('t')!.getBoundingClientRect().top * scale;
+    await expect.poll(() => top() >= 0 && top() <= innerHeight).toBe(true);
+  });
+
+  it('scrolls the expanded stage, not the page, to a picked element', async () => {
+    const source = `window.axe = { run: async () => ({ violations: [{ id: 'x', impact: 'minor', help: 'X',
+      helpUrl: 'https://example.com/x', nodes: [{ target: ['#t'] }] }] }) };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    const doc = frame.contentDocument!;
+    const root = doc.createElement('div');
+    root.setAttribute('data-zukan-preview', '');
+    root.innerHTML = '<div style="height: 3000px"></div><button id="t">t</button><div style="height: 3000px"></div>';
+    doc.body.append(root);
+    await expect.poll(() => frame.getBoundingClientRect().height).toBeGreaterThan(3000);
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    const stage = screen.container.querySelector('.stage')!;
+    await screen.getByRole('button', { name: '#t' }).click();
+    const scrolled = scrollY;
+    const box = stage.getBoundingClientRect();
+    const top = () => frame.getBoundingClientRect().top + doc.getElementById('t')!.getBoundingClientRect().top;
+    await expect.poll(() => top() >= box.top && top() <= box.bottom).toBe(true);
+    expect(stage.scrollTop).toBeGreaterThan(2000);
+    expect(scrollY).toBe(scrolled);
+  });
+
   it('has no accessibility button without axe-core', async () => {
     const screen = await render(PreviewFrame, { props });
     await expect.element(screen.getByRole('button', { name: 'Show outlines' })).toBeInTheDocument();

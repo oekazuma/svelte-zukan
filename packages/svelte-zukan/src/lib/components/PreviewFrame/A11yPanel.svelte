@@ -50,15 +50,12 @@
   let {
     doc,
     axe,
-    frame,
     labels,
     onclose
   }: {
-    /** the preview page; the panel is recreated when it reloads, so a check runs again after every edit */
+    /** the preview page; the panel is recreated when it reloads */
     doc: Document;
     axe: () => Promise<string>;
-    /** to scroll the catalog page to an element inside the preview */
-    frame: HTMLIFrameElement | undefined;
     labels: Messages;
     onclose: () => void;
   } = $props();
@@ -94,9 +91,12 @@
     ((e.currentTarget as HTMLElement).parentElement!.children[next + 1] as HTMLElement).focus();
   }
 
-  async function check() {
-    result = { status: 'running' };
-    selected = null;
+  /** `quiet` keeps the previous results until the new ones are in, so a check after an edit does not empty the list */
+  async function check(quiet = false) {
+    if (!quiet) {
+      result = { status: 'running' };
+      selected = null;
+    }
     try {
       result = { status: 'done', ...(await runAxe(doc, axe)) };
     } catch (e) {
@@ -105,20 +105,35 @@
   }
 
   $effect(() => {
-    untrack(check);
+    untrack(() => check());
+  });
+
+  // an edit that keeps the component's props is applied in place by HMR, with no reload that would recreate the panel
+  $effect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // only changes inside the checked root count: the panel's outlines, badges and filters go to <head>, <body> or a
+    // shadow root, and axe-core's own additions to <head> and <html>, so a check never sets off another one
+    const changed = new doc.defaultView!.MutationObserver((records) => {
+      const root = doc.querySelector('[data-zukan-preview]');
+      if (!root || !records.some((r) => root.contains(r.target))) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => check(true), 300);
+    });
+    changed.observe(doc.body, { subtree: true, childList: true, attributes: true, characterData: true });
+    return () => {
+      changed.disconnect();
+      clearTimeout(timer);
+    };
   });
 
   function select(target: string) {
     selected = selected === target ? null : target;
     if (!selected) return;
-    const el = findTarget(doc, target)?.el;
-    if (!el || !frame) return;
-    const top = frame.getBoundingClientRect().top + el.getBoundingClientRect().top;
-    if (top < 0 || top > innerHeight - 40)
-      scrollTo({
-        top: scrollY + top - innerHeight / 3,
-        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'
-      });
+    // from inside the frame, the browser scrolls whatever holds it (the page, or the expanded stage) by its scaled box
+    findTarget(doc, target)?.el.scrollIntoView({
+      block: 'nearest',
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'
+    });
   }
 
   /** outlines every reported element in its impact's color, dashed when it needs a manual check; the selected one thicker */
@@ -293,7 +308,7 @@
         <span class="passed">{labels.a11yPassed}</span>
       {/if}
     </p>
-    <button type="button" class="action" disabled={result.status === 'running'} onclick={check}>
+    <button type="button" class="action" disabled={result.status === 'running'} onclick={() => check()}>
       {@render icon(RERUN_ICON)}{labels.a11yRerun}
     </button>
     <button type="button" class="close" aria-label={labels.close} title={labels.close} onclick={onclose}>

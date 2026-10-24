@@ -48,8 +48,18 @@ export function findTarget(doc: Document, target: string) {
   return null;
 }
 
-/** Runs axe-core inside a preview page, or throws the preview's own error when it failed to load, injecting its source on the first run. */
-export async function runAxe(doc: Document, source: () => Promise<string>): Promise<AxeResult> {
+/** the last run in each preview page: axe-core throws "Axe is already running" when a run starts before it ends */
+const runs = new WeakMap<Window, Promise<unknown>>();
+
+/** Runs axe-core inside a preview page, or throws the preview's own error when it failed to load, injecting its source on the first run. A run waits for the one before it in the same page. */
+export function runAxe(doc: Document, source: () => Promise<string>): Promise<AxeResult> {
+  const win = doc.defaultView!;
+  const run = (runs.get(win) ?? Promise.resolve()).catch(() => {}).then(() => runOnce(doc, source));
+  runs.set(win, run);
+  return run;
+}
+
+async function runOnce(doc: Document, source: () => Promise<string>): Promise<AxeResult> {
   const failed = doc.querySelector('[data-zukan-error]');
   if (failed) throw new Error(failed.textContent ?? '');
   const win = doc.defaultView as AxeWindow;

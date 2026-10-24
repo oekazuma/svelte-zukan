@@ -578,7 +578,7 @@
   <div class="tip" popover="manual" aria-hidden="true" bind:this={tip}>{tipText}</div>
   {#if a11yOpen && axe && doc}
     {#key doc}
-      <A11yPanel {doc} {axe} frame={iframe} {labels} onclose={() => (a11yOpen = false)} />
+      <A11yPanel {doc} {axe} {labels} onclose={() => (a11yOpen = false)} />
     {/key}
   {/if}
 </div>
@@ -632,6 +632,14 @@
 
   .expanded .stage {
     flex: 1;
+    min-height: 40%;
+    overflow: auto;
+  }
+
+  /* a long list of issues scrolls in the panel, instead of squeezing the stage to nothing and being clipped */
+  .expanded > :global(.a11y) {
+    min-height: 0;
+    max-height: 50%;
     overflow: auto;
   }
 
