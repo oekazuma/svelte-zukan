@@ -260,6 +260,27 @@ describe('PreviewFrame resizing', () => {
     expect(parseFloat(iframe.style.height)).toBe(first);
   });
 
+  it('content taller than a min-height: 100vh element does not keep growing', async () => {
+    for (const html of [
+      '<header style="height: 40px"></header><main style="min-height: 100vh"></main>',
+      '<div style="padding: 16px"><div style="min-height: 100vh"></div></div>'
+    ]) {
+      const screen = await render(PreviewFrame, { props });
+      const iframe = screen.container.querySelector('iframe')!;
+      await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+      const doc = iframe.contentDocument!;
+      const target = doc.createElement('div');
+      target.setAttribute('data-zukan-preview', '');
+      target.innerHTML = html;
+      doc.body.append(target);
+      await new Promise((r) => setTimeout(r, 500));
+      const first = parseFloat(iframe.style.height);
+      await new Promise((r) => setTimeout(r, 500));
+      expect(parseFloat(iframe.style.height), html).toBe(first);
+      screen.unmount();
+    }
+  });
+
   it('content with min-height: 100vh keeps its height after the preview is expanded and back', async () => {
     const screen = await render(PreviewFrame, { props });
     const iframe = screen.container.querySelector('iframe')!;

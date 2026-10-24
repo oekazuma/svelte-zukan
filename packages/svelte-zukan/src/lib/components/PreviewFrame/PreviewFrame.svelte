@@ -178,6 +178,8 @@
     let target: Element | null = null;
     /** the viewport height the content last matched */
     let tiedTo = -1;
+    /** the content's bottom and the viewport height at the previous measurement */
+    let last = { bottom: 0, viewport: 0 };
     observer = new ResizeObserver(() => {
       const found = doc.querySelector('[data-zukan-preview]');
       if (!found) return;
@@ -197,6 +199,12 @@
       const scrollbar = win.innerHeight - viewport;
       const own = found.getBoundingClientRect().height;
       const tied = Math.abs(own - viewport) < 1;
+      const grown = bottom - last.bottom;
+      const resized = viewport - last.viewport;
+      last = { bottom, viewport };
+      // content that grew with the viewport holds an element sized to it (`100vh`) next to more content, so it is always
+      // taller than the frame: following it would grow the frame without end
+      if (ready && Math.abs(resized) >= 1 && Math.abs(grown - resized) < 2) return;
       // a page that fills the viewport has nothing new to measure when the viewport has not changed since, or when the
       // frame is stretched to the expanded stage: measuring it would grow the frame by the body's margins each time
       if (tied && ready && (expanded || Math.abs(tiedTo - viewport) < 1)) return;
