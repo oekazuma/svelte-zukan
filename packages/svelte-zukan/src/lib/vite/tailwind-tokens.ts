@@ -321,10 +321,10 @@ export function extractTokens(
   const token = (name: string, stem: string, own: string | null, value: string, shown = value): TailwindToken => {
     const variable = soleVar(value);
     let cssVariable: string | null = variable && Object.hasOwn(variables, variable) ? variable : null;
-    // an `@theme inline` token puts its value into the class, so the variable is the one holding that value, or the one
-    // it aliases (`--color-primary: var(--color-blue-500)` gives `bg-primary` the value `var(--color-blue-500)`)
+    // an `@theme inline` token puts its value into the class, so the class reads the variable it aliases
+    // (`--color-primary: var(--color-blue-500)` gives `bg-primary` the value `var(--color-blue-500)`): name its own
     const suffix = name.slice(stem.length + 1);
-    if (variable && !variable.endsWith(`-${suffix}`) && own && Object.hasOwn(variables, own)) cssVariable = own;
+    if (variable && own && variable !== own && Object.hasOwn(variables, own)) cssVariable = own;
     if (!cssVariable && suffix) {
       cssVariable =
         Object.keys(variables).find((key) => variables[key] === value && key.endsWith(`-${suffix}`)) ?? null;

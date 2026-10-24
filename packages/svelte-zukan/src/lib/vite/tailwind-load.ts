@@ -58,9 +58,12 @@ export async function findTailwindEntries(dirs: string[], resolveCss: Resolver):
       return normalizePath(file);
     }
   };
-  const byReal = new Map([...candidates.keys()].map((file) => [real(file), file]));
+  // a file reached through two scanned paths (a directory and a symlink to it) is one file, listed once
+  const byReal = new Map<string, string>();
+  for (const file of candidates.keys()) if (!byReal.has(real(file))) byReal.set(real(file), file);
   const partials = new Set<string>();
-  for (const [file, css] of candidates) {
+  for (const file of byReal.values()) {
+    const css = candidates.get(file)!;
     const base = path.dirname(file);
     for (const id of importIds(css)) {
       if (isTailwindId(id)) continue;
@@ -69,7 +72,7 @@ export async function findTailwindEntries(dirs: string[], resolveCss: Resolver):
       if (target && target !== file) partials.add(target);
     }
   }
-  return [...candidates.keys()].filter((file) => !partials.has(file));
+  return [...byReal.values()].filter((file) => !partials.has(file));
 }
 
 /**

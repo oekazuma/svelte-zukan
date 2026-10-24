@@ -49,9 +49,11 @@ describe('extractTokens', () => {
   it('names an @theme inline alias of another theme variable after the token, and orders it as the project', async () => {
     const { result, token } = await load(
       '@import "tailwindcss";\n@theme inline { --color-primary: var(--color-blue-500); --radius-card: var(--radius-lg);' +
-        ' --font-body: var(--font-serif); }'
+        ' --font-body: var(--font-serif); --color-old-surface: #123456; --color-surface: var(--color-old-surface); }'
     );
     expect(token('background-color', 'bg-primary')?.cssVariable).toBe('--color-primary');
+    // the aliased variable ends in the same suffix as the token's own
+    expect(token('background-color', 'bg-surface')?.cssVariable).toBe('--color-surface');
     expect(token('border-radius', 'rounded-card')?.cssVariable).toBe('--radius-card');
     expect(token('font-family', 'font-body')?.cssVariable).toBe('--font-body');
     const classes = (id: TailwindCategoryId) =>
