@@ -1,5 +1,25 @@
 # svelte-zukan
 
+## 0.13.0
+
+### Minor Changes
+
+- 0d6d77a: fix: the `svelte` peer dependency is now `^5.46.4`, the version Vite 8's Svelte plugin requires; the catalog UI already needed Svelte 5.29 or later for `{@attach}`.
+
+### Patch Changes
+
+- 6bec00d: fix: picking the section already in the URL in the ⌘K search scrolls to it again; a CSS file edited into a Tailwind CSS entry (`@theme` or `@import "tailwindcss"` added) shows up without a restart; and deleting a component next to a catalog file reloads only the catalog tab.
+- 20674d5: fix: catalog navigation and state fixes. The table of contents' Props link scrolls to the props without putting `#zukan-props` in the URL, and Back onto an in-page anchor of a doc shows the page it was on. Back and Forward keep the scroll position the browser restores instead of jumping to the top. Each detail page starts with its own table of contents marker and no expanded preview, F with the props in view expands the last section, and a link to the section already in the URL scrolls to it again. On a narrow screen, clicking a folder in the menu no longer closes it. WebMCP's `check_accessibility` without a `theme` renders in the catalog's current theme, as the accessibility panel does.
+- 87b2876: fix: editing a file a props type is imported from reloads only the catalog tab, never every tab, and no longer fails after its component is deleted; a component created next to a catalog file shows its props table at once; creating a route file or a test no longer reloads the catalog.
+
+  fix: a `<style>` written in a `<script>` or an HTML comment no longer breaks parsing; the code view keeps the quotes of `generics`; the props table follows `export … from` re-exports and shows a union or other type it can not list as written.
+
+  fix: an installed `svelte-zukan` is prebundled up front, so the first catalog visit no longer re-optimizes and reloads the page; the printed catalog URL has a `/` before `__zukan/` under SvelteKit's `paths.base`; a catalog `build.outDir` inside the app's `publicDir`, an empty group name and a group without directories are errors; `vite preview` serves more asset types (`.jpeg`, `.wasm`, fonts, video) with their content type.
+
+- ce7b7cf: fix: a preview with a `100vh` element beside more content no longer grows without end; the expanded view keeps the preview visible and scrolls a long accessibility list; the catalog's shortcuts, Esc included, work while the focus is inside a preview; the accessibility check runs again after an edit applied in place, no longer fails with "Axe is already running" when the panel is reopened during a check, and scrolls to a picked element in a scaled or expanded preview; arrow keys on the resize grip keep a width wider than the stage; the page's own `html` background is kept; the background switch applies to every preview on the page; and the code view no longer takes an apostrophe in text, a URL or a nested template literal for a string or a comment.
+- 17b40bd: fix: on the Tailwind CSS page, keep the entry's `[data-theme]` rules and the catalog's font out of the samples, order size tokens by value, show an `@theme inline` alias's own variable, and treat a partial reached through a symlinked directory as a partial.
+- d2e9f19: fix: an expanded preview fills the screen with the page's own background, the shortcuts button is hidden on touch screens, and paths without a catalog file wrap after a slash.
+
 ## 0.12.0
 
 ### Minor Changes
