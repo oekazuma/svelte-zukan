@@ -139,7 +139,7 @@
             </div>
           {/each}
           {#if hasProps}
-            <h2 id="zukan-props" use:track={PROPS}>{t.props}</h2>
+            <h2 id="zukan-props" tabindex="-1" use:track={PROPS}>{t.props}</h2>
             {#if meta.propsType}
               <p class="props-type">{t.propsType} <code>{meta.propsType}</code></p>
             {/if}
@@ -221,8 +221,17 @@
               {/each}
               {#if hasProps}
                 <li>
-                  <!-- a plain anchor: the app keeps its route on a hash that is not one of its own -->
-                  <a href="#zukan-props" aria-current={active === PROPS ? 'location' : undefined}>{t.props}</a>
+                  <!-- the hash stays the catalog route, which a shared or bookmarked URL needs -->
+                  <a
+                    href="#zukan-props"
+                    aria-current={active === PROPS ? 'location' : undefined}
+                    onclick={(e) => {
+                      e.preventDefault();
+                      const heading = document.getElementById('zukan-props')!;
+                      heading.scrollIntoView();
+                      heading.focus({ preventScroll: true });
+                    }}>{t.props}</a
+                  >
                 </li>
               {/if}
             </ul>
@@ -279,6 +288,11 @@
   h2 {
     margin: 32px 0 10px;
     font-size: 18px;
+  }
+
+  /* focused only to move the keyboard's starting point, like main */
+  h2:focus {
+    outline: none;
   }
 
   .example {

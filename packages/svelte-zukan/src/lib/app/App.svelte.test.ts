@@ -430,11 +430,36 @@ describe('App', () => {
         }
       });
     const screen = await render(App, { props });
-    const toc = screen.getByRole('navigation', { name: 'On this page' });
-    await expect.element(toc.getByRole('link', { name: 'Props' })).toHaveAttribute('href', '#zukan-props');
-    await toc.getByRole('link', { name: 'Props' }).click();
-    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
-    expect(document.getElementById('zukan-props')!.getBoundingClientRect().top).toBeLessThan(innerHeight);
+    document.body.style.minHeight = '5000px';
+    try {
+      const link = screen.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Props' });
+      await expect.element(link).toBeInTheDocument();
+      scrollTo(0, 3000);
+      (link.element() as HTMLElement).focus();
+      await userEvent.keyboard('{Enter}');
+      const heading = document.getElementById('zukan-props')!;
+      await expect.poll(() => Math.round(heading.getBoundingClientRect().top)).toBe(0);
+      expect(document.activeElement).toBe(heading);
+      // the URL stays one that opens this page
+      expect(location.hash).toBe('#/ui/Card');
+    } finally {
+      document.body.style.minHeight = '';
+    }
+  });
+
+  it('Back onto an in-page anchor of a doc shows the page it was on', async () => {
+    const props = three();
+    const first = await render(App, { props });
+    await expect.element(first.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    await setHash('#usage');
+    await userEvent.keyboard('j');
+    await expect.element(first.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+    history.back();
+    await expect.element(first.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    expect(location.hash).toBe('#usage');
+    await first.unmount();
+    const again = await render(App, { props });
+    await expect.element(again.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
   });
 
   it('a page with several sections has a table of contents', async () => {
@@ -765,6 +790,29 @@ describe('App', () => {
       expect(window.scrollY).toBe(1000);
       location.hash = '#/ui/Nope';
       await expect.poll(() => window.scrollY).toBe(0);
+    } finally {
+      document.body.style.minHeight = '';
+    }
+  });
+
+  it('Back and Forward keep the position the browser restores', async () => {
+    const { props } = setup('');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: 'Components' })).toBeInTheDocument();
+    document.body.style.minHeight = '5000px';
+    try {
+      window.scrollTo(0, 1000);
+      await setHash('#/ui/Card');
+      await expect.poll(() => window.scrollY).toBe(0);
+      window.scrollTo(0, 500);
+      history.back();
+      await expect.element(screen.getByRole('heading', { level: 1, name: 'Components' })).toBeInTheDocument();
+      await tick();
+      await expect.poll(() => window.scrollY).toBe(1000);
+      history.forward();
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+      await tick();
+      await expect.poll(() => window.scrollY).toBe(500);
     } finally {
       document.body.style.minHeight = '';
     }
