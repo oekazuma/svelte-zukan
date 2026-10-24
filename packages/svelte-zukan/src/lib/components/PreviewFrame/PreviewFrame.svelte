@@ -291,12 +291,13 @@
   // focus; the copy goes to the iframe, so the catalog's handlers get an element as the target, as for a key on the page
   $effect(() => {
     const frame = iframe;
-    if (!doc || !frame) return;
+    const page = doc;
+    if (!page || !frame) return;
     const forward = (e: KeyboardEvent) => {
       const target = e.composedPath()[0] as HTMLElement;
       const typing = target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
       // Escape closes a dialog or a popover open in the preview first, which must not leave the expanded view too
-      const closes = e.key === 'Escape' && doc.querySelector('dialog[open], :popover-open');
+      const closes = e.key === 'Escape' && page.querySelector('dialog[open], :popover-open');
       if (e.defaultPrevented || e.isComposing || typing || closes) return;
       const { key, code, location, repeat, ctrlKey, shiftKey, altKey, metaKey } = e;
       const copy = { key, code, location, repeat, ctrlKey, shiftKey, altKey, metaKey, bubbles: true, cancelable: true };
@@ -304,7 +305,7 @@
       if (!frame.dispatchEvent(new KeyboardEvent('keydown', copy))) e.preventDefault();
     };
     // on the window, after the page's own handlers on its elements and document, which may take the key
-    const view = doc.defaultView!;
+    const view = page.defaultView!;
     view.addEventListener('keydown', forward);
     return () => view.removeEventListener('keydown', forward);
   });
