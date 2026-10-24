@@ -207,8 +207,9 @@
   {/if}
 {/snippet}
 
-<!-- class names are prefixed: the entry's own CSS is in this document and may style `.card` or `.sample` -->
-<div class="zukan-tokens" data-theme={theme} {@attach measure}>
+<!-- class names and the theme attribute are prefixed: the entry's own CSS is in this document and may style `.card`,
+     `.sample` or `[data-theme='dark']` -->
+<div class="zukan-tokens" data-zukan-theme={theme} {@attach measure}>
   <!-- first: at the end, its static position would put it 1px below the content the frame is sized to -->
   <p class="zukan-sr-only" aria-live="polite">{copied ? (copied.ok ? t.copied : t.copyFailed) : ''}</p>
   {#if !tokens.length}
@@ -269,12 +270,18 @@
     --_danger: #cf222e;
 
     color: var(--_text);
+  }
+
+  /* the catalog's parts only: a sample inherits the entry's base font, which its preflight puts on `html` */
+  .zukan-names,
+  .zukan-values,
+  .zukan-empty {
     font-family: system-ui, sans-serif;
     font-size: 14px;
     line-height: 1.5;
   }
 
-  .zukan-tokens[data-theme='dark'] {
+  .zukan-tokens[data-zukan-theme='dark'] {
     --_bg: #0d1117;
     --_text: #f0f6fc;
     --_muted: #9198a1;

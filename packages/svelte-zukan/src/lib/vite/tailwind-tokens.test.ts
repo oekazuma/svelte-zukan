@@ -1,7 +1,14 @@
 import { __unstable__loadDesignSystem, compile } from '@tailwindcss/node';
 import { describe, expect, it } from 'vitest';
 import type { TailwindCategoryId } from '../types.js';
-import { extractTokens, resolveValue, rootVariables, scanCss, type DesignSystemLike } from './tailwind-tokens.js';
+import {
+  extractTokens,
+  resolveValue,
+  rootVariables,
+  scanCss,
+  sizeOf,
+  type DesignSystemLike
+} from './tailwind-tokens.js';
 
 const base = import.meta.dirname;
 
@@ -37,6 +44,25 @@ describe('extractTokens', () => {
       cssVariable: '--color-primary',
       value: 'oklch(0.6 0.2 30)'
     });
+  });
+
+  it('names an @theme inline alias of another theme variable after the token, and orders it as the project', async () => {
+    const { result, token } = await load(
+      '@import "tailwindcss";\n@theme inline { --color-primary: var(--color-blue-500); --radius-card: var(--radius-lg);' +
+        ' --font-body: var(--font-serif); --color-old-surface: #123456; --color-surface: var(--color-old-surface); }'
+    );
+    expect(token('background-color', 'bg-primary')?.cssVariable).toBe('--color-primary');
+    // the aliased variable ends in the same suffix as the token's own
+    expect(token('background-color', 'bg-surface')?.cssVariable).toBe('--color-surface');
+    expect(token('border-radius', 'rounded-card')?.cssVariable).toBe('--radius-card');
+    expect(token('font-family', 'font-body')?.cssVariable).toBe('--font-body');
+    const classes = (id: TailwindCategoryId) =>
+      result.categories.find((c) => c.id === id)?.tokens.map((t) => t.class) ?? [];
+    expect(classes('background-color').indexOf('bg-primary')).toBeGreaterThan(
+      classes('background-color').indexOf('bg-white')
+    );
+    expect(classes('font-family').at(-1)).toBe('font-body');
+    expect(classes('border-radius').indexOf('rounded-card')).toBe(classes('border-radius').indexOf('rounded-lg') + 1);
   });
 
   it('gives spacing classes no variable and a resolved value', async () => {
@@ -130,20 +156,13 @@ describe('extractTokens', () => {
       ]);
       expect(classes(result, 'font-weight').slice(0, 3)).toEqual(['font-thin', 'font-extralight', 'font-light']);
       expect(classes(result, 'letter-spacing')[0]).toBe('tracking-tighter');
-      expect(classes(result, 'line-height').slice(-5)).toEqual([
-        'leading-tight',
-        'leading-snug',
-        'leading-normal',
-        'leading-relaxed',
-        'leading-loose'
-      ]);
       expect(classes(result, 'border-radius')).toEqual(
         ['none', 'xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', 'full'].map((size) => `rounded-${size}`)
       );
       expect(classes(result, 'border-width').slice(0, 3)).toEqual(['border-0', 'border', 'border-2']);
       expect(classes(result, 'box-shadow').slice(0, 7)).toEqual([
-        'shadow',
         'shadow-none',
+        'shadow',
         'shadow-2xs',
         'shadow-xs',
         'shadow-sm',
@@ -158,7 +177,7 @@ describe('extractTokens', () => {
       );
     });
 
-    it('lists project colors in their @theme order and leaves spacing scales alone', async () => {
+    it('lists project colors in their @theme order', async () => {
       const { result } = await load('@import "tailwindcss"; @theme { --color-zeta: red; --color-alpha: blue; }');
       const colors = classes(result, 'background-color');
       expect(colors.indexOf('bg-zeta')).toBe(colors.indexOf('bg-alpha') - 1);
@@ -167,8 +186,38 @@ describe('extractTokens', () => {
         'bg-red-100',
         'bg-red-200'
       ]);
-      expect(classes(result, 'padding').slice(0, 5)).toEqual(['p-0', 'p-0.5', 'p-1', 'p-1.5', 'p-2']);
-      expect(classes(result, 'spacing')[0]).toBe('--spacing');
+    });
+
+    it('orders sizes by their value, with project tokens among the defaults', async () => {
+      const { result } = await load(
+        '@import "tailwindcss"; @theme { --spacing-18: 4.5rem; --text-2xs: 0.625rem; --breakpoint-xs: 20rem; }'
+      );
+      const padding = classes(result, 'padding');
+      expect(padding.slice(0, 5)).toEqual(['p-0', 'p-px', 'p-0.5', 'p-1', 'p-1.5']);
+      expect(padding.slice(padding.indexOf('p-16'), padding.indexOf('p-16') + 3)).toEqual(['p-16', 'p-18', 'p-20']);
+      expect(classes(result, 'spacing').slice(0, 3)).toEqual(['--spacing', 'p-0', 'p-px']);
+      expect(classes(result, 'font-size')[0]).toBe('text-2xs');
+      expect(classes(result, 'breakpoints')[0]).toBe('--breakpoint-xs');
+      // a unitless line height is a multiple of the 16px base, and ties keep the theme order
+      const leading = classes(result, 'line-height');
+      expect(leading.slice(0, 3)).toEqual(['leading-0', 'leading-px', 'leading-0.5']);
+      expect(leading.indexOf('leading-none')).toBe(leading.indexOf('leading-4') + 1);
+      expect(leading.filter((c) => /^leading-([5-8]|tight|snug|normal|relaxed|loose)$/.test(c ?? ''))).toEqual([
+        'leading-5',
+        'leading-tight',
+        'leading-snug',
+        'leading-6',
+        'leading-normal',
+        'leading-relaxed',
+        'leading-7',
+        'leading-8',
+        'leading-loose'
+      ]);
+      // values that need the frame to compute come after the others, in class-list order
+      const width = classes(result, 'width');
+      expect(width.indexOf('w-auto')).toBeGreaterThan(width.indexOf('w-96'));
+      expect(width.indexOf('w-auto')).toBeGreaterThan(width.indexOf('w-7xl'));
+      expect(width.indexOf('w-px')).toBe(width.indexOf('w-0') + 1);
     });
   });
 
@@ -194,6 +243,25 @@ describe('extractTokens', () => {
     expect(result.categories.find((c) => c.id === 'spacing')?.tokens[0].cssVariable).toBe('--tw-spacing');
     expect(result.classes).toContain('tw:bg-red-500');
     expect(result.classes).not.toContain('bg-red-500');
+  });
+});
+
+describe('sizeOf', () => {
+  it('computes lengths and calc() products at a 16px root', () => {
+    expect(sizeOf('0 0 #0000', 'box-shadow')).toBe(0);
+    expect(sizeOf('none', 'filter')).toBe(0);
+    expect(sizeOf('1px', 'padding')).toBe(1);
+    expect(sizeOf('-0.05em', 'letter-spacing')).toBeCloseTo(-0.8);
+    expect(sizeOf('calc(0.25rem * 4)', 'padding')).toBe(16);
+    expect(sizeOf('calc(infinity * 1px)', 'border-radius')).toBe(Infinity);
+    expect(sizeOf('1.5', 'line-height')).toBe(24);
+    expect(sizeOf('700', 'font-weight')).toBe(700);
+  });
+
+  it('gives up on values that need a browser', () => {
+    for (const value of ['100%', '100vw', 'auto', 'calc(1 / 2 * 100%)', 'calc(var(--x) * 2)', '0 1px 2px red']) {
+      expect(sizeOf(value, 'width')).toBeNull();
+    }
   });
 });
 
