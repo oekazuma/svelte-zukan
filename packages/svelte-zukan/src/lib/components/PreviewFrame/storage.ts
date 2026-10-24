@@ -1,6 +1,9 @@
 export type Theme = 'light' | 'dark';
 /** the preview page's own background, under the app's CSS */
 export const BACKGROUNDS: Record<Theme, string> = { light: '#fff', dark: '#0d1117' };
+/** a computed color that paints nothing: `transparent`, or any color whose alpha is 0, such as `rgba(255, 255, 255, 0)` */
+export const transparent = (color: string) =>
+  color === 'transparent' || /^rgba\((?:[^,]+,){3}\s*0\)$/.test(color) || /\/\s*0\)$/.test(color);
 
 const THEME_KEY = 'svelte-zukan:theme';
 const widthKey = (src: string) => `svelte-zukan:width:${src}`;

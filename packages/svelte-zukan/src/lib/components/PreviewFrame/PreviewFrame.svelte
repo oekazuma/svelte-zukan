@@ -6,6 +6,7 @@
   import {
     BACKGROUND_MODES,
     BACKGROUNDS,
+    transparent,
     readBackground,
     readWidth,
     writeBackground,
@@ -196,6 +197,9 @@
       const scrollbar = win.innerHeight - viewport;
       const own = found.getBoundingClientRect().height;
       const tied = Math.abs(own - viewport) < 1;
+      // a page that fills the viewport has nothing new to measure when the viewport has not changed since, or when the
+      // frame is stretched to the expanded stage: measuring it would grow the frame by the body's margins each time
+      if (tied && ready && (expanded || Math.abs(tiedTo - viewport) < 1)) return;
       const follows = tied && tiedTo !== -1 && Math.abs(tiedTo - viewport) >= 1;
       if (tied) tiedTo = viewport;
       const next = Math.max(MIN_HEIGHT, follows ? own : Math.ceil(bottom + spacing + scrollbar));
@@ -220,9 +224,7 @@
    */
   function paint(page: Document) {
     const body = page.defaultView!.getComputedStyle(page.body).backgroundColor;
-    page.documentElement.style.backgroundColor = /^(rgba\(0, 0, 0, 0\)|transparent)$/.test(body)
-      ? BACKGROUNDS[theme]
-      : body;
+    page.documentElement.style.backgroundColor = transparent(body) ? BACKGROUNDS[theme] : body;
   }
 
   $effect(() => {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { BACKGROUNDS, type Theme } from '../components/PreviewFrame/storage.js';
+  import { BACKGROUNDS, transparent, type Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
   import { formatHash } from './hash.js';
   import { fitThumb } from './thumb-fit.js';
@@ -10,7 +10,6 @@
   /** tall enough to cover the card at the smallest scale `fitThumb` gives */
   const LAYOUT_HEIGHT = 500;
   /** a thumbnail is a picture of the first example: it never scrolls */
-  const TRANSPARENT = /^(rgba\(0, 0, 0, 0\)|transparent)$/;
   /** elements that draw their own content, whatever their background */
   const DRAWN = ['img', 'svg', 'video', 'canvas', 'iframe', 'input', 'select', 'textarea', 'progress', 'meter'];
   const THUMB_CSS = 'html,body{overflow:hidden !important}[data-zukan-preview]{box-sizing:border-box;padding:24px}';
@@ -53,7 +52,7 @@
       paint = undefined;
       for (let el: Element | null = root; el && el !== doc!.documentElement; el = el.parentElement) {
         const color = view.getComputedStyle(el).backgroundColor;
-        if (!TRANSPARENT.test(color)) {
+        if (!transparent(color)) {
           paint = color;
           break;
         }
@@ -72,7 +71,7 @@
         if (
           DRAWN.includes(el.localName) ||
           style.backgroundImage !== 'none' ||
-          !TRANSPARENT.test(style.backgroundColor) ||
+          !transparent(style.backgroundColor) ||
           [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth].some(
             (w) => parseFloat(w) > 0
           )
