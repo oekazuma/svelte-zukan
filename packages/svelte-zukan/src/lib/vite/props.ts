@@ -12,8 +12,12 @@ type Scope = {
   file: string;
   text: (n: Node) => string;
   declarations: Node[];
-  /** imported names, and the names a barrel re-exports (`export type { Props } from './button'`) */
+  /** imported names */
   imports: Map<string, { from: string; name: string }>;
+  /** the names a barrel re-exports (`export type { Props } from './button'`) */
+  reexports: Map<string, { from: string; name: string }>;
+  /** the file's own exports, exported name to local name (`export type Props`, `export { Inner as Props }`) */
+  exported: Map<string, string>;
   /** the sources of `export * from './button'` */
   stars: string[];
 };
@@ -37,17 +41,24 @@ function jsdocOf(node: Node) {
 
 function scopeOf(file: string, lf: string, body: Node[]): Scope {
   const imports = new Map<string, { from: string; name: string }>();
+  const reexports = new Map<string, { from: string; name: string }>();
+  const exported = new Map<string, string>();
   const stars: string[] = [];
   for (const n of body) {
     const from = (n.source as { value: string } | null | undefined)?.value;
+    if (n.type === 'ExportNamedDeclaration') {
+      const declaration = n.declaration as Node | null;
+      const id = declaration?.id as Node | undefined;
+      if (id?.type === 'Identifier') exported.set(id.name as string, id.name as string);
+      for (const s of n.specifiers as { local: Node; exported: Node }[])
+        if (from === undefined) exported.set(keyName(s.exported), keyName(s.local));
+        else reexports.set(keyName(s.exported), { from, name: keyName(s.local) });
+    }
     if (from === undefined) continue;
     if (n.type === 'ImportDeclaration') {
       for (const s of n.specifiers as { type: string; imported?: Node; local: Node }[])
         if (s.type === 'ImportSpecifier' && s.imported)
           imports.set(s.local.name as string, { from, name: keyName(s.imported) });
-    } else if (n.type === 'ExportNamedDeclaration') {
-      for (const s of n.specifiers as { local: Node; exported: Node }[])
-        imports.set(keyName(s.exported), { from, name: keyName(s.local) });
     } else if (n.type === 'ExportAllDeclaration' && !n.exported) stars.push(from);
   }
   return {
@@ -55,6 +66,8 @@ function scopeOf(file: string, lf: string, body: Node[]): Scope {
     text: (n) => lf.slice(n.start, n.end).replace(/\s+/g, ' ').trim(),
     declarations: body.map((n) => (n.type === 'ExportNamedDeclaration' && n.declaration ? (n.declaration as Node) : n)),
     imports,
+    reexports,
+    exported,
     stars
   };
 }
@@ -139,20 +152,28 @@ export function extractProps(
     );
 
   /** the declaration a name refers to in a scope: its own, or one it imports or re-exports from a relative path */
-  function lookup(scope: Scope, name: string, depth: number): { node: Node; scope: Scope; depth: number } | null {
-    const local = declared(scope, name);
-    if (local) return { node: local, scope, depth };
+  /** `exportedOnly` is for a file reached through `export *`, which passes on only what that file exports */
+  function lookup(
+    scope: Scope,
+    name: string,
+    depth: number,
+    exportedOnly = false
+  ): { node: Node; scope: Scope; depth: number } | null {
+    const local = exportedOnly ? scope.exported.get(name) : name;
+    const node = local === undefined ? null : declared(scope, local);
+    if (node) return { node, scope, depth };
     if (depth >= MAX_DEPTH) return null;
-    const imported = scope.imports.get(name);
-    for (const { from, name: target } of imported ? [imported] : scope.stars.map((from) => ({ from, name }))) {
+    const imported = scope.reexports.get(name) ?? (local === undefined ? undefined : scope.imports.get(local));
+    const next = imported ? [{ ...imported, star: false }] : scope.stars.map((from) => ({ from, name, star: true }));
+    for (const { from, name: target, star } of next) {
       const file = resolveImport(scope.file, from);
       if (!file) continue;
       if (!scopes.has(file)) scopes.set(file, readScope(file));
-      const next = scopes.get(file);
-      if (!next) continue;
+      const found = scopes.get(file);
+      if (!found) continue;
       files.add(file);
-      const found = lookup(next, target, depth + 1);
-      if (found) return found;
+      const result = lookup(found, target, depth + 1, star);
+      if (result) return result;
     }
     return null;
   }

@@ -84,7 +84,7 @@ A button for the main action on a page. Use one per screen.
 </button>
 ```
 
-props はコンポーネントを実行せず、ソースを読んで取り出します。型はその場に書いても、コンポーネント内で宣言した type エイリアスや interface（interface の `extends` を含む）でもかまいません。相対パスで import した型も読みます。`.ts` ファイル（`./types`、`./types.js`、`./types/index.ts`。`export … from` による再エクスポートも含む）や、ほかのコンポーネントの `<script module>` から import した型で、import は 3 ファイル先までたどります。パッケージの型（`svelte/elements` の `HTMLButtonAttributes` など）やユニオン型（`{ href: string } | { onclick: () => void }`）のように読めない型は、一覧にその型を書かれたとおりに出し、props は分割代入したものだけを型なしで並べます。props の型を書いたファイルを編集すると、一覧も更新されます。パースできないコンポーネントや `$props()` のないコンポーネントには、一覧を出しません。JSDoc コメントも `.md` と同じく HTML として挿入するので、カタログを公開する前にコードと同じようにレビューしてください。
+props はコンポーネントを実行せず、ソースを読んで取り出します。型はその場に書いても、コンポーネント内で宣言した type エイリアスや interface（interface の `extends` を含む）でもかまいません。相対パスで import した型も読みます。`.ts` ファイル（`./types`、`./types.js`、`./types/index.ts`。`export … from` による再エクスポートも含む）や、ほかのコンポーネントの `<script module>` から import した型で、import は 3 ファイル先までたどります。パッケージの型（`svelte/elements` の `HTMLButtonAttributes` など）やユニオン型（`{ href: string } | { onclick: () => void }`）のように読めない型は、一覧にその型を書かれたとおりに出します。上の例のような交差型では、読める部分の props は型付きで並び（`variant`、`disabled`）、それ以外に分割代入した props（`children`）は型なしで並びます。props の型を書いたファイルを編集すると、一覧も更新されます。パースできないコンポーネントや `$props()` のないコンポーネントには、一覧を出しません。JSDoc コメントも `.md` と同じく HTML として挿入するので、カタログを公開する前にコードと同じようにレビューしてください。
 
 ## 接尾辞を変える
 

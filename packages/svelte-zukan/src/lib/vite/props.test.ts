@@ -223,6 +223,15 @@ describe('extractProps with imported types', () => {
     expect(found.files.sort()).toEqual([button, extra, inner, index].sort());
   });
 
+  it('takes through `export *` only a name the file exports, not one it imports for itself', () => {
+    write('lib/private.ts', 'export type Props = { wrong: string };\n');
+    write('lib/first.ts', "import type { Props } from './private';\nexport type First = Props & { first: boolean };\n");
+    write('lib/second.ts', 'export type Props = { right: string };\n');
+    write('lib/types/index.ts', "export * from '../first';\nexport * from '../second';\n");
+    const file = component("  import type { Props } from './types';\n  let { right }: Props = $props();");
+    expect(read(file)!.props.map((p) => p.name)).toEqual(['right']);
+  });
+
   it('stops at types that refer to each other', () => {
     write('lib/a.ts', "import type { B } from './b';\nexport type A = B & { a: number };\n");
     write('lib/b.ts', "import type { A } from './a';\nexport type B = A & { b: number };\n");
