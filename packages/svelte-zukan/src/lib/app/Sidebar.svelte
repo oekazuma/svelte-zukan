@@ -191,9 +191,16 @@
       aria-label={t.search}
       autocomplete="off"
     />
-    <!-- following a link closes the panel on narrow screens; the links themselves handle the keyboard -->
+    <!-- following a link closes the panel on narrow screens, also one to the page shown, which fires no hashchange;
+         a folder keeps it open. The links themselves handle the keyboard -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <nav aria-label={t.nav} onclick={() => (open = false)} onkeydown={moveInTree}>
+    <nav
+      aria-label={t.nav}
+      onclick={(e) => {
+        if ((e.target as Element).closest('a[href]')) open = false;
+      }}
+      onkeydown={moveInTree}
+    >
       {#if matches.entries.length}
         <!-- re-created when a search starts or ends, so every folder is open while searching -->
         {#key !!query.trim()}

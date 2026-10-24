@@ -967,4 +967,18 @@ describe('App', () => {
     await expect.element(menu).toHaveAttribute('aria-expanded', 'false');
     await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
   });
+
+  it('on a narrow screen a folder opens and closes without closing the menu', async () => {
+    await page.viewport(400, 800);
+    const { props } = setup('');
+    props.catalog.push({ group: 'ui', name: 'Button', dir: 'forms', path: 'ui/forms/Button', load, meta });
+    const screen = await render(App, { props });
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    await menu.click();
+    const folder = screen.getByRole('navigation', { name: 'Components' }).getByText('forms');
+    await folder.click();
+    await expect.poll(() => folder.element().closest('details')!.open).toBe(false);
+    await expect.element(menu).toHaveAttribute('aria-expanded', 'true');
+    expect(document.activeElement).toBe(folder.element().closest('summary'));
+  });
 });
