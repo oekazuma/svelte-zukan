@@ -103,6 +103,7 @@
           axe,
           page: location.pathname,
           themes: !fixedTheme,
+          currentTheme: () => theme,
           tailwind: tailwind.length > 0
         }),
         context
