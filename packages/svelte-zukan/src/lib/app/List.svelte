@@ -66,7 +66,12 @@
     <p>{t.uncatalogedHint}</p>
     <ul>
       {#each uncataloged as u (u.file)}
-        <li><code>{u.file}</code></li>
+        <!-- a long path wraps after a slash rather than inside a name -->
+        <li>
+          <code
+            >{#each u.file.split('/') as part, i (i)}{#if i}/<wbr />{/if}{part}{/each}</code
+          >
+        </li>
       {/each}
     </ul>
   </details>

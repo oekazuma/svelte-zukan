@@ -4,7 +4,7 @@
 </script>
 
 <Section title="基本">
-  <CodeBlock code="<button>押す</button>" />
+  <CodeBlock code="<button>押す</button>" open />
 </Section>
 
 <Section title="複数行">

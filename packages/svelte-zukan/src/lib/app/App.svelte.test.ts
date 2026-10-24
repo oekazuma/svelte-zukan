@@ -254,6 +254,8 @@ describe('App', () => {
     await expect.element(screen.getByText('src/lib/Lone.svelte')).not.toBeVisible();
     summary.click();
     await expect.element(screen.getByText('src/lib/Lone.svelte')).toBeVisible();
+    // a long path wraps after a slash rather than inside a name
+    expect(screen.container.querySelectorAll('.uncataloged code wbr')).toHaveLength(2);
   });
 
   it('on the dev server, the detail page opens the catalog file and the component in the editor', async () => {

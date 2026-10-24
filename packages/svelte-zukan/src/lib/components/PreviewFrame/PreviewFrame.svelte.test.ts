@@ -260,6 +260,26 @@ describe('PreviewFrame resizing', () => {
     expect(parseFloat(iframe.style.height)).toBe(first);
   });
 
+  it('content with min-height: 100vh keeps its height after the preview is expanded and back', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    target.style.minHeight = '100vh';
+    doc.body.append(target);
+    await new Promise((r) => setTimeout(r, 500));
+    const before = iframe.style.height;
+    // the expanded stage is far taller than the preview, and the page follows it while expanded
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    await expect.poll(() => iframe.getBoundingClientRect().height).toBeGreaterThan(parseFloat(before) + 100);
+    await new Promise((r) => setTimeout(r, 500));
+    await screen.getByRole('button', { name: 'Exit expanded view (Esc)' }).click();
+    await new Promise((r) => setTimeout(r, 500));
+    expect(iframe.style.height).toBe(before);
+  });
+
   it('shows no width before the stage is measured', async () => {
     const hidden = document.body.appendChild(document.createElement('div'));
     try {
@@ -616,6 +636,18 @@ describe('PreviewFrame toolbar', () => {
     await screen.rerender({ theme: 'light' });
     await expect.poll(() => iframe.contentDocument!.documentElement.style.colorScheme).toBe('light');
     expect(iframe.style.colorScheme).toBe('light');
+  });
+
+  it('fills the preview page with its own body color, so a page taller than its content is one color', async () => {
+    const screen = await render(PreviewFrame, { props: { ...props, theme: 'dark' } });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.style.background = 'rgb(21, 19, 29)';
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    doc.body.append(target);
+    await expect.poll(() => doc.documentElement.style.backgroundColor).toBe('rgb(21, 19, 29)');
   });
 
   it('has no theme buttons of its own', async () => {
