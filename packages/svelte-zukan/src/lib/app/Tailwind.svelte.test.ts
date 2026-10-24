@@ -497,6 +497,26 @@ describe('the Tailwind CSS page', () => {
     }
   });
 
+  it("keeps the entry's own dark theme rules out of the samples in the dark catalog theme", async () => {
+    localStorage.setItem('svelte-zukan:theme', 'dark');
+    const themed = { ...source, css: `${source.css}\n[data-theme="dark"] { --color-brand-500: rgb(255, 0, 255) }` };
+    const screen = await render(App, { props: props('#/tailwind', [item(themed)]) });
+    const { doc } = await frame(screen.container);
+    expect(getComputedStyle(doc.querySelector('.bg-brand-500')!).backgroundColor).toBe('rgb(255, 62, 0)');
+    // the cards around the samples do follow the dark theme
+    expect(getComputedStyle(doc.querySelector('.zukan-copy')!).color).toBe('rgb(240, 246, 252)');
+  });
+
+  it("draws text samples in the entry's base font, and the names in the catalog's", async () => {
+    const based = { ...source, css: `${source.css}\nhtml { font-family: Georgia, serif; line-height: 2 }` };
+    const screen = await render(App, { props: props('#/tailwind?category=font-size', [item(based)]) });
+    const { doc } = await frame(screen.container);
+    const sample = getComputedStyle(doc.querySelector('.zukan-sample .text-lg')!);
+    expect(sample.fontFamily).toBe('Georgia, serif');
+    expect(sample.lineHeight).toBe(`${parseFloat(sample.fontSize) * 2}px`);
+    expect(getComputedStyle(doc.querySelector('.zukan-copy')!).fontFamily).toContain('system-ui');
+  });
+
   it('lists every theme variable in Full config', async () => {
     const screen = await render(App, { props: props('#/tailwind?category=full-config') });
     await expect.element(screen.getByRole('link', { name: 'Full config' })).toHaveAttribute('aria-current', 'page');

@@ -62,7 +62,7 @@ Background Color, Text Color and the text categories are cards. Shadows are card
 - **Breakpoints** are bars proportional to their width
 - **Z-index** has no sample, only the names and the value
 
-The samples are drawn in a frame of their own, built from the CSS Tailwind generates for the entry: the theme variables, the entry's own rules, and its preflight. Nothing from the catalog reaches the samples, and Tailwind's CSS does not reach the catalog or your component previews.
+The samples are drawn in a frame of their own, built from the CSS Tailwind generates for the entry: the theme variables, the entry's own rules, and its preflight. Nothing from the catalog reaches the samples, so their text is drawn in the font your app's `html` gets, such as the theme's `--font-sans`, and Tailwind's CSS does not reach the catalog or your component previews.
 
 The frame is always light, in every catalog theme, because the values shown are the base values. The page around it follows the catalog's theme.
 
