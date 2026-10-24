@@ -23,7 +23,7 @@ The accessibility button runs [axe-core](https://github.com/dequelabs/axe-core) 
 
 - The reported elements are outlined in the preview in the color of their impact. Hover or focus an element in the list to draw it thicker, or click it to keep it that way and scroll to it. An element inside a shadow root is listed as its host's selector, `>>>`, then its selector inside
 - What axe-core cannot decide on its own, such as the contrast of text over an image or a gradient, is listed separately under "Needs a manual check" and outlined with a dashed line. Read about each rule (Learn more) and check it yourself: some are visual, such as contrast, and some are not, such as an ARIA attribute. When nothing else is found, the panel says so instead of reporting no issues
-- The check runs again each time the preview reloads after an edit, while the panel is open
+- The check runs again after each edit while the panel is open, whether the preview reloads or the edit is applied in place
 - "Simulate vision" shows the preview as seen with blurred vision or a color vision deficiency (protanopia, deuteranopia, tritanopia, achromatopsia). Each chip shows a sample of its colors
 - "Check" has two switches for what axe-core cannot see:
   - "Text 200%" doubles the root font size of the preview, as raising the browser's default font size does, so text that overflows or overlaps shows up. Text with a fixed `px` size does not grow, which is worth fixing too ([WCAG 1.4.4](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html))

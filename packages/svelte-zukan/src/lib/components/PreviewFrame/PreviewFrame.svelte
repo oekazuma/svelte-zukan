@@ -7,6 +7,7 @@
     BACKGROUND_MODES,
     BACKGROUNDS,
     transparent,
+    onBackground,
     readBackground,
     readWidth,
     writeBackground,
@@ -166,8 +167,9 @@
   function onkeydown(e: KeyboardEvent) {
     if (e.key === 'Home') width = min;
     else if (e.key === 'End') width = null;
-    else if (e.key === 'ArrowRight') width = clamp(current + KEY_STEP);
-    else if (e.key === 'ArrowLeft') width = clamp(current - KEY_STEP);
+    // up to MAX_WIDTH, as a typed width: past the stage, it is scaled down
+    else if (e.key === 'ArrowRight') width = Math.min(MAX_WIDTH, current + KEY_STEP);
+    else if (e.key === 'ArrowLeft') width = Math.max(min, current - KEY_STEP);
     else return;
     e.preventDefault();
   }
@@ -178,6 +180,8 @@
     let target: Element | null = null;
     /** the viewport height the content last matched */
     let tiedTo = -1;
+    /** the content's bottom and the viewport height at the previous measurement */
+    let last = { bottom: 0, viewport: 0 };
     observer = new ResizeObserver(() => {
       const found = doc.querySelector('[data-zukan-preview]');
       if (!found) return;
@@ -197,6 +201,12 @@
       const scrollbar = win.innerHeight - viewport;
       const own = found.getBoundingClientRect().height;
       const tied = Math.abs(own - viewport) < 1;
+      const grown = bottom - last.bottom;
+      const resized = viewport - last.viewport;
+      last = { bottom, viewport };
+      // content that grew with the viewport holds an element sized to it (`100vh`) next to more content, so it is always
+      // taller than the frame: following it would grow the frame without end
+      if (ready && Math.abs(resized) >= 1 && Math.abs(grown - resized) < 2) return;
       // a page that fills the viewport has nothing new to measure when the viewport has not changed since, or when the
       // frame is stretched to the expanded stage: measuring it would grow the frame by the body's margins each time
       if (tied && ready && (expanded || Math.abs(tiedTo - viewport) < 1)) return;
@@ -219,12 +229,18 @@
   });
 
   /**
-   * The page's own body color, when it has one, for the whole page: an expanded preview is taller than its content.
+   * The page's own body color, when it has one and its html has none, for the whole page: an expanded preview is taller
+   * than its content.
    * Read after the theme (`light-dark()`) and after a pattern background, which makes the body transparent, changes.
    */
   function paint(page: Document) {
-    const body = page.defaultView!.getComputedStyle(page.body).backgroundColor;
-    page.documentElement.style.backgroundColor = transparent(body) ? BACKGROUNDS[theme] : body;
+    const view = page.defaultView!;
+    const html = page.documentElement;
+    // the app's own html background, without the color set here last time
+    html.style.backgroundColor = '';
+    if (!transparent(view.getComputedStyle(html).backgroundColor)) return;
+    const body = view.getComputedStyle(page.body).backgroundColor;
+    html.style.backgroundColor = transparent(body) ? BACKGROUNDS[theme] : body;
   }
 
   $effect(() => {
@@ -249,9 +265,10 @@
     paint(doc);
   });
 
+  $effect(() => onBackground((value) => (background = value)));
+
   function nextBackground() {
-    background = BACKGROUND_MODES[(BACKGROUND_MODES.indexOf(background) + 1) % BACKGROUND_MODES.length];
-    writeBackground(background);
+    writeBackground(BACKGROUND_MODES[(BACKGROUND_MODES.indexOf(background) + 1) % BACKGROUND_MODES.length]);
   }
 
   const BACKGROUND_LABELS = { theme: 'backgroundTheme', checker: 'backgroundChecker', grid: 'backgroundGrid' } as const;
@@ -268,6 +285,29 @@
 
   $effect(() => {
     if (doc && measuring) return startMeasure(doc);
+  });
+
+  // keys pressed in the preview never reach the catalog's window, so its shortcuts would stop once the preview has the
+  // focus; the copy goes to the iframe, so the catalog's handlers get an element as the target, as for a key on the page
+  $effect(() => {
+    const frame = iframe;
+    const page = doc;
+    if (!page || !frame) return;
+    const forward = (e: KeyboardEvent) => {
+      const target = e.composedPath()[0] as HTMLElement;
+      const typing = target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+      // Escape closes a dialog or a popover open in the preview first, which must not leave the expanded view too
+      const closes = e.key === 'Escape' && page.querySelector('dialog[open], :popover-open');
+      if (e.defaultPrevented || e.isComposing || typing || closes) return;
+      const { key, code, location, repeat, ctrlKey, shiftKey, altKey, metaKey } = e;
+      const copy = { key, code, location, repeat, ctrlKey, shiftKey, altKey, metaKey, bubbles: true, cancelable: true };
+      // a shortcut the catalog handled (⌘K) must not also do what the browser does with it
+      if (!frame.dispatchEvent(new KeyboardEvent('keydown', copy))) e.preventDefault();
+    };
+    // on the window, after the page's own handlers on its elements and document, which may take the key
+    const view = page.defaultView!;
+    view.addEventListener('keydown', forward);
+    return () => view.removeEventListener('keydown', forward);
   });
 
   function toggleExpanded() {
@@ -570,7 +610,7 @@
   <div class="tip" popover="manual" aria-hidden="true" bind:this={tip}>{tipText}</div>
   {#if a11yOpen && axe && doc}
     {#key doc}
-      <A11yPanel {doc} {axe} frame={iframe} {labels} onclose={() => (a11yOpen = false)} />
+      <A11yPanel {doc} {axe} {labels} onclose={() => (a11yOpen = false)} />
     {/key}
   {/if}
 </div>
@@ -624,6 +664,14 @@
 
   .expanded .stage {
     flex: 1;
+    min-height: 40%;
+    overflow: auto;
+  }
+
+  /* a long list of issues scrolls in the panel, instead of squeezing the stage to nothing and being clipped */
+  .expanded > :global(.a11y) {
+    min-height: 0;
+    max-height: 50%;
     overflow: auto;
   }
 

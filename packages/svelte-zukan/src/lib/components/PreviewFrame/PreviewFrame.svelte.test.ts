@@ -64,6 +64,14 @@ describe('PreviewFrame', () => {
     await expect.poll(() => frame().head.textContent).not.toContain('gradient');
   });
 
+  it('every preview on the page follows a background change', async () => {
+    const one = await render(PreviewFrame, { props });
+    const two = await render(PreviewFrame, { props: { ...props, src: 'about:blank#two' } });
+    const button = (screen: typeof one) => screen.container.querySelector<HTMLElement>('[aria-label^="Background"]')!;
+    button(one).click();
+    await expect.poll(() => button(two).getAttribute('aria-label')).toBe('Background: Checkerboard');
+  });
+
   it('width presets are a labelled group and the readout is not a live region', async () => {
     const screen = await render(PreviewFrame, { props });
     await expect
@@ -137,6 +145,19 @@ describe('PreviewFrame resizing', () => {
     await expect.element(handle).toHaveAttribute('aria-valuenow', '200');
     await userEvent.keyboard('{End}');
     await expect.element(handle).toHaveAttribute('aria-valuenow', '986');
+  });
+
+  it('arrow keys keep a width wider than the stage, scaled', async () => {
+    const screen = await render(PreviewFrame, { props });
+    screen.container.style.width = '1000px';
+    await screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }).click();
+    const handle = screen.getByRole('separator');
+    await expect.element(handle).toHaveAttribute('aria-valuenow', '1280');
+    handle.element().focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect.element(handle).toHaveAttribute('aria-valuenow', '1290');
+    await userEvent.keyboard('{ArrowLeft}{ArrowLeft}');
+    await expect.element(handle).toHaveAttribute('aria-valuenow', '1270');
   });
 
   it('drag resize', async () => {
@@ -258,6 +279,27 @@ describe('PreviewFrame resizing', () => {
     const first = parseFloat(iframe.style.height);
     await new Promise((r) => setTimeout(r, 500));
     expect(parseFloat(iframe.style.height)).toBe(first);
+  });
+
+  it('content taller than a min-height: 100vh element does not keep growing', async () => {
+    for (const html of [
+      '<header style="height: 40px"></header><main style="min-height: 100vh"></main>',
+      '<div style="padding: 16px"><div style="min-height: 100vh"></div></div>'
+    ]) {
+      const screen = await render(PreviewFrame, { props });
+      const iframe = screen.container.querySelector('iframe')!;
+      await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+      const doc = iframe.contentDocument!;
+      const target = doc.createElement('div');
+      target.setAttribute('data-zukan-preview', '');
+      target.innerHTML = html;
+      doc.body.append(target);
+      await new Promise((r) => setTimeout(r, 500));
+      const first = parseFloat(iframe.style.height);
+      await new Promise((r) => setTimeout(r, 500));
+      expect(parseFloat(iframe.style.height), html).toBe(first);
+      screen.unmount();
+    }
   });
 
   it('content with min-height: 100vh keeps its height after the preview is expanded and back', async () => {
@@ -527,6 +569,126 @@ describe('PreviewFrame resizing', () => {
     expect(axe).not.toHaveBeenCalled();
   });
 
+  it('keeps the expanded preview visible and scrolls a long list of issues', async () => {
+    const source = `window.axe = { run: async () => ({ violations: Array.from({ length: 40 }, (_, i) => ({ id: 'r' + i,
+      impact: 'minor', help: 'Rule ' + i, helpUrl: 'https://example.com/' + i, nodes: [{ target: ['body'] }] })) }) };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.poll(() => screen.container.querySelectorAll('.a11y > ul > li').length).toBe(40);
+    const stage = screen.container.querySelector('.stage')!;
+    const panel = screen.container.querySelector<HTMLElement>('.a11y')!;
+    expect(stage.getBoundingClientRect().height).toBeGreaterThan(100);
+    expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight);
+    expect(getComputedStyle(panel).overflowY).toBe('auto');
+  });
+
+  it('checks again when the preview changes in place, but not for its own outlines and badges', async () => {
+    const source = `window.runs = 0; window.axe = { run: async () => (window.runs++, { violations: [{ id: 'x',
+      impact: 'minor', help: 'X', helpUrl: 'https://example.com/x', nodes: [{ target: ['button'] }] }] }) };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    const doc = frame.contentDocument!;
+    const root = doc.createElement('div');
+    root.setAttribute('data-zukan-preview', '');
+    root.innerHTML = '<button>a</button>';
+    doc.body.append(root);
+    const runs = () => (frame.contentWindow as Window & { runs?: number }).runs;
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.poll(runs).toBe(1);
+    await screen.getByRole('button', { name: 'Tab order' }).click();
+    await screen.getByRole('radio', { name: 'Deuteranopia' }).click();
+    await new Promise((r) => setTimeout(r, 600));
+    expect(runs()).toBe(1);
+    root.querySelector('button')!.textContent = 'b';
+    root.append(doc.createElement('input'));
+    await expect.poll(runs).toBe(2);
+    // the previous results stay while it runs again, so an edit does not empty the list
+    await expect.element(screen.getByRole('button', { name: 'button' })).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 600));
+    expect(runs()).toBe(2);
+    // an edit of the component's <style> reaches the page as a stylesheet in <head>, which Vite updates in place
+    const css = doc.createElement('style');
+    css.setAttribute('data-vite-dev-id', '/src/Button.svelte?svelte&type=style&lang.css');
+    css.textContent = 'button { color: red }';
+    doc.head.append(css);
+    await expect.poll(runs).toBe(3);
+    css.textContent = 'button { color: #eee }';
+    await expect.poll(runs).toBe(4);
+    // the panel's and the toolbar's own styles in <head> do not count
+    await screen.getByRole('button', { name: 'Text 200%' }).click();
+    await new Promise((r) => setTimeout(r, 600));
+    expect(runs()).toBe(4);
+  });
+
+  it('waits for a check still running when the panel is closed and opened again', async () => {
+    // axe-core rejects a run while another one is running in the same page
+    const source = `let busy = false; window.axe = { run: async () => {
+      if (busy) throw new Error('Axe is already running');
+      busy = true;
+      await new Promise((r) => setTimeout(r, 300));
+      busy = false;
+      return { violations: [] };
+    } };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    const button = screen.getByRole('button', { name: 'Check accessibility' });
+    await button.click();
+    await expect.element(screen.getByText('Checking…')).toBeInTheDocument();
+    await button.click();
+    await button.click();
+    await expect.element(screen.getByText('No accessibility issues found')).toBeInTheDocument();
+  });
+
+  it('scrolls to a picked element by its scaled position', async () => {
+    const source = `window.axe = { run: async () => ({ violations: [{ id: 'x', impact: 'minor', help: 'X',
+      helpUrl: 'https://example.com/x', nodes: [{ target: ['#t'] }] }] }) };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    screen.container.style.width = '600px';
+    await screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }).click();
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    const doc = frame.contentDocument!;
+    const root = doc.createElement('div');
+    root.setAttribute('data-zukan-preview', '');
+    root.innerHTML = '<div style="height: 2000px"></div><button id="t">t</button><div style="height: 4000px"></div>';
+    doc.body.append(root);
+    await expect.poll(() => frame.getBoundingClientRect().height).toBeGreaterThan(2000);
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await screen.getByRole('button', { name: '#t' }).click();
+    const scale = frame.getBoundingClientRect().width / frame.offsetWidth;
+    const top = () => frame.getBoundingClientRect().top + doc.getElementById('t')!.getBoundingClientRect().top * scale;
+    await expect.poll(() => top() >= 0 && top() <= innerHeight).toBe(true);
+  });
+
+  it('scrolls the expanded stage, not the page, to a picked element', async () => {
+    const source = `window.axe = { run: async () => ({ violations: [{ id: 'x', impact: 'minor', help: 'X',
+      helpUrl: 'https://example.com/x', nodes: [{ target: ['#t'] }] }] }) };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    const doc = frame.contentDocument!;
+    const root = doc.createElement('div');
+    root.setAttribute('data-zukan-preview', '');
+    root.innerHTML = '<div style="height: 3000px"></div><button id="t">t</button><div style="height: 3000px"></div>';
+    doc.body.append(root);
+    await expect.poll(() => frame.getBoundingClientRect().height).toBeGreaterThan(3000);
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    const stage = screen.container.querySelector('.stage')!;
+    await screen.getByRole('button', { name: '#t' }).click();
+    const scrolled = scrollY;
+    const box = stage.getBoundingClientRect();
+    const top = () => frame.getBoundingClientRect().top + doc.getElementById('t')!.getBoundingClientRect().top;
+    await expect.poll(() => top() >= box.top && top() <= box.bottom).toBe(true);
+    expect(stage.scrollTop).toBeGreaterThan(2000);
+    expect(scrollY).toBe(scrolled);
+  });
+
   it('has no accessibility button without axe-core', async () => {
     const screen = await render(PreviewFrame, { props });
     await expect.element(screen.getByRole('button', { name: 'Show outlines' })).toBeInTheDocument();
@@ -650,6 +812,21 @@ describe('PreviewFrame toolbar', () => {
     await expect.poll(() => doc.documentElement.style.backgroundColor).toBe('rgb(21, 19, 29)');
   });
 
+  it("keeps the page's own html background", async () => {
+    const screen = await render(PreviewFrame, { props: { ...props, theme: 'dark' } });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.documentElement.style.backgroundColor).toBe('rgb(13, 17, 23)');
+    const doc = iframe.contentDocument!;
+    const style = doc.createElement('style');
+    style.textContent = 'html{background:#222}';
+    doc.head.append(style);
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    doc.body.append(target);
+    await expect.poll(() => doc.documentElement.style.backgroundColor).toBe('');
+    expect(doc.defaultView!.getComputedStyle(doc.documentElement).backgroundColor).toBe('rgb(34, 34, 34)');
+  });
+
   it('has no theme buttons of its own', async () => {
     const screen = await render(PreviewFrame, { props });
     await expect.element(screen.getByRole('button', { name: 'Dark', exact: true })).not.toBeInTheDocument();
@@ -721,6 +898,55 @@ describe('PreviewFrame tools', () => {
     await userEvent.keyboard('{Escape}');
     await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
     await expect.element(screen.getByRole('button', { name: 'Expand' })).toHaveFocus();
+  });
+
+  it("passes the catalog's shortcuts on from inside the preview, but not while typing there", async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.innerHTML = '<button>in</button><input><div contenteditable>e</div>';
+    doc.addEventListener('keydown', (e) => e.key === 'x' && e.preventDefault());
+    const keys: string[] = [];
+    const listener = (e: KeyboardEvent) =>
+      keys.push(`${e.key}${e.shiftKey ? '+shift' : ''}:${(e.target as Element).tagName}`);
+    addEventListener('keydown', listener);
+    try {
+      const preview = screen.container.querySelector('.preview')!;
+      await screen.getByRole('button', { name: 'Expand' }).click();
+      doc.querySelector('button')!.focus();
+      await userEvent.keyboard('{Shift>}J{/Shift}x');
+      doc.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true, isComposing: true }));
+      await userEvent.keyboard('{Escape}');
+      await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
+      doc.querySelector('input')!.focus();
+      await userEvent.keyboard('k');
+      doc.querySelector<HTMLElement>('[contenteditable]')!.focus();
+      await userEvent.keyboard('k');
+      expect(keys.filter((k) => k !== 'Shift:IFRAME' && k !== 'Shift+shift:IFRAME')).toEqual([
+        'J+shift:IFRAME',
+        'Escape:IFRAME'
+      ]);
+    } finally {
+      removeEventListener('keydown', listener);
+    }
+  });
+
+  it('leaves Escape to a dialog open inside the preview, so closing it does not leave the expanded view', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.innerHTML = '<dialog><button>ok</button></dialog>';
+    const preview = screen.container.querySelector('.preview')!;
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    doc.querySelector('dialog')!.showModal();
+    doc.querySelector('button')!.focus();
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(() => doc.querySelector('dialog')!.open).toBe(false);
+    expect(preview.classList.contains('expanded')).toBe(true);
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
   });
 
   it('shows a tooltip with the name of a toolbar control on hover, without a native title', async () => {

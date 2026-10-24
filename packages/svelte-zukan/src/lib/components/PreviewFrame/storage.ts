@@ -51,5 +51,17 @@ export const readBackground = (): Background =>
     return BACKGROUND_MODES.includes(value as Background) ? (value as Background) : 'theme';
   }, 'theme');
 
-export const writeBackground = (value: Background) =>
+/** every frame on the page listens, so they all switch together; the event carries the value, as storage may throw */
+const BACKGROUND_EVENT = 'svelte-zukan:background';
+
+export const writeBackground = (value: Background) => {
   tryStorage(() => sessionStorage.setItem(BACKGROUND_KEY, value), undefined);
+  dispatchEvent(new CustomEvent(BACKGROUND_EVENT, { detail: value }));
+};
+
+/** calls `fn` with each background written on this page; returns the function that stops it */
+export const onBackground = (fn: (value: Background) => void) => {
+  const listener = (e: Event) => fn((e as CustomEvent<Background>).detail);
+  addEventListener(BACKGROUND_EVENT, listener);
+  return () => removeEventListener(BACKGROUND_EVENT, listener);
+};

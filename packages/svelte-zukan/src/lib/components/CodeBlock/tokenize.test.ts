@@ -54,6 +54,36 @@ describe('highlight', () => {
     ]);
   });
 
+  it('starts no string at an apostrophe in text', () => {
+    expect(kinds("<p>Don't <b>stop</b>, it's fine</p>")).toEqual([
+      'tag:<p',
+      'tag:>',
+      'tag:<b',
+      'tag:>',
+      'tag:</b',
+      'tag:>',
+      'tag:</p',
+      'tag:>'
+    ]);
+  });
+
+  it('takes no URL or regex for a comment, only // at a line start or after a space', () => {
+    expect(kinds('<a href="https://example.com">https://example.com</a>')).toEqual([
+      'tag:<a',
+      'attr:href',
+      'string:"https://example.com"',
+      'tag:>',
+      'tag:</a',
+      'tag:>'
+    ]);
+    expect(kinds('const re = /\\/\\//;\nlet a; // note')).toEqual(['keyword:const', 'keyword:let', 'comment:// note']);
+  });
+
+  it('keeps a template literal nested in another one whole', () => {
+    expect(kinds('const a = `x ${`y ${z}`} w`;')).toEqual(['keyword:const', 'string:`x ${`y ${z}`} w`']);
+    expect(kinds('const a = `open')).toEqual(['keyword:const']);
+  });
+
   it('covers every character exactly once', () => {
     const code = '<script lang="ts">\n  let a = 1; // one\n</script>\n\n<p class="x">{a}</p>';
     expect(
@@ -61,5 +91,8 @@ describe('highlight', () => {
         .map((p) => p.text)
         .join('')
     ).toBe(code);
+  });
+  it('reads a backtick in a quoted string inside ${} as part of that string', () => {
+    expect(kinds('const x = `a ${"`"} b`;')).toEqual(['keyword:const', 'string:`a ${"`"} b`']);
   });
 });

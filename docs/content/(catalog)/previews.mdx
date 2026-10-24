@@ -32,16 +32,18 @@ Each section previews in its own frame, with a toolbar above it.
 
 A preview is as tall as its content in normal flow. Content in the top layer or with `position: fixed` or `absolute`, such as a modal, a popover or a menu, adds no height, so it can be clipped. Give the section's content a `min-height` that leaves room for it, or use Expand.
 
+Content sized to the preview's own height, such as `min-height: 100vh`, has no height of its own to follow, so the preview keeps the height it first measured. Use Expand to see it at the window's height.
+
 ## Other buttons
 
-| Button          | What it does                                                                                                   |
-| --------------- | -------------------------------------------------------------------------------------------------------------- |
-| Background      | Switches the preview's background between the theme's color, a checkerboard (to see transparency) and a grid   |
-| Accessibility   | Opens the [accessibility panel](/accessibility)                                                                |
-| Measure         | On hover, shows the element's size and draws its margin, border and padding in the colors of browser dev tools |
-| Outline         | Outlines every element of the preview                                                                          |
-| Expand          | Fills the window with the preview. <kbd>Esc</kbd> or a click outside leaves                                    |
-| Copy link       | Copies a link to this section at its current width and theme                                                   |
-| Open in new tab | Opens the preview alone, in the catalog's theme                                                                |
+| Button          | What it does                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Background      | Switches the preview's background between the theme's color, a checkerboard (to see transparency) and a grid, in every preview on the page |
+| Accessibility   | Opens the [accessibility panel](/accessibility)                                                                                            |
+| Measure         | On hover, shows the element's size and draws its margin, border and padding in the colors of browser dev tools                             |
+| Outline         | Outlines every element of the preview                                                                                                      |
+| Expand          | Fills the window with the preview. <kbd>Esc</kbd> or a click outside leaves                                                                |
+| Copy link       | Copies a link to this section at its current width and theme                                                                               |
+| Open in new tab | Opens the preview alone, in the catalog's theme                                                                                            |
 
 A copied link opens the section with its width and theme. The theme applies to that tab only, so it does not replace the theme you chose. You can also write such a link by hand: add `width` and `theme` after `section`, as in `#/ui/Card?section=Basic&width=375&theme=dark`. When the [`theme` option](/options) fixes the theme, a link's `theme` is ignored.
