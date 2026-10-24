@@ -97,9 +97,22 @@ export function listCatalog(groups: CatalogGroup[], suffix: string): CatalogItem
 }
 
 /**
+ * Whether `rel`, a `.svelte` file relative to the scanned directory `dir`, is a component of the library: SvelteKit's
+ * route files (`+page.svelte`), tests, and `routes/` under a scanned `src` are not.
+ */
+export function isComponentFile(dir: string, rel: string) {
+  const base = rel.slice(rel.lastIndexOf('/') + 1);
+  return (
+    !base.startsWith('+') &&
+    !/\.(test|spec)\.svelte$/.test(base) &&
+    !rel.split('/').includes('node_modules') &&
+    !(dir.endsWith('/src') && rel.startsWith('routes/'))
+  );
+}
+
+/**
  * The `.svelte` files in the scanned directories that no catalog file sits next to, so a person or an agent can see
- * what is left to catalog. SvelteKit's route files (`+page.svelte`), tests, and `routes/` under a scanned `src` are
- * not components of the library and are left out.
+ * what is left to catalog. Only component files (`isComponentFile`) are listed.
  */
 export function listUncataloged(
   groups: CatalogGroup[],
@@ -113,10 +126,7 @@ export function listUncataloged(
       const exclude = ['**/node_modules/**', ...(dir.endsWith('/src') ? ['routes/**'] : [])];
       const found = globSync('**/*.svelte', { cwd: dir, exclude })
         .map((f) => normalizePath(f))
-        .filter((f) => {
-          const base = f.slice(f.lastIndexOf('/') + 1);
-          return !f.endsWith(ext) && !base.startsWith('+') && !/\.(test|spec)\.svelte$/.test(base);
-        })
+        .filter((f) => !f.endsWith(ext) && isComponentFile(dir, f))
         .sort((a, b) => collator.compare(a, b) || byCodePoint(a, b));
       for (const f of found) {
         const file = normalizePath(join(dir, f));

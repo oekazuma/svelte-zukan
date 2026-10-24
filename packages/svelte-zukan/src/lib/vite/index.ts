@@ -14,7 +14,7 @@ import {
   type ViteDevServer
 } from 'vite';
 import type { CatalogGroup, CatalogItem, TailwindSource } from '../types.js';
-import { discoverGroups, listCatalog, listUncataloged } from './discover.js';
+import { discoverGroups, isComponentFile, listCatalog, listUncataloged } from './discover.js';
 import { catalogJson } from './catalog-json.js';
 import { extractSections } from './extract.js';
 import { extractProps } from './props.js';
@@ -100,12 +100,22 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   /** a file a component's props type is imported from → the components that read it */
   const propsDeps = new Map<string, Set<string>>();
   const readProps = (component: string) => {
+    for (const [dep, readers] of propsDeps) if (readers.delete(component) && !readers.size) propsDeps.delete(dep);
+    // deleted or renamed since it was served; an edit of a file it imported its type from still arrives
+    if (!existsSync(component)) {
+      servedProps.delete(component);
+      return null;
+    }
     const found = extractProps(readFileSync(component, 'utf-8'), component);
     servedProps.set(component, JSON.stringify(found));
     for (const dep of found?.files ?? []) {
       if (!propsDeps.has(dep)) propsDeps.set(dep, new Set());
       propsDeps.get(dep)!.add(component);
     }
+    // not `addWatchFile`: like Tailwind's dependencies, the file would become an import of the meta module, and an
+    // edit of it would end in `full-reload`; the root is watched already
+    const outside = (found?.files ?? []).filter((file) => !isInside(file, root));
+    if (outside.length) watcher?.add(outside);
     return found;
   };
   let root = '';
@@ -371,7 +381,6 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         if (existsSync(component)) {
           this.addWatchFile(component);
           found = readProps(normalizePath(component));
-          for (const dep of found?.files ?? []) this.addWatchFile(dep);
         }
         const meta = { sections, doc, props: found?.props ?? null, propsType: found?.typeName ?? null };
         return `export default ${JSON.stringify(meta)};\n`;
@@ -546,13 +555,13 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       } else if (
         type !== 'update' &&
         file.endsWith('.svelte') &&
-        scanned().some((dir) => isInside(normalizePath(file), dir))
+        scanned().some((dir) => isInside(normalized, dir) && isComponentFile(dir, normalized.slice(dir.length + 1)))
       ) {
-        // a component created or deleted: only the list of files without a catalog file changes, and the app's own
-        // handling of the file goes on
+        // a component created or deleted: the list of files without a catalog file changes, and so do the props of a
+        // catalog file next to it; the app's own handling of the file goes on
         const list = moduleGraph.getModuleById('\0' + CATALOG);
         if (!list || this.environment.config.consumer !== 'client') return;
-        moduleGraph.invalidateModule(list, new Set(), timestamp, true);
+        for (const mod of [list, ...metas()]) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
         this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
         return;
       } else if (type === 'update' && (servedProps.has(normalizePath(file)) || propsDeps.has(normalizePath(file)))) {
