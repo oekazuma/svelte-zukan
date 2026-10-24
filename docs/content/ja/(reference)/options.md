@@ -29,7 +29,7 @@ zukan({
 | `build`    | `boolean \| { outDir?: string }`     | `false`    | `vite build` のときにカタログを[静的に書き出す](/ja/static-export)。`true` なら `outDir` は `'zukan-dist'`                                           |
 
 - パスはすべて Vite の root からの相対で、`.zukan/` のように `src` の外も指定できます
-- 不正な値（`suffix` が規則に合わない、`locale` や `theme` が未知、指定したファイルやディレクトリがない）は、設定の読み込み時にエラーになります
+- 不正な値（`suffix` が規則に合わない、`locale` や `theme` が未知、指定したファイルやディレクトリがない、`groups` のキーやディレクトリの一覧が空）は、設定の読み込み時にエラーになります
 - `groups` のキーを数字だけにすると、JavaScript のオブジェクトの仕様で、宣言順ではなく数値順で並びます。グループ名には数字以外の文字を含めてください
 
 ## UI の言語

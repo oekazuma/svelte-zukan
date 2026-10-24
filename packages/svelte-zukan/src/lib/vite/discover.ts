@@ -26,7 +26,11 @@ export function discoverGroups(root: string, groups?: Record<string, string | st
   root = resolve(root);
   if (groups) {
     return Object.entries(groups).map(([name, dirs]) => {
+      // an empty name would give IDs such as "/Button"
+      if (!name.trim()) throw new Error('svelte-zukan: a group name in `groups` must not be empty');
       checkGroupName(name);
+      if (![dirs].flat().length)
+        throw new Error(`svelte-zukan: group "${name}" in \`groups\` needs at least one directory`);
       const seen = new Map<string, string>();
       for (const d of [dirs].flat()) {
         const abs = resolve(root, d);

@@ -43,6 +43,8 @@ const ENTRY_SRC = '/@id/__x00__' + ENTRY;
 const OUT_PREFIX = '_zukan/';
 /** the catalog as data, next to index.html: `/__zukan/catalog.json` in dev */
 const CATALOG_JSON = 'catalog.json';
+/** Node resolves symlinks, so a workspace link to this package does not count */
+const installed = libDir.split('/').includes('node_modules');
 /** the types of what the catalog build writes; anything else is served as octet-stream, which browsers refuse for module scripts */
 const CONTENT_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -51,9 +53,20 @@ const CONTENT_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.avif': 'image/avif',
+  '.ico': 'image/x-icon',
   '.webp': 'image/webp',
+  '.woff': 'font/woff',
   '.woff2': 'font/woff2',
-  '.json': 'application/json'
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.wasm': 'application/wasm',
+  '.json': 'application/json',
+  '.map': 'application/json'
 };
 
 /** Vite adds these to its own responses; the catalog's responses are the same pages */
@@ -88,7 +101,8 @@ const printCatalogUrl = (server: ViteDevServer | PreviewServer) => {
   const printUrls = server.printUrls;
   server.printUrls = () => {
     printUrls();
-    const local = server.resolvedUrls?.local[0];
+    // Vite prints the base as configured: SvelteKit's `paths.base` has no trailing slash
+    const local = server.resolvedUrls?.local[0]?.replace(/\/?$/, '/');
     if (local) server.config.logger.info(`  ➜  zukan:   ${local}__zukan/`);
   };
 };
@@ -227,6 +241,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         const allow = extendFsAllow(root, [...scanned(), libDir, ...extra], config.server?.fs?.allow);
         // mutated rather than returned: returned arrays are concatenated to the user's `allow`
         if (allow) ((config.server ??= {}).fs ??= {}).allow = allow;
+        // catalog files import `svelte-zukan` only behind the virtual modules, where the dep scan does not look: an
+        // installed copy would be found on the first visit, re-optimized, and the page reloaded mid-load. A linked or
+        // aliased copy (a workspace package, this repository's own app) is not prebundled and must stay that way
+        const deps = config.optimizeDeps;
+        if (installed && ![...(deps?.include ?? []), ...(deps?.exclude ?? [])].includes('svelte-zukan'))
+          ((config.optimizeDeps ??= {}).include ??= []).push('svelte-zukan');
         // `config.build.ssr` is the server half of an SSR build (`vite build --ssr`)
         if (command !== 'build' || !resolved.build || config.build?.ssr) return;
         // set here, not in configResolved: a define added there does not reach the build
@@ -246,6 +266,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         ])
           if (overlaps(dir))
             throw new Error(`svelte-zukan: build.outDir of the catalog (${out}) must not overlap ${what} (${dir})`);
+        // the app copies publicDir (SvelteKit's kit.files.assets) before the catalog is written
+        const publicDir = config.publicDir === false ? null : dirOf(config.publicDir ?? 'public');
+        if (publicDir && isInside(out, publicDir))
+          throw new Error(
+            `svelte-zukan: build.outDir of the catalog (${out}) must not be inside the app's publicDir (${publicDir}), which is copied before the catalog is written`
+          );
         // adapters usually empty `build/`, but their outDir can not be read from here
         warning =
           kit && overlaps(dirOf('build'))

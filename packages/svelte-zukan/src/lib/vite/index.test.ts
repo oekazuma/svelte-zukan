@@ -500,18 +500,22 @@ describe('configureServer', () => {
     expect(server.watcher.add).toHaveBeenCalledWith([outside]);
   });
 
-  it('prints the catalog URL after the server URLs', async () => {
-    const { root } = await makeApp();
-    const server = fakeServer(root, '/app/');
-    const original = server.printUrls;
-    boot(root).p.configureServer(server);
-    server.resolvedUrls = { local: ['http://localhost:5173/app/'], network: [] };
-    server.printUrls();
-    expect(original).toHaveBeenCalled();
-    expect(server.config.logger.info).toHaveBeenCalledWith(
-      expect.stringContaining('http://localhost:5173/app/__zukan/')
-    );
-  });
+  // SvelteKit's `paths.base: '/app'` resolves to the base '/app/', but Vite prints it without the slash
+  it.each(['http://localhost:5173/app/', 'http://localhost:5173/app'])(
+    'prints the catalog URL after the server URLs (%s)',
+    async (url) => {
+      const { root } = await makeApp();
+      const server = fakeServer(root, '/app/');
+      const original = server.printUrls;
+      boot(root).p.configureServer(server);
+      server.resolvedUrls = { local: [url], network: [] };
+      server.printUrls();
+      expect(original).toHaveBeenCalled();
+      expect(server.config.logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('http://localhost:5173/app/__zukan/')
+      );
+    }
+  );
 });
 
 describe('configurePreviewServer', () => {
@@ -526,7 +530,7 @@ describe('configurePreviewServer', () => {
     await writeFile(path.join(root, 'zukan-dist/_zukan/zukan-abc.js'), 'export {}');
     const server = fakeServer(root, base, headers);
     boot(root, options).p.configurePreviewServer(server);
-    return { server, mw: server.middlewares.use.mock.calls[0]?.[0] };
+    return { root, server, mw: server.middlewares.use.mock.calls[0]?.[0] };
   };
 
   it('serves index.html and the files under _zukan/', async () => {
@@ -535,6 +539,16 @@ describe('configurePreviewServer', () => {
     expect(html.body).toContain('catalog');
     expect(html.type).toMatch(/^text\/html/);
     expect((await request(mw, '/__zukan/_zukan/zukan-abc.js')).type).toMatch(/javascript/);
+  });
+
+  it.each([
+    ['photo.jpeg', 'image/jpeg'],
+    ['module.wasm', 'application/wasm'],
+    ['font.woff', 'font/woff']
+  ])('serves %s as %s', async (name, type) => {
+    const { root, mw } = await setup();
+    await writeFile(path.join(root, 'zukan-dist/_zukan', name), '');
+    expect((await request(mw, `/__zukan/_zukan/${name}`)).type).toBe(type);
   });
 
   it('sends the configured preview.headers', async () => {
@@ -656,6 +670,20 @@ describe('build', () => {
     // SvelteKit sets an absolute outDir
     await reject('.svelte-kit/output/zukan', { build: { outDir: `${root}/.svelte-kit/output` } });
     expect((await bootBuild(root, { build: { outDir: 'out' } }, { build: { outDir: 'output' } })).added).toBeDefined();
+  });
+
+  it("rejects a catalog outDir inside the app's publicDir", async () => {
+    const { root } = await makeApp();
+    const reject = (outDir: string, user: object = {}) =>
+      expect(bootBuild(root, { build: { outDir } }, user)).rejects.toThrow(
+        `svelte-zukan: build.outDir of the catalog (${root}/${outDir}) must not be inside the app's publicDir`
+      );
+    // Vite's default is public; SvelteKit sets it to kit.files.assets
+    await reject('public/zukan');
+    await reject('static/zukan', { publicDir: 'static' });
+    await reject('static', { publicDir: `${root}/static` });
+    expect((await bootBuild(root, { build: { outDir: 'public/zukan' } }, { publicDir: false })).added).toBeDefined();
+    expect((await bootBuild(root, { build: { outDir: 'public-zukan' } })).added).toBeDefined();
   });
 
   // the shape of the real plugin: Kit 3 keeps `kit.outDir` at `api.options.outDir`

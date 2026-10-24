@@ -74,7 +74,7 @@ export default defineConfig({ plugins: [zukan(), svelte()] });
 
 dev サーバーを起動して `/__zukan/` を開きます。起動時にターミナルへ出る URL 一覧にも、カタログの URL が載ります。
 
-Vite の `base` や SvelteKit の `paths.base` を設定しているときは、カタログは `<base>__zukan/` に移ります。たとえば `base: '/app/'` なら `/app/__zukan/` です。
+Vite の `base` や SvelteKit の `paths.base` を設定しているときは、カタログはその下に移ります。`base: '/app/'` でも `paths.base: '/app'` でも `/app/__zukan/` です。
 
 トップページには、すべてのコンポーネントが小さなプレビュー付きで並びます。詳細ページには、各セクションのプレビューと、幅・背景・計測・アクセシビリティ検査のツールバー、各セクションのコード、コンポーネントの props が並びます。どれも[カタログの使い方](/ja/catalog-ui)でキーボードショートカットとあわせて説明しています。
 
