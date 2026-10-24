@@ -147,19 +147,25 @@
               <!-- focusable, so a keyboard can scroll the table when it is wider than the page -->
               <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
               <div class="props" role="region" aria-label={t.props} tabindex="0">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>{t.propName}</th>
-                      <th>{t.propType}</th>
-                      <th>{t.propDefault}</th>
-                      <th>{t.propDescription}</th>
+                <!-- the roles keep it a table for screen readers when a narrow layout changes its display -->
+                <!-- svelte-ignore a11y_no_redundant_roles -->
+                <table role="table">
+                  <!-- svelte-ignore a11y_no_redundant_roles -->
+                  <thead role="rowgroup">
+                    <!-- svelte-ignore a11y_no_redundant_roles -->
+                    <tr role="row">
+                      <th role="columnheader">{t.propName}</th>
+                      <th role="columnheader">{t.propType}</th>
+                      <th role="columnheader">{t.propDefault}</th>
+                      <th role="columnheader">{t.propDescription}</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <!-- svelte-ignore a11y_no_redundant_roles -->
+                  <tbody role="rowgroup">
                     {#each meta.props as p (p.name)}
-                      <tr>
-                        <td>
+                      <!-- svelte-ignore a11y_no_redundant_roles -->
+                      <tr role="row">
+                        <td role="cell">
                           <code class="name">{p.name}</code>
                           {#if p.required}<span class="flag">{t.required}</span>{/if}
                           {#if p.bindable}<span class="flag">{t.bindable}</span>{/if}
@@ -167,7 +173,7 @@
                         <!-- a union wraps between its members, never inside one such as `() => void` -->
                         <!-- the separator is a mustache because Svelte trims the spaces of plain text at the edges of a block, and those spaces are where the union wraps -->
                         <!-- eslint-disable svelte/no-useless-mustaches -->
-                        <td
+                        <td role="cell" data-label={t.propType}
                           >{#if p.type}<code
                               >{#each p.type.split(' | ') as part, i (i)}{#if i}{' | '}{/if}<span class="type-part"
                                   >{part}</span
@@ -175,12 +181,12 @@
                             >{/if}</td
                         >
                         <!-- eslint-enable svelte/no-useless-mustaches -->
-                        <td
+                        <td role="cell" data-label={t.propDefault}
                           >{#if p.default}<code>{p.default}</code>{/if}</td
                         >
                         <!-- rendered by the plugin from the component's own JSDoc -->
                         <!-- eslint-disable svelte/no-at-html-tags -->
-                        <td
+                        <td role="cell"
                           >{#if p.description}{@html p.description}{/if}</td
                         >
                         <!-- eslint-enable svelte/no-at-html-tags -->
@@ -369,7 +375,55 @@
   }
 
   .props {
+    container-type: inline-size;
     overflow-x: auto;
+  }
+
+  /* too narrow for four columns: each prop stacks, with the type and default labelled on one line */
+  @container (width < 520px) {
+    .props :is(table, tbody, tr, td) {
+      display: block;
+    }
+
+    .props thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+
+    .props tr {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--_border);
+    }
+
+    /* beats the four-column rules for cells below */
+    .props tr td {
+      padding: 2px 0;
+      border: 0;
+      white-space: normal;
+    }
+
+    .props td[data-label] {
+      display: inline-block;
+      margin-right: 16px;
+    }
+
+    .props td[data-label]:not(:empty)::before {
+      content: attr(data-label) ' ';
+      color: var(--_muted);
+      font-size: 12px;
+    }
+
+    /* hidden by sight only: a screen reader still finds every row's four cells */
+    .props td:empty {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
   }
 
   .props table {

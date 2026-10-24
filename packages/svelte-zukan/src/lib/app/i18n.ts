@@ -5,6 +5,8 @@ export type Messages = {
   listHeading: string;
   empty: string;
   notFound: string;
+  notFoundHint: string;
+  notFoundBack: string;
   skipToContent: string;
   loadFailed: string;
   code: string;
@@ -132,6 +134,8 @@ export const messages: Record<'en' | 'ja', Messages> = {
     listHeading: 'Components',
     empty: 'No catalog files found. Searched:',
     notFound: 'Not found',
+    notFoundHint: 'No component or page has this address. It may have been renamed or removed.',
+    notFoundBack: 'All components',
     skipToContent: 'Skip to content',
     loadFailed: 'Failed to load:',
     code: 'Code',
@@ -260,6 +264,8 @@ export const messages: Record<'en' | 'ja', Messages> = {
     listHeading: 'コンポーネント一覧',
     empty: 'カタログファイルが見つかりません。探した場所:',
     notFound: '見つかりません',
+    notFoundHint: 'このアドレスのコンポーネントやページはありません。名前が変わったか、削除された可能性があります。',
+    notFoundBack: 'コンポーネント一覧へ',
     skipToContent: '本文へスキップ',
     loadFailed: '読み込めませんでした:',
     code: 'コード',

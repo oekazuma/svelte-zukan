@@ -197,10 +197,15 @@ describe('App', () => {
     expect(location.hash).toBe('#/ui/Card');
   });
 
-  it('an unknown ID is not found', async () => {
+  it('an unknown ID is not found, with ways back to the list and to the search', async () => {
     const { props } = setup('#/ui/Nope');
     const screen = await render(App, { props });
-    await expect.element(screen.getByRole('heading', { level: 1, name: 'Not found' })).toBeInTheDocument();
+    const main = screen.getByRole('main');
+    await expect.element(main.getByRole('heading', { level: 1, name: 'Not found' })).toBeInTheDocument();
+    await expect.element(main.getByText(/It may have been renamed or removed/)).toBeInTheDocument();
+    await expect.element(main.getByRole('link', { name: 'All components' })).toHaveAttribute('href', '#/');
+    await main.getByRole('button', { name: 'Search the catalog' }).click();
+    await expect.element(screen.getByRole('combobox')).toHaveFocus();
   });
 
   it('the list shows each group with a count and links to every entry', async () => {
@@ -534,6 +539,38 @@ describe('App', () => {
       "'sm'",
       "'md'"
     ]);
+  });
+
+  it('a narrow props table stacks each prop and stays a table', async () => {
+    await page.viewport(400, 800);
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = () =>
+      Promise.resolve({
+        default: {
+          sections: [],
+          doc: null,
+          props: [
+            {
+              name: 'cover',
+              type: 'string',
+              default: null,
+              required: false,
+              bindable: false,
+              description: 'A CSS background for the cover area, such as a gradient'
+            }
+          ],
+          propsType: null
+        }
+      });
+    const screen = await render(App, { props });
+    const table = screen.getByRole('table');
+    await expect.element(table).toBeInTheDocument();
+    // the empty default is hidden by sight only, so the row keeps its four cells
+    expect(table.getByRole('cell').all()).toHaveLength(4);
+    // the description gets the whole width instead of a squeezed fourth column
+    const description = table.getByRole('cell').nth(3).element();
+    expect(description.getBoundingClientRect().width).toBeGreaterThan(300);
+    expect(getComputedStyle(table.getByRole('cell').nth(1).element(), '::before').content).toBe('"Type "');
   });
 
   it('a file without sections says so', async () => {

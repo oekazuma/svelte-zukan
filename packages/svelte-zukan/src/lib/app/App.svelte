@@ -242,6 +242,13 @@
         />
       {:else}
         <h1>{t.notFound}</h1>
+        <p class="missing">{t.notFoundHint}</p>
+        <p class="missing">
+          <!-- the catalog is a hash-routed SPA outside SvelteKit, so resolve() does not apply -->
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+          <a href="#/">{t.notFoundBack}</a>
+          <button type="button" onclick={() => searchDialog?.open()}>{t.searchCatalog}</button>
+        </p>
       {/if}
     </main>
     <!-- inside .zukan, so the dialog gets the catalog's theme -->
@@ -385,6 +392,29 @@
   h1 {
     margin: 0 0 16px;
     font-size: 24px;
+  }
+
+  .missing {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 0 0 12px;
+    color: var(--_muted);
+  }
+
+  .missing :is(a, button) {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--_accent);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .missing :is(a, button):focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: 2px;
   }
 
   .shortcuts {

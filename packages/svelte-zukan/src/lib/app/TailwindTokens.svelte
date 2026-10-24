@@ -398,6 +398,37 @@
       grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
       grid-template-areas: 'sample names' 'sample value';
     }
+
+    /* a colour needs only a swatch beside its names, so a long palette is a list of short rows */
+    .zukan-cards:has(.zukan-color, .zukan-text-color) {
+      gap: 8px;
+    }
+
+    .zukan-card:has(> :is(.zukan-color, .zukan-text-color)) {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr);
+      grid-template-areas: 'sample names';
+      align-items: center;
+    }
+
+    .zukan-card > :is(.zukan-color, .zukan-text-color) {
+      grid-area: sample;
+      margin: 8px 0 8px 8px;
+      padding: 4px;
+    }
+
+    .zukan-color .zukan-value,
+    .zukan-text-color .zukan-value {
+      height: 40px;
+      min-height: 0;
+    }
+
+    .zukan-text-color .zukan-value {
+      overflow: hidden;
+      line-height: 40px;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
   }
 
   /* the bar takes the row's whole width under its names, so long lengths stay apart */
