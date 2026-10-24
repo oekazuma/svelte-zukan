@@ -4,13 +4,16 @@
 
   let {
     code,
-    labels = messages.ja
+    labels = messages.ja,
+    open = $bindable(false)
   }: {
     /** 表示し、コピーするソース */
     code: string;
     /** UI の文言。カタログは自身の `locale` の文言を渡す */
     labels?: Pick<Messages, 'code' | 'copy' | 'copied' | 'copyFailed'>;
+    /** コードを開いて表示しているか。最初は閉じている */
+    open?: boolean;
   } = $props();
 </script>
 
-<CodeBlock {code} {labels} />
+<CodeBlock {code} {labels} bind:open />

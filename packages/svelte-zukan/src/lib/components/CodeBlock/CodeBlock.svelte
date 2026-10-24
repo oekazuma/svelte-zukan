@@ -4,15 +4,16 @@
 
   let {
     code,
-    labels = messages.en
+    labels = messages.en,
+    open = $bindable(false)
   }: {
     /** the source to show and copy */
     code: string;
     /** UI strings; the catalog passes those of its `locale` */
     labels?: Pick<Messages, 'code' | 'copy' | 'copied' | 'copyFailed'>;
+    /** whether the code is shown; it starts closed */
+    open?: boolean;
   } = $props();
-
-  let open = $state(false);
   let status = $state<'idle' | 'copied' | 'failed'>('idle');
   let timer: ReturnType<typeof setTimeout> | undefined;
 

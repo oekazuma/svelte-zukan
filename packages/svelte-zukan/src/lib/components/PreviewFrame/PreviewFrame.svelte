@@ -180,6 +180,8 @@
     observer = new ResizeObserver(() => {
       const found = doc.querySelector('[data-zukan-preview]');
       if (!found) return;
+      // the app's CSS, which may paint the body, arrives with the content
+      paint(doc);
       if (found !== target) {
         target = found;
         observer!.observe(found);
@@ -210,8 +212,18 @@
   $effect(() => {
     if (!doc) return;
     doc.documentElement.style.colorScheme = theme;
-    doc.documentElement.style.backgroundColor = BACKGROUNDS[theme];
   });
+
+  /**
+   * The page's own body color, when it has one, for the whole page: an expanded preview is taller than its content.
+   * Read after the theme (`light-dark()`) and after a pattern background, which makes the body transparent, changes.
+   */
+  function paint(page: Document) {
+    const body = page.defaultView!.getComputedStyle(page.body).backgroundColor;
+    page.documentElement.style.backgroundColor = /^(rgba\(0, 0, 0, 0\)|transparent)$/.test(body)
+      ? BACKGROUNDS[theme]
+      : body;
+  }
 
   $effect(() => {
     if (!doc) return;
@@ -227,6 +239,12 @@
     style.textContent = backgroundCss(background, theme);
     doc.head.append(style);
     return () => style.remove();
+  });
+
+  // after the effects above, so it reads the body with the current theme and pattern
+  $effect(() => {
+    if (!doc || !background) return;
+    paint(doc);
   });
 
   function nextBackground() {
@@ -605,6 +623,17 @@
   .expanded .stage {
     flex: 1;
     overflow: auto;
+  }
+
+  /* at full width the page itself fills the rest of the screen, instead of the stage's grey below it */
+  .expanded .stage:not(.sized),
+  .expanded .stage:not(.sized) :is(.frame, .viewport:not(.scaled)) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .expanded .stage:not(.sized) :is(.frame, .viewport:not(.scaled), .viewport:not(.scaled) iframe) {
+    flex: 1 0 auto;
   }
 
   .backdrop {

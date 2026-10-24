@@ -24,6 +24,12 @@ describe('CodeBlock', () => {
     expect(screen.getByRole('button', { name: 'Copy' }).query()).toBeNull();
   });
 
+  it('starts open with `open`', async () => {
+    const screen = await render(CodeBlock, { props: { code: '<a />', open: true } });
+    expect(screen.container.querySelector('details')!.open).toBe(true);
+    await expect.element(screen.getByRole('button', { name: 'Copy' })).toBeVisible();
+  });
+
   it('shows the copy button once the code is open, and removes it again on close', async () => {
     const screen = await render(CodeBlock, { props: { code: '<a />' } });
     await screen.getByText('Code').click();

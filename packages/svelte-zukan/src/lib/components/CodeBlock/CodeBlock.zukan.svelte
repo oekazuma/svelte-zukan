@@ -4,7 +4,7 @@
 </script>
 
 <Section title="Basic">
-  <CodeBlock code="<button>Press</button>" />
+  <CodeBlock code="<button>Press</button>" open />
 </Section>
 
 <Section title="Multiple lines">

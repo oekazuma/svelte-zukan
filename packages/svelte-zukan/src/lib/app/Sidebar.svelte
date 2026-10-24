@@ -267,6 +267,13 @@
     color: var(--_text);
   }
 
+  /* a touch screen has no keyboard to use the shortcuts with */
+  @media (hover: none) and (pointer: coarse) {
+    .keys {
+      display: none;
+    }
+  }
+
   .sr-only {
     position: absolute;
     width: 1px;

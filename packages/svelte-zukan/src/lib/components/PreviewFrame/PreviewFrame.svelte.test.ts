@@ -618,6 +618,18 @@ describe('PreviewFrame toolbar', () => {
     expect(iframe.style.colorScheme).toBe('light');
   });
 
+  it('fills the preview page with its own body color, so a page taller than its content is one color', async () => {
+    const screen = await render(PreviewFrame, { props: { ...props, theme: 'dark' } });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.style.background = 'rgb(21, 19, 29)';
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    doc.body.append(target);
+    await expect.poll(() => doc.documentElement.style.backgroundColor).toBe('rgb(21, 19, 29)');
+  });
+
   it('has no theme buttons of its own', async () => {
     const screen = await render(PreviewFrame, { props });
     await expect.element(screen.getByRole('button', { name: 'Dark', exact: true })).not.toBeInTheDocument();
