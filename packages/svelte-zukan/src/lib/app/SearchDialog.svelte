@@ -133,10 +133,15 @@
 
   function go(hit: SearchHit) {
     dialog.close();
-    location.hash =
+    const next =
       hit.kind === 'tailwind'
         ? formatTailwindHash(hit.item.source, hit.item.category, hit.label)
         : formatHash('detail', hit.item.path, hit.kind === 'section' ? hit.label : undefined);
+    // the URL already shown navigates without a hashchange: bring the section's heading into view as its link would
+    if (next === location.hash) {
+      const link = [...document.querySelectorAll<HTMLAnchorElement>('h2 a')].find((a) => a.hash === next);
+      link?.closest('h2')?.scrollIntoView();
+    } else location.hash = next;
   }
 
   function onkeydown(e: KeyboardEvent) {

@@ -238,6 +238,9 @@ it('editing a props type after its component is deleted is not an error', { time
   send.mockClear();
   rmSync(join(tmp, 'app/src/A.svelte'));
   await waitForReload();
+  // the meta module does not import the component, so deleting it reloads only the catalog tab
+  await new Promise((r) => setTimeout(r, 500));
+  expect(fullReloads()).toBe(0);
   expect(await meta('app/A')).toContain('"props":null');
   for (const b of ['string', 'number']) {
     writeFileSync(types, `export type Props = { a: number; b?: ${b} };\n`);
@@ -391,6 +394,16 @@ describe('Tailwind CSS', () => {
     await waitForReload();
     expect(fullReloads()).toBe(0);
     expect(await transform(TAILWIND)).toContain('"file":"src/other.css"');
+  });
+
+  it('picks up a plain CSS file edited into an entry', { timeout: 30_000 }, async () => {
+    await withTailwind({ 'app/src/app.css': brand, 'app/src/extra.css': 'body { margin: 0; }\n' });
+    await transform(TAILWIND);
+    send.mockClear();
+    writeFileSync(join(tmp, 'app/src/extra.css'), '@theme { --color-extra: blue; }\n');
+    await waitForReload();
+    expect(fullReloads()).toBe(0);
+    expect(await transform(TAILWIND)).toContain('"file":"src/extra.css"');
   });
 
   it("does not swallow the app's CSS update", { timeout: 30_000 }, async () => {

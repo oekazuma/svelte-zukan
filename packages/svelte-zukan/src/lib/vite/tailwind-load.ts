@@ -19,7 +19,7 @@ const importIds = (css: string) =>
   [...stripComments(css).matchAll(/@import\s+(?:url\(\s*)?(['"])(.+?)\1/g)].map((m) => m[2]);
 const isTailwindId = (id: string) => id === 'tailwindcss' || id.startsWith('tailwindcss/');
 const importsTailwind = (css: string) => importIds(css).some(isTailwindId);
-const isCandidate = (css: string) => importsTailwind(css) || /@theme\b/.test(stripComments(css));
+export const isCandidate = (css: string) => importsTailwind(css) || /@theme\b/.test(stripComments(css));
 
 function cssFiles(dirs: string[]): string[] {
   const found = new Set<string>();

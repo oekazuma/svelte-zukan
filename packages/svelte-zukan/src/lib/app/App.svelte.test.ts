@@ -6,6 +6,7 @@ import type { ZukanMeta } from '../types.js';
 import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
 import Wrapper from './Wrapper.test.svelte';
+import { modifier } from './SearchDialog.svelte';
 
 // a negative assertion needs the hashchange to have been handled first
 async function setHash(hash: string) {
@@ -749,6 +750,26 @@ describe('App', () => {
       await screen.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Two' }).click();
       await expect.poll(() => spy.mock.calls.length).toBe(2);
       expect(spy.mock.contexts[1]).toBe(two.element());
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('picking the section already in the URL in the search scrolls to it again', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card?section=Two');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      const two = screen.getByRole('heading', { level: 2, name: 'Two' });
+      await expect.element(two).toBeInTheDocument();
+      await userEvent.keyboard(modifier === '⌘' ? '{Meta>}k{/Meta}' : '{Control>}k{/Control}');
+      await screen.getByRole('combobox').fill('Two');
+      const before = spy.mock.calls.length;
+      await screen.getByRole('option', { name: /Two/ }).first().click();
+      await expect.poll(() => spy.mock.calls.length).toBeGreaterThan(before);
+      expect(spy.mock.contexts.at(-1)).toBe(two.element());
+      expect(location.hash).toBe('#/ui/Card?section=Two');
     } finally {
       spy.mockRestore();
     }

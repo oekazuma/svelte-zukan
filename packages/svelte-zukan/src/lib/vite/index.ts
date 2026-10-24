@@ -22,7 +22,7 @@ import { renderHtml } from './html.js';
 import { detectSvelteKit } from './kit.js';
 import { createMatchers } from './matchers.js';
 import { appFile, extendFsAllow, isInside, libDir, resolveOptions, type ZukanOptions } from './options.js';
-import { hasTailwind, loadTailwind, type Resolver } from './tailwind-load.js';
+import { hasTailwind, isCandidate, loadTailwind, type Resolver } from './tailwind-load.js';
 import {
   AXE,
   CATALOG,
@@ -404,10 +404,9 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         const sections = extractSections(readFileSync(item.file, 'utf-8'), item.file);
         const component = componentFileOf(item.file);
         let found = null;
-        if (existsSync(component)) {
-          this.addWatchFile(component);
-          found = readProps(normalizePath(component));
-        }
+        // not `addWatchFile`: the component would become an import of the meta module, and deleting it would end in
+        // `full-reload`; `hotUpdate` compares its props itself, and the scanned directories are watched
+        if (existsSync(component)) found = readProps(normalizePath(component));
         const meta = { sections, doc, props: found?.props ?? null, propsType: found?.typeName ?? null };
         return `export default ${JSON.stringify(meta)};\n`;
       }
@@ -532,38 +531,47 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       });
       printCatalogUrl(server);
     },
-    hotUpdate({ type, file, modules, timestamp }) {
+    hotUpdate({ type, file, modules, timestamp, read }) {
       const { moduleGraph } = this.environment;
       // the metadata of an entry depends on its catalog file and its .md, which the component's module does not track
       const metas = () => [...moduleGraph.idToModuleMap.values()].filter((m) => m.id?.startsWith('\0' + META));
       let targets: Iterable<(typeof modules)[number]>;
       const normalized = normalizePath(file);
-      if (
-        tailwindWatch.has(normalized) ||
-        (type !== 'update' && file.endsWith('.css') && cssDirs().some((dir) => isInside(normalized, dir)))
-      ) {
+      const searchedCss = file.endsWith('.css') && cssDirs().some((dir) => isInside(normalized, dir));
+      const watchedCss = tailwindWatch.has(normalized) || (searchedCss && type !== 'update');
+      if (watchedCss || (searchedCss && type === 'update')) {
         // the other environments see the same file: one regeneration is enough
         if (this.environment.config.consumer !== 'client') return;
-        tailwind = null;
-        if (!moduleGraph.getModuleById('\0' + TAILWIND)) return;
         const env = this.environment;
         // in the background, so that the app's own handling of the file (e.g. `@tailwindcss/vite`'s CSS update) is
         // neither delayed nor shown a failure of ours
-        tailwindData(() => env)
-          .then(({ sources }) => {
-            const json = JSON.stringify(sources);
-            if (json === served) return;
-            served = json;
-            for (const mod of moduleGraph.idToModuleMap.values())
-              if (mod.id === '\0' + TAILWIND || mod.id?.startsWith('\0' + TAILWIND_SOURCE))
-                moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
-            env.hot.send({ type: 'custom', event: 'zukan:reload' });
-          })
-          .catch((e) =>
-            env.logger.warn(
-              `svelte-zukan: could not read the Tailwind CSS entries: ${e instanceof Error ? e.message : e}`
-            )
-          );
+        const regenerate = () => {
+          tailwind = null;
+          if (!moduleGraph.getModuleById('\0' + TAILWIND)) return;
+          tailwindData(() => env)
+            .then(({ sources }) => {
+              const json = JSON.stringify(sources);
+              if (json === served) return;
+              served = json;
+              for (const mod of moduleGraph.idToModuleMap.values())
+                if (mod.id === '\0' + TAILWIND || mod.id?.startsWith('\0' + TAILWIND_SOURCE))
+                  moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
+              env.hot.send({ type: 'custom', event: 'zukan:reload' });
+            })
+            .catch((e) =>
+              env.logger.warn(
+                `svelte-zukan: could not read the Tailwind CSS entries: ${e instanceof Error ? e.message : e}`
+              )
+            );
+        };
+        if (watchedCss) regenerate();
+        // a plain CSS file edited into an entry (`@theme` added) is not watched yet; `read()` waits for the editor to
+        // finish writing, where reading the file at once could find it empty
+        else
+          Promise.resolve()
+            .then(read)
+            .then((css) => isCandidate(css) && regenerate())
+            .catch(() => {});
         // undefined, never []
         return;
       }
