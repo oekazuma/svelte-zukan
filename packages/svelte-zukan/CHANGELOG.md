@@ -1,5 +1,15 @@
 # svelte-zukan
 
+## 0.12.0
+
+### Minor Changes
+
+- 83babb0: feat: add "Text 200%" and "Tab order" to the accessibility panel. The first doubles the preview's root font size, as raising the browser's default font size does; the second numbers the elements the Tab key moves to. The "Highlight issues" switch is now "Outline where issues were found".
+
+### Patch Changes
+
+- c0516b7: fix: the top page fits each thumbnail to its example, centred and at most at its real size, in the example's own background; a narrow props table lists each prop on its own; Tailwind CSS colors are short rows on a phone; and the not-found page links back to the list and to the search.
+
 ## 0.11.0
 
 ### Minor Changes
