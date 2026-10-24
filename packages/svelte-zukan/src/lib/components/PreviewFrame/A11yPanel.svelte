@@ -383,11 +383,16 @@
 </div>
 
 <style>
+  /* in the corner, so it stays on the first row when a narrow panel wraps the status and "Check again" */
   .close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
     padding: 3px 6px;
   }
 
   .a11y {
+    position: relative;
     border-top: 1px solid var(--_border);
     padding: 10px 14px;
     font-size: 13px;
@@ -398,6 +403,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
+    padding-right: 36px;
   }
 
   .status {
