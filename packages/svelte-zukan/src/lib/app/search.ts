@@ -31,8 +31,17 @@ export type SearchHit =
 const AROUND = 30;
 
 function snippet(text: string, at: number, length: number) {
-  const start = Math.max(0, at - AROUND);
-  const end = Math.min(text.length, at + length + AROUND);
+  let start = Math.max(0, at - AROUND);
+  let end = Math.min(text.length, at + length + AROUND);
+  // a cut inside a word moves to the nearest space towards the match; text without spaces (Japanese) is cut as it is
+  if (start > 0 && text[start - 1] !== ' ') {
+    const space = text.indexOf(' ', start);
+    if (space !== -1 && space < at) start = space + 1;
+  }
+  if (end < text.length && text[end] !== ' ') {
+    const space = text.lastIndexOf(' ', end);
+    if (space >= at + length) end = space;
+  }
   return `${start > 0 ? '…' : ''}${text.slice(start, end).trim()}${end < text.length ? '…' : ''}`;
 }
 

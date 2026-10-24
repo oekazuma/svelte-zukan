@@ -87,6 +87,14 @@ describe('search', () => {
     expect(hit.snippet!.length).toBeLessThan(80);
   });
 
+  it('starts and ends a snippet between words rather than inside one', () => {
+    const doc =
+      'Pass an open state that the parents can bind:open with, so Escape closes it and the buttons too, as expected';
+    const [hit] = search([item('ui/Dialog', { doc })], 'Escape', null);
+    assert(hit.kind === 'description');
+    expect(hit.snippet).toBe('…can bind:open with, so Escape closes it and the buttons…');
+  });
+
   it('collapses whitespace in snippets', () => {
     const [hit] = search([item('ui/A', { doc: 'one\n\n  two' })], 'two', null);
     assert(hit.kind === 'description');

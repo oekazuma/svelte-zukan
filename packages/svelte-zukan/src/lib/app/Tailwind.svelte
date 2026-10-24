@@ -5,7 +5,7 @@
   import { CATEGORIES } from '../vite/tailwind-tokens.js';
   import { formatTailwindHash } from './hash.js';
   import { categoryGroups, categoryTitles, type Messages } from './i18n.js';
-  import { filterVariables, groupVariables, isColor } from './tailwind-filter.js';
+  import { filterTokens, filterVariables, groupVariables, isColor } from './tailwind-filter.js';
   import TailwindTokens from './TailwindTokens.svelte';
 
   let {
@@ -79,6 +79,13 @@
   let sampleText = $state(t.sampleTextValue);
 
   const variableGroups = $derived(groupVariables(filterVariables(data?.variables ?? {}, query), data?.prefix ?? null));
+  /** while filtering, what each category holds of the filter, so the categories with a match stand out */
+  const counts: Record<string, number> = $derived(
+    Object.fromEntries([
+      ...(data?.categories ?? []).map((c) => [c.id, filterTokens(c.tokens, query).length]),
+      [FULL, filterVariables(data?.variables ?? {}, query).length]
+    ])
+  );
 
   let copied = $state<{ text: string; ok: boolean } | null>(null);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -144,8 +151,13 @@
     <div class="columns">
       {#snippet link(category: keyof typeof titles, count: number)}
         <!-- the catalog is a hash-routed SPA outside SvelteKit, so resolve() does not apply -->
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-        <a href={formatTailwindHash(item.id, category, query)} aria-current={category === current ? 'page' : undefined}>
+        <!-- eslint-disable svelte/no-navigation-without-resolve -->
+        <a
+          href={formatTailwindHash(item.id, category, query)}
+          aria-current={category === current ? 'page' : undefined}
+          class={{ none: query.trim() !== '' && count === 0 }}
+        >
+          <!-- eslint-enable svelte/no-navigation-without-resolve -->
           <span>{titles[category]}</span>
           <!-- the link is named by its category alone -->
           <span class="count" aria-hidden="true">{count}</span>
@@ -156,12 +168,12 @@
           <h2 id="{id}-{i}">{group.title}</h2>
           <ul aria-labelledby="{id}-{i}">
             {#each group.categories as c (c.id)}
-              <li>{@render link(c.id, c.tokens.length)}</li>
+              <li>{@render link(c.id, counts[c.id] ?? 0)}</li>
             {/each}
           </ul>
         {/each}
         <ul class="full">
-          <li>{@render link(FULL, Object.keys(data.variables).length)}</li>
+          <li>{@render link(FULL, counts[FULL] ?? 0)}</li>
         </ul>
       </nav>
 
@@ -175,11 +187,11 @@
           {#each groups as group (group.title)}
             <optgroup label={group.title}>
               {#each group.categories as c (c.id)}
-                <option value={c.id}>{titles[c.id]}</option>
+                <option value={c.id}>{titles[c.id]}{query.trim() ? ` (${counts[c.id] ?? 0})` : ''}</option>
               {/each}
             </optgroup>
           {/each}
-          <option value={FULL}>{titles[FULL]}</option>
+          <option value={FULL}>{titles[FULL]}{query.trim() ? ` (${counts[FULL] ?? 0})` : ''}</option>
         </select>
 
         <div class="controls">
@@ -348,6 +360,10 @@
     background: var(--_code-bg);
     color: var(--_accent);
     font-weight: 600;
+  }
+
+  nav a.none {
+    color: var(--_muted);
   }
 
   .count {
