@@ -22,7 +22,7 @@ import { renderHtml } from './html.js';
 import { detectSvelteKit } from './kit.js';
 import { createMatchers } from './matchers.js';
 import { appFile, extendFsAllow, isInside, libDir, resolveOptions, type ZukanOptions } from './options.js';
-import { hasTailwind, loadTailwind, type Resolver } from './tailwind-load.js';
+import { hasTailwind, isCandidate, loadTailwind, type Resolver } from './tailwind-load.js';
 import {
   AXE,
   CATALOG,
@@ -404,10 +404,9 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         const sections = extractSections(readFileSync(item.file, 'utf-8'), item.file);
         const component = componentFileOf(item.file);
         let found = null;
-        if (existsSync(component)) {
-          this.addWatchFile(component);
-          found = readProps(normalizePath(component));
-        }
+        // not `addWatchFile`: the component would become an import of the meta module, and deleting it would end in
+        // `full-reload`; `hotUpdate` compares its props itself, and the scanned directories are watched
+        if (existsSync(component)) found = readProps(normalizePath(component));
         const meta = { sections, doc, props: found?.props ?? null, propsType: found?.typeName ?? null };
         return `export default ${JSON.stringify(meta)};\n`;
       }
@@ -538,10 +537,16 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       const metas = () => [...moduleGraph.idToModuleMap.values()].filter((m) => m.id?.startsWith('\0' + META));
       let targets: Iterable<(typeof modules)[number]>;
       const normalized = normalizePath(file);
-      if (
-        tailwindWatch.has(normalized) ||
-        (type !== 'update' && file.endsWith('.css') && cssDirs().some((dir) => isInside(normalized, dir)))
-      ) {
+      const searchedCss = file.endsWith('.css') && cssDirs().some((dir) => isInside(normalized, dir));
+      // a plain CSS file edited into an entry (`@theme` added) is not watched yet
+      const becameEntry = () => {
+        try {
+          return isCandidate(readFileSync(file, 'utf8'));
+        } catch {
+          return false;
+        }
+      };
+      if (tailwindWatch.has(normalized) || (searchedCss && (type !== 'update' || becameEntry()))) {
         // the other environments see the same file: one regeneration is enough
         if (this.environment.config.consumer !== 'client') return;
         tailwind = null;
