@@ -4,7 +4,29 @@ sidebar:
   order: 5
 ---
 
-An AI coding agent can write catalog files and check them without a browser. svelte-zukan gives it these docs as text, the catalog as data (also as WebMCP tools in the browser), and a skill that says how to work with them.
+An AI coding agent can set up svelte-zukan, write catalog files and check them without a browser. The quickest way to get there is the skill below. svelte-zukan also gives an agent these docs as text and the catalog as data (also as WebMCP tools in the browser).
+
+## The skill
+
+svelte-zukan has a skill for agents that read [Agent Skills](https://agentskills.io), such as Claude Code, Cursor and Codex. With it, an agent takes a project from no catalog to a documented one: it adds svelte-zukan with the options the project needs (a monorepo included), writes a catalog file for each component, documents each component with JSDoc on its props and a `<Name>.zukan.md` file, and checks the result in `catalog.json`. Install it with the [skills CLI](https://github.com/vercel-labs/skills):
+
+```sh
+npx skills add oekazuma/svelte-zukan
+```
+
+Then ask in your own words, for example:
+
+- "Set up svelte-zukan in this project and catalog the components in `src/lib`"
+- "Add a catalog file and docs for the new `DatePicker`"
+- "Run the accessibility check on the Button sections and fix the violations"
+
+The CLI asks which of your agents to install it for and puts it in each one's skill directory in your project. Choose agents with `-a` (for example `-a claude-code`), or add `-g` to install it for all your projects.
+
+The npm package ships the same skill, at `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md`, matching the version you installed. You can also copy that folder to your agent's skill directory yourself:
+
+```sh
+mkdir -p .claude/skills && cp -r node_modules/svelte-zukan/skills/svelte-zukan .claude/skills/
+```
 
 ## The docs as text
 
@@ -60,22 +82,6 @@ In a browser that implements [WebMCP](https://webmachinelearning.github.io/webmc
 | `list_tailwind_tokens` | With Tailwind CSS data only. Without a `category`, lists each entry's categories and their token counts. With one of the category IDs (`background-color`, `padding`, `font-size`, …), returns its tokens, and with `full-config`, every theme variable as `{ variable: value }` under `variables` instead of `tokens`. `query` keeps the tokens whose class, variable or value contains the text |
 
 Browsers without WebMCP ignore them, and nothing is loaded for them.
-
-## The skill
-
-svelte-zukan has a skill for agents that read [Agent Skills](https://agentskills.io), such as Claude Code, Cursor and Codex. It says how to find what to catalog, how to write a catalog file, and how to check it. Install it with the [skills CLI](https://github.com/vercel-labs/skills):
-
-```sh
-npx skills add oekazuma/svelte-zukan
-```
-
-The CLI asks which of your agents to install it for and puts it in each one's skill directory in your project. Choose agents with `-a` (for example `-a claude-code`), or add `-g` to install it for all your projects.
-
-The npm package ships the same skill, at `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md`, matching the version you installed. You can also copy that folder to your agent's skill directory yourself:
-
-```sh
-mkdir -p .claude/skills && cp -r node_modules/svelte-zukan/skills/svelte-zukan .claude/skills/
-```
 
 ## A line for AGENTS.md
 

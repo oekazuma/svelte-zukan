@@ -40,6 +40,14 @@ Put `Button.zukan.svelte` next to `Button.svelte`:
 
 Start the dev server and open `/__zukan/`.
 
+## With an AI agent
+
+This package ships an agent skill. Install it and ask your agent (Claude Code, Cursor, Codex, …) to set up svelte-zukan and catalog your components:
+
+```sh
+npx skills add oekazuma/svelte-zukan
+```
+
 ## Links
 
 - [Documentation](https://oekazuma.github.io/svelte-zukan/) ([日本語](https://oekazuma.github.io/svelte-zukan/ja/))

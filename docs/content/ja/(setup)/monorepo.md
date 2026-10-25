@@ -18,6 +18,10 @@ sidebar:
 - Yarn の Plug'n'Play には `node_modules` がないので見つかりません。その場合は `groups` で指定してください
 - 推移的な依存は探しません。アプリの依存に宣言していないアプリやパッケージは、`groups` で指定します
 
+## 各パッケージにインストールする
+
+カタログファイルは `svelte-zukan` から `Section` を import します。そのため、カタログファイルを置くパッケージにはそれぞれ、カタログ用のアプリと同じバージョンの `svelte-zukan` を `devDependencies` に入れます。pnpm では、パッケージは自分が宣言したものしか import できません。入れないと、dev サーバーではそのパッケージのカタログファイルが表示されることがあっても、[`build: true`](/ja/static-export) での `vite build` は `svelte-zukan` を解決できずに失敗します。
+
 ## `groups` でディレクトリを選ぶ
 
 `groups` を書くと自動探索はせず、書いたディレクトリだけを探します。たとえば、カタログ用のアプリ `apps/catalog` から、別のアプリ `apps/web` のコンポーネントを見せたいときは次のようにします。
