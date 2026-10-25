@@ -41,12 +41,19 @@
   // svelte-ignore state_referenced_locally
   const loaded = Promise.all([wrapper?.(), entry.load()]);
   // the theme's color covers the page until the wrapper brings the app's CSS, which may paint html or body itself; read
-  // once the content is mounted, as a component's own styles are added then
-  if (stored)
+  // once the content is mounted, as a component's own styles are added then. A newer preview (another hash) owns the
+  // page once this one is gone
+  $effect(() => {
+    if (!stored) return;
+    let mounted = true;
     loaded.then(tick).then(
-      () => paint(document, stored),
+      () => mounted && paint(document, stored),
       () => {}
     );
+    return () => {
+      mounted = false;
+    };
+  });
 </script>
 
 <!-- the wrapper is imported only here, so its global CSS never reaches the catalog UI -->

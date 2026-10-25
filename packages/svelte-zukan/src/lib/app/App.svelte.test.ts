@@ -100,6 +100,23 @@ describe('App', () => {
     }
   });
 
+  it('a preview that is gone before its wrapper loads leaves the page background to the one after it', async () => {
+    let resolve!: (value: { default: typeof Wrapper }) => void;
+    try {
+      const { props } = setup('#/preview/ui/Card?section=Two&theme=dark');
+      props.wrapper = vi.fn(() => new Promise((r) => (resolve = r)));
+      const screen = await render(App, { props });
+      screen.unmount();
+      document.documentElement.style.backgroundColor = 'rgb(1, 2, 3)';
+      resolve({ default: Wrapper });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(document.documentElement.style.backgroundColor).toBe('rgb(1, 2, 3)');
+    } finally {
+      document.documentElement.style.colorScheme = '';
+      document.documentElement.style.backgroundColor = '';
+    }
+  });
+
   it('a preview inside the catalog leaves the theme to its frame', async () => {
     localStorage.setItem('svelte-zukan:theme', 'dark');
     // the catalog page that frames it: same path, another window
