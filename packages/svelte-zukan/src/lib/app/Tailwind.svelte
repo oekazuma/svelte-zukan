@@ -124,7 +124,8 @@
         app = mount(TailwindTokens, { target: doc.body, props: tokenProps as ComponentProps<typeof TailwindTokens> });
         const root = doc.body.querySelector('.zukan-tokens')!;
         // the root, not the body: the entry's CSS may give the body a min-height of the frame
-        observer = new ResizeObserver(
+        // the frame's own ResizeObserver, as in PreviewFrame: one of the catalog page outlives a removed frame
+        observer = new doc.defaultView!.ResizeObserver(
           () => (iframe.style.height = `${Math.ceil(root.getBoundingClientRect().height)}px`)
         );
         observer.observe(root);

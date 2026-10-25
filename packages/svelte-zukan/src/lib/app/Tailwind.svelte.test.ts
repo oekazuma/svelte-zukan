@@ -336,6 +336,24 @@ describe('the Tailwind CSS page', () => {
     expect(doc.querySelector('[data-token="w-full"] .zukan-sample')).toBeNull();
   });
 
+  it('leaves nothing observed in the sample document once the frame is gone', async () => {
+    const widths: TailwindSource = {
+      ...source,
+      categories: [{ id: 'width', title: 'Width', tokens: [{ class: 'w-64', cssVariable: null, value: '16rem' }] }]
+    };
+    const screen = await render(App, { props: props('#/tailwind', [item(widths)]) });
+    const { iframe, doc } = await frame(screen.container);
+    await expect.poll(() => doc.querySelector('.zukan-bar')).toBeTruthy();
+    const errors: string[] = [];
+    const onerror = (e: ErrorEvent) => errors.push(e.message);
+    addEventListener('error', onerror);
+    // closing the page detaches its frames before any cleanup runs
+    iframe.remove();
+    await new Promise((r) => setTimeout(r, 200));
+    removeEventListener('error', onerror);
+    expect(errors).toEqual([]);
+  });
+
   it('shows no px for a value the property rejects or that follows the frame', async () => {
     const odd: TailwindSource = {
       ...source,
