@@ -63,7 +63,7 @@ Browsers without WebMCP ignore them, and nothing is loaded for them.
 
 ## The skill
 
-svelte-zukan has a skill for agents that read [Agent Skills](https://agentskills.io), such as Claude Code, Cursor and Codex. It says how to add svelte-zukan to a project and choose its options, how to find what to catalog, how to write a catalog file and document a component (JSDoc on its props and a `.md` file), and how to check the result. Install it with the [skills CLI](https://github.com/vercel-labs/skills):
+svelte-zukan has a skill for agents that read [Agent Skills](https://agentskills.io), such as Claude Code, Cursor and Codex. It says how to add svelte-zukan to a project and choose its options, how to find what to catalog, how to write a catalog file and document a component (JSDoc on its props and a `<Name>.zukan.md` file), and how to check the result. Install it with the [skills CLI](https://github.com/vercel-labs/skills):
 
 ```sh
 npx skills add oekazuma/svelte-zukan
