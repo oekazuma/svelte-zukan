@@ -4,7 +4,29 @@ sidebar:
   order: 5
 ---
 
-AI のコーディングエージェントはブラウザーを使わずにカタログファイルを書いて確かめられます。そのために svelte-zukan は、テキストで読めるドキュメント、データとしてのカタログ（ブラウザーでは WebMCP のツールとしても）、これらの使い方を書いたスキルを用意しています。
+AI のコーディングエージェントは、ブラウザーを使わずに svelte-zukan を導入し、カタログファイルを書いて確かめられます。いちばん手早いのは、次に説明するスキルを使う方法です。ほかにも svelte-zukan は、テキストで読めるドキュメントと、データとしてのカタログ（ブラウザーでは WebMCP のツールとしても）を用意しています。
+
+## スキル
+
+svelte-zukan には、Claude Code、Cursor、Codex など [Agent Skills](https://agentskills.io) を読むエージェント向けのスキルがあります。これを入れると、エージェントはカタログのないプロジェクトから、説明のそろったカタログまでを作れます。プロジェクトに合ったオプションで svelte-zukan を導入し（モノレポも含みます）、コンポーネントごとにカタログファイルを書き、props の JSDoc と `<Name>.zukan.md` ファイルで説明を付け、`catalog.json` で結果を確かめます。[skills CLI](https://github.com/vercel-labs/skills) でインストールします。
+
+```sh
+npx skills add oekazuma/svelte-zukan
+```
+
+あとは、ふだんの言葉で頼むだけです。たとえば次のように頼みます。
+
+- 「このプロジェクトに svelte-zukan を入れて、`src/lib` のコンポーネントをカタログに載せて」
+- 「新しく作った `DatePicker` のカタログファイルと説明を書いて」
+- 「Button のセクションでアクセシビリティ検査をして、違反を直して」
+
+CLI がどのエージェントに入れるかを尋ね、プロジェクト内のそれぞれのスキルのディレクトリに置きます。エージェントは `-a` で選べます（例: `-a claude-code`）。`-g` を付けると、すべてのプロジェクトで使えるように入ります。
+
+npm のパッケージにも同じスキルが `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md` に入っていて、インストールしたバージョンに合っています。このフォルダーを自分でエージェントのスキルのディレクトリにコピーして使うこともできます。
+
+```sh
+mkdir -p .claude/skills && cp -r node_modules/svelte-zukan/skills/svelte-zukan .claude/skills/
+```
 
 ## テキストで読めるドキュメント
 
@@ -60,22 +82,6 @@ dev サーバーは `/__zukan/catalog.json` を返します。`build: true` で 
 | `list_tailwind_tokens` | Tailwind CSS のデータがあるときだけ使えます。`category` を省くと、エントリーごとにカテゴリーとトークンの数を返します。カテゴリーの ID（`background-color`、`padding`、`font-size` など）を渡すとそのトークンを、`full-config` を渡すとすべてのテーマ変数を `{ 変数: 値 }` の形で、`tokens` ではなく `variables` に入れて返します。`query` は、クラス名・変数名・値のどれかにその文字を含むものだけに絞ります |
 
 WebMCP に対応していないブラウザーではツールは使われず、そのためのコードも読み込みません。
-
-## スキル
-
-svelte-zukan には、Claude Code、Cursor、Codex など [Agent Skills](https://agentskills.io) を読むエージェント向けのスキルがあります。プロジェクトへの svelte-zukan の導入とオプションの選び方、カタログに載せるものの探し方、カタログファイルの書き方、コンポーネントの説明の書き方（props の JSDoc と `<Name>.zukan.md` ファイル）、書いたものの確かめ方をまとめたものです。[skills CLI](https://github.com/vercel-labs/skills) でインストールします。
-
-```sh
-npx skills add oekazuma/svelte-zukan
-```
-
-CLI がどのエージェントに入れるかを尋ね、プロジェクト内のそれぞれのスキルのディレクトリに置きます。エージェントは `-a` で選べます（例: `-a claude-code`）。`-g` を付けると、すべてのプロジェクトで使えるように入ります。
-
-npm のパッケージにも同じスキルが `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md` に入っていて、インストールしたバージョンに合っています。このフォルダーを自分でエージェントのスキルのディレクトリにコピーして使うこともできます。
-
-```sh
-mkdir -p .claude/skills && cp -r node_modules/svelte-zukan/skills/svelte-zukan .claude/skills/
-```
 
 ## AGENTS.md に書く例
 

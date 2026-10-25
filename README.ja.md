@@ -54,6 +54,14 @@ src/lib/Button/
 
 dev サーバーを起動して `/__zukan/` を開きます。詳しくは[クイックスタート](https://oekazuma.github.io/svelte-zukan/ja/quickstart/)を見てください。
 
+## AI エージェントと使う
+
+[スキル](https://oekazuma.github.io/svelte-zukan/ja/ai-agents/#スキル)を入れて、エージェント（Claude Code、Cursor、Codex など）に svelte-zukan の導入とコンポーネントのカタログ作りを頼めます。
+
+```sh
+npx skills add oekazuma/svelte-zukan
+```
+
 ## リンク
 
 - [ドキュメント](https://oekazuma.github.io/svelte-zukan/ja/)

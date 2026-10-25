@@ -6,6 +6,8 @@ sidebar:
 
 svelte-zukan works with plain Vite + Svelte and with SvelteKit 3 or later. It needs Vite 8 or later, Svelte 5.46.4 or later, and Node 22.17 or later. It uses Vite-specific hooks (`configureServer`, `hotUpdate`, `buildApp`), so it does not work with other bundlers.
 
+Working with an AI coding agent? Install the [skill](/ai-agents#the-skill) with `npx skills add oekazuma/svelte-zukan` and ask it to set up svelte-zukan. It follows the steps on this page, picks the options your project needs, and writes the catalog files and docs for you.
+
 ## Install
 
 <CodeGroup>
@@ -89,5 +91,8 @@ The top page lists every component with a small preview. Each detail page shows 
   </Card>
   <Card title="Options" icon="list" href="/options">
     Every option of `zukan()`.
+  </Card>
+  <Card title="Using it with AI agents" icon="bot" href="/ai-agents">
+    The skill, `catalog.json` and the WebMCP tools.
   </Card>
 </CardGroup>
