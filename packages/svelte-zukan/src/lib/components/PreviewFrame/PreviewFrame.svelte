@@ -5,9 +5,8 @@
   import { startMeasure } from './measure.js';
   import {
     BACKGROUND_MODES,
-    BACKGROUNDS,
-    transparent,
     onBackground,
+    paint,
     readBackground,
     readWidth,
     writeBackground,
@@ -188,7 +187,7 @@
       const found = doc.querySelector('[data-zukan-preview]');
       if (!found) return;
       // the app's CSS, which may paint the body, arrives with the content
-      paint(doc);
+      paint(doc, theme);
       if (found !== target) {
         target = found;
         observer!.observe(found);
@@ -230,21 +229,6 @@
     doc.documentElement.style.colorScheme = theme;
   });
 
-  /**
-   * The page's own body color, when it has one and its html has none, for the whole page: an expanded preview is taller
-   * than its content.
-   * Read after the theme (`light-dark()`) and after a pattern background, which makes the body transparent, changes.
-   */
-  function paint(page: Document) {
-    const view = page.defaultView!;
-    const html = page.documentElement;
-    // the app's own html background, without the color set here last time
-    html.style.backgroundColor = '';
-    if (!transparent(view.getComputedStyle(html).backgroundColor)) return;
-    const body = view.getComputedStyle(page.body).backgroundColor;
-    html.style.backgroundColor = transparent(body) ? BACKGROUNDS[theme] : body;
-  }
-
   $effect(() => {
     if (!doc) return;
     const style = doc.createElement('style');
@@ -261,10 +245,11 @@
     return () => style.remove();
   });
 
-  // after the effects above, so it reads the body with the current theme and pattern
+  // after the effects above, so it reads the body with the current theme (`light-dark()`) and pattern, which makes the
+  // body transparent
   $effect(() => {
     if (!doc || !background) return;
-    paint(doc);
+    paint(doc, theme);
   });
 
   $effect(() => onBackground((value) => (background = value)));

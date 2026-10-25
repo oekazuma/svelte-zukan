@@ -5,6 +5,20 @@ export const BACKGROUNDS: Record<Theme, string> = { light: '#fff', dark: '#0d111
 export const transparent = (color: string) =>
   color === 'transparent' || /^rgba\((?:[^,]+,){3}\s*0\)$/.test(color) || /\/\s*0\)$/.test(color);
 
+/**
+ * The page's own body color, when it has one and its html has none, for the whole page: an expanded preview is taller
+ * than its content. Without either, the theme's color.
+ */
+export function paint(page: Document, theme: Theme) {
+  const view = page.defaultView!;
+  const html = page.documentElement;
+  // the app's own html background, without the color set here last time
+  html.style.backgroundColor = '';
+  if (!transparent(view.getComputedStyle(html).backgroundColor)) return;
+  const body = view.getComputedStyle(page.body).backgroundColor;
+  html.style.backgroundColor = transparent(body) ? BACKGROUNDS[theme] : body;
+}
+
 const THEME_KEY = 'svelte-zukan:theme';
 const widthKey = (src: string) => `svelte-zukan:width:${src}`;
 const BACKGROUND_KEY = 'svelte-zukan:background';
