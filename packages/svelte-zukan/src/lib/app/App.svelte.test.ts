@@ -79,6 +79,44 @@ describe('App', () => {
     }
   });
 
+  it("a preview page with a theme keeps the html background of the app's CSS, which arrives with the wrapper", async () => {
+    const style = document.createElement('style');
+    style.textContent = 'html{background-color:rgb(250, 250, 250)}';
+    try {
+      const { props } = setup('#/preview/ui/Card?section=Two&theme=dark');
+      props.wrapper = vi.fn(() => {
+        document.head.append(style);
+        return Promise.resolve({ default: Wrapper });
+      });
+      const screen = await render(App, { props });
+      await expect.element(screen.getByTestId('wrapper').getByText('two')).toBeInTheDocument();
+      await expect.poll(() => document.documentElement.style.backgroundColor).toBe('');
+      expect(getComputedStyle(document.documentElement).backgroundColor).toBe('rgb(250, 250, 250)');
+      expect(document.documentElement.style.colorScheme).toBe('dark');
+    } finally {
+      style.remove();
+      document.documentElement.style.colorScheme = '';
+      document.documentElement.style.backgroundColor = '';
+    }
+  });
+
+  it('a preview that is gone before its wrapper loads leaves the page background to the one after it', async () => {
+    let resolve!: (value: { default: typeof Wrapper }) => void;
+    try {
+      const { props } = setup('#/preview/ui/Card?section=Two&theme=dark');
+      props.wrapper = vi.fn(() => new Promise((r) => (resolve = r)));
+      const screen = await render(App, { props });
+      screen.unmount();
+      document.documentElement.style.backgroundColor = 'rgb(1, 2, 3)';
+      resolve({ default: Wrapper });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(document.documentElement.style.backgroundColor).toBe('rgb(1, 2, 3)');
+    } finally {
+      document.documentElement.style.colorScheme = '';
+      document.documentElement.style.backgroundColor = '';
+    }
+  });
+
   it('a preview inside the catalog leaves the theme to its frame', async () => {
     localStorage.setItem('svelte-zukan:theme', 'dark');
     // the catalog page that frames it: same path, another window

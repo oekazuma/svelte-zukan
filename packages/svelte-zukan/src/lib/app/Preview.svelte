@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { setContext, type Component, type Snippet } from 'svelte';
-  import { BACKGROUNDS, readTheme, type Theme } from '../components/PreviewFrame/storage.js';
+  import { setContext, tick, type Component, type Snippet } from 'svelte';
+  import { BACKGROUNDS, paint, readTheme, type Theme } from '../components/PreviewFrame/storage.js';
   import { PREVIEW_SECTION_KEY } from '../context.js';
   import type { Entry } from '../types.js';
   import type { Messages } from './i18n.js';
@@ -37,11 +37,28 @@
     document.documentElement.style.colorScheme = stored;
     document.documentElement.style.backgroundColor = BACKGROUNDS[stored];
   }
+
+  // svelte-ignore state_referenced_locally
+  const loaded = Promise.all([wrapper?.(), entry.load()]);
+  // the theme's color covers the page until the wrapper brings the app's CSS, which may paint html or body itself; read
+  // once the content is mounted, as a component's own styles are added then. A newer preview (another hash) owns the
+  // page once this one is gone
+  $effect(() => {
+    if (!stored) return;
+    let mounted = true;
+    loaded.then(tick).then(
+      () => mounted && paint(document, stored),
+      () => {}
+    );
+    return () => {
+      mounted = false;
+    };
+  });
 </script>
 
 <!-- the wrapper is imported only here, so its global CSS never reaches the catalog UI -->
 <div data-zukan-preview>
-  {#await Promise.all([wrapper?.(), entry.load()]) then [w, mod]}
+  {#await loaded then [w, mod]}
     {#if w}
       <w.default><mod.default /></w.default>
     {:else}
