@@ -18,6 +18,10 @@ Dependency packages are found through the links in the catalog app's own `node_m
 - Yarn Plug'n'Play has no `node_modules`, so packages are not found there. Use `groups` instead
 - Transitive dependencies are not scanned. For apps or packages that the app does not declare as dependencies, use `groups`
 
+## Installing it in each package
+
+A catalog file imports `Section` from `svelte-zukan`, so every package that has catalog files lists `svelte-zukan` in its own `devDependencies`, with the same version as the catalog app. With pnpm, a package can only import what it declares: without it, the dev server may still show the package's catalog files, but `vite build` with [`build: true`](/static-export) fails to resolve `svelte-zukan`.
+
 ## Choosing directories with `groups`
 
 With `groups`, automatic discovery is skipped and only the listed directories are scanned. For example, when the catalog app `apps/catalog` should show the components of another app, `apps/web`:

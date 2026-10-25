@@ -38,6 +38,15 @@ A preview loads only its catalog file, never the app's entry, so the wrapper is 
 {@render children()}
 ```
 
+### In a monorepo
+
+When the repository has workspaces (`pnpm-workspace.yaml`, or `workspaces` in the root `package.json`), components usually live in packages such as `packages/ui` and the catalog is served by an app:
+
+- `zukan()` and the wrapper go in the app that serves the catalog (`apps/web`), not in the component packages. Without `groups`, it scans that app's `src` and the `src` of each workspace package in the app's `dependencies` and `devDependencies`, and each package's `name` becomes its group
+- A workspace package the app does not list itself, such as a dependency of a dependency, is not scanned and is not in `uncataloged` either. Add it to the app's `devDependencies` (`"@acme/icons": "workspace:*"`) and install, or list every directory in `groups`
+- Every package that gets catalog files lists `svelte-zukan` in its own `devDependencies`, with the same version as the app, and you install. With pnpm, a catalog file in `packages/ui` cannot resolve `import { Section } from 'svelte-zukan'` otherwise: the dev server may still show it, but `vite build` with `build: true` fails
+- The wrapper imports shared CSS by package name: `import '@acme/ui/tokens.css'`
+
 ## Find what to work on
 
 Start the dev server in the background and read `/__zukan/catalog.json` (under Vite's `base` or SvelteKit's `paths.base` if one is set). After `vite build` with `build: true`, the same data is in `<outDir>/catalog.json`, `zukan-dist/` by default:
