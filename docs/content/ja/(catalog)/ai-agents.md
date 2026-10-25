@@ -63,7 +63,7 @@ WebMCP に対応していないブラウザーではツールは使われず、�
 
 ## スキル
 
-svelte-zukan には、Claude Code、Cursor、Codex など [Agent Skills](https://agentskills.io) を読むエージェント向けのスキルがあります。カタログに載せるものの探し方、カタログファイルの書き方、書いたものの確かめ方をまとめたものです。[skills CLI](https://github.com/vercel-labs/skills) でインストールします。
+svelte-zukan には、Claude Code、Cursor、Codex など [Agent Skills](https://agentskills.io) を読むエージェント向けのスキルがあります。プロジェクトへの svelte-zukan の導入とオプションの選び方、カタログに載せるものの探し方、カタログファイルの書き方、コンポーネントの説明の書き方（props の JSDoc と `.md` ファイル）、書いたものの確かめ方をまとめたものです。[skills CLI](https://github.com/vercel-labs/skills) でインストールします。
 
 ```sh
 npx skills add oekazuma/svelte-zukan

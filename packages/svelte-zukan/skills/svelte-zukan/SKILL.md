@@ -1,17 +1,48 @@
 ---
 name: svelte-zukan
-description: Write and check svelte-zukan catalog files (`*.zukan.svelte`) for Svelte components. Use when a project uses svelte-zukan and you add or change a component, are asked to document one in the catalog, or need to see what a component looks like.
+description: Set up svelte-zukan and write its catalog files (`*.zukan.svelte`) and docs (`*.zukan.md`) for Svelte components. Use when asked to add svelte-zukan or a component catalog to a project, to configure `zukan()` in `vite.config`, to catalog or document components, when you add or change a component in a project that uses svelte-zukan, or when you need to see what a component looks like.
 ---
 
 # svelte-zukan
 
-svelte-zukan is a Vite plugin that serves a component catalog at `/__zukan/` on the app's dev server. Each component gets a catalog file next to it; there is no other config to touch.
+svelte-zukan is a Vite plugin that serves a component catalog at `/__zukan/` on the app's dev server. Setup is one plugin in `vite.config`; after that, each component gets a catalog file next to it.
+
+## Set it up
+
+Skip this when `vite.config.*` already calls `zukan(`. Otherwise:
+
+1. Read `package.json`: SvelteKit (`@sveltejs/kit`) or plain Vite (`@sveltejs/vite-plugin-svelte`). svelte-zukan needs Vite 8+, Svelte 5.46.4+ and Node 22.17+. If `svelte-zukan` is not installed, add it as a dev dependency with the package manager of the lockfile
+2. In `vite.config.*`, import `zukan` from `svelte-zukan/vite` and make `zukan()` the first entry of `plugins`, ahead of `sveltekit()` / `svelte()` and every other plugin: `plugins: [zukan(), tailwindcss(), sveltekit()]`
+3. Start from `zukan()` and add an option only for what you find:
+
+| What the project has                                                                                                         | Option                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Global CSS (`app.css`, Tailwind, fonts) imported in `main.ts` or a layout, or a provider every component needs (theme, i18n) | `wrapper: '.zukan/Wrapper.svelte'`, see below           |
+| Components in `src/lib`, and the rest of `src` is the app (`App.svelte`, `routes/`)                                          | `groups: { ui: 'src/lib' }`                             |
+| Components in another app, or Yarn Plug'n'Play (workspace packages the app depends on are found without it)                  | `groups` with each directory, relative to the Vite root |
+| Catalog files that already use another suffix                                                                                | `suffix`                                                |
+| The user wants a static catalog to deploy                                                                                    | `build: true`, and add `zukan-dist` to `.gitignore`     |
+
+`build: true` makes every `vite build` also write the catalog, so add it only when the user asks for a static catalog, not to check your work (check on the dev server, below). Every option: https://oekazuma.github.io/svelte-zukan/options.md
+
+A preview loads only its catalog file, never the app's entry, so the wrapper is where the global CSS and providers go. Put it in `.zukan/`, outside the scanned directories:
+
+```svelte
+<!-- .zukan/Wrapper.svelte -->
+<script lang="ts">
+  import '../src/app.css';
+
+  let { children } = $props();
+</script>
+
+{@render children()}
+```
 
 ## Find what to work on
 
-With the dev server running, read `/__zukan/catalog.json` (after `vite build` with `build: true`, the same data is in `<outDir>/catalog.json`, `zukan-dist/` by default):
+Start the dev server in the background and read `/__zukan/catalog.json` (under Vite's `base` or SvelteKit's `paths.base` if one is set). After `vite build` with `build: true`, the same data is in `<outDir>/catalog.json`, `zukan-dist/` by default:
 
-- `components[]`: `id`, `file` (the catalog file), `component` (the `.svelte` next to it), `doc` (its `.md`), `props` (read from the component's `$props()`), and `sections[]` with each `title`, `code` and `preview`
+- `components[]`: `id`, `file` (the catalog file), `component` (the `.svelte` next to it), `doc` (its `.md`), `props` (read from the component's `$props()`, each with its `description`), and `sections[]` with each `title`, `code` and `preview`
 - `components[].error`: why a catalog file does not compile. Fix these first
 - `uncataloged[]`: `.svelte` files with no catalog file next to them yet
 - `tailwind`: `null` when the project has no Tailwind CSS v4 entry, else one object per entry with `file`, `version`, `prefix`, `categories[]` (the utility classes by category, each token with its `class`, `cssVariable` and `value`), `variables` (every theme variable) and `error`. When styling a component, use only the classes listed here (with the entry's `prefix`, if any): they are the ones the theme defines
@@ -41,11 +72,28 @@ Put `<Name>.zukan.svelte` next to `<Name>.svelte` (the suffix can differ: check 
 - `<Section>` must be at the top level, with a non-empty, static, unique `title`. Anything else is a build error with the file and line
 - Plain Svelte 5 with runes; `lang="ts"` is fine. Preprocessors only inside `<style>`
 - State a section needs (`$state`, snippets, helper data) goes in the `<script>` or as top-level `{#snippet}` blocks; the code view shows each section with what it uses
-- Describe the component in an optional `<Name>.zukan.md` next to it (Markdown, rendered above the sections; it is inserted as HTML). Describe each prop with a JSDoc comment on its type in the component instead of repeating props in the `.md`: the props table shows them
+- A component that needs a parent or a context provider gets it inside the section: `<Section title="Basic"><ToastProvider><ToastButton /></ToastProvider></Section>`
+
+## Document it
+
+A component's docs have two parts, each in its own place.
+
+Each prop gets a JSDoc comment on its type in the component. The props table on the detail page reads the name, type and default from the source and the description from this comment. Adding the comments changes no behaviour, so add them when you document a component:
+
+```ts
+let {
+  variant = 'primary'
+}: {
+  /** `primary` for the main action on a screen, `danger` for one that deletes data */
+  variant?: 'primary' | 'secondary' | 'danger';
+} = $props();
+```
+
+`<Name>.zukan.md` next to the catalog file is one to three short paragraphs of Markdown, rendered above the sections. They say what the component is for and when to use it, plus what the props table cannot show: keyboard and screen reader behaviour, a parent it must be inside, what it does with attributes it passes through. The `.md` is inserted as HTML, so write no raw HTML from untrusted sources.
 
 ## Check the result
 
-- Reload `/__zukan/catalog.json`: the component is listed, has no `error`, and its sections are the ones you wrote
+- Reload `/__zukan/catalog.json`: the component is listed, has no `error`, its sections are the ones you wrote, and each prop has a `description`
 - Open a section alone: `/__zukan/#/preview/<id>?section=<title>` (add `&theme=dark` for the dark theme; ignored when the `theme` option fixes the theme). The page has only the component and fills the window, so set the window width for a phone or tablet layout. It makes a good target for a screenshot
 - On the detail page, `/__zukan/#/<id>?section=<title>&width=375` opens that section's preview at 375px inside the catalog
 - Run the accessibility check (axe-core) on the sections you wrote: the button in each preview's toolbar, or, in a browser with WebMCP, the catalog page's `check_accessibility` tool (`list_components`, `get_component` and `open_component` are there too, and, with Tailwind CSS, `list_tailwind_tokens`). Fix its `violations`; its `review` list is what axe-core could not decide, such as text over an image or an ARIA attribute, so tell the user which rules need a manual check instead of calling them passed
