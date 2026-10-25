@@ -1,5 +1,11 @@
 # svelte-zukan
 
+## 0.13.2
+
+### Patch Changes
+
+- d61a90c: fix: observe a preview's size from the preview frame itself, so a frame taken away (as when the browser is closed) no longer reports a "ResizeObserver loop" error on every frame, which Vite forwards to the dev terminal.
+
 ## 0.13.1
 
 ### Patch Changes
