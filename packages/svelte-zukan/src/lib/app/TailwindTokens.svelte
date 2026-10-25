@@ -97,7 +97,8 @@
   function cutOff(px: number) {
     return (bar: HTMLElement) => {
       const track = bar.parentElement!;
-      const observer = new ResizeObserver(() => {
+      // the sample frame's own ResizeObserver; this code runs in the catalog page, which would outlive the frame
+      const observer = new bar.ownerDocument.defaultView!.ResizeObserver(() => {
         const style = getComputedStyle(track);
         const room = track.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
         bar.toggleAttribute('data-cut', px > room + 0.5);

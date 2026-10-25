@@ -182,7 +182,9 @@
     let tiedTo = -1;
     /** the content's bottom and the viewport height at the previous measurement */
     let last = { bottom: 0, viewport: 0 };
-    observer = new ResizeObserver(() => {
+    // the frame's own ResizeObserver: one of the catalog page keeps the elements of a frame that is taken away (as
+    // closing the tab does, before any cleanup) and reports a "ResizeObserver loop" on every frame from then on
+    observer = new doc.defaultView!.ResizeObserver(() => {
       const found = doc.querySelector('[data-zukan-preview]');
       if (!found) return;
       // the app's CSS, which may paint the body, arrives with the content

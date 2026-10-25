@@ -221,6 +221,27 @@ describe('PreviewFrame resizing', () => {
     await expect.poll(() => iframe.style.height).toBe('300px');
   });
 
+  it('leaves nothing observed in the preview page once the frame is gone', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    const target = doc.createElement('div');
+    target.setAttribute('data-zukan-preview', '');
+    target.style.height = '300px';
+    doc.body.style.margin = '0';
+    doc.body.append(target);
+    await expect.poll(() => iframe.style.height).toBe('300px');
+    const errors: string[] = [];
+    const onerror = (e: ErrorEvent) => errors.push(e.message);
+    addEventListener('error', onerror);
+    // closing the page detaches its frames before any cleanup runs
+    iframe.remove();
+    await new Promise((r) => setTimeout(r, 200));
+    removeEventListener('error', onerror);
+    expect(errors).toEqual([]);
+  });
+
   it('height includes the body padding and margin of the preview page', async () => {
     const screen = await render(PreviewFrame, { props });
     const iframe = screen.container.querySelector('iframe')!;
