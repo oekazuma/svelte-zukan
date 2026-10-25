@@ -95,6 +95,18 @@ describe('search', () => {
     expect(hit.snippet).toBe('…can bind:open with, so Escape closes it and the buttons…');
   });
 
+  it('cuts the snippet around the match in the text as written, where lowercasing changes its length', () => {
+    // `İ` lowercases to two code units, which would move an index found in the lowercased text past the match
+    const doc = `${'İ'.repeat(40)} the target is described here, with more words after it`;
+    const [hit] = search([item('ui/A', { doc })], 'target', null);
+    assert(hit.kind === 'description');
+    expect(hit.snippet).toContain('the target is');
+    // the query is matched literally
+    const [paren] = search([item('ui/A', { doc: 'call fn(a) here' })], 'fn(a', null);
+    assert(paren.kind === 'description');
+    expect(paren.snippet).toBe('call fn(a) here');
+  });
+
   it('collapses whitespace in snippets', () => {
     const [hit] = search([item('ui/A', { doc: 'one\n\n  two' })], 'two', null);
     assert(hit.kind === 'description');

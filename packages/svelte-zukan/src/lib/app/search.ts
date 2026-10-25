@@ -61,6 +61,12 @@ export function search(
 ): SearchHit[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
+  // in the text as written: an index found in the lowercased text moves where lowercasing changes the length (`İ`)
+  const pattern = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu');
+  const find = (text: string) => {
+    const m = pattern.exec(text);
+    return m && { at: m.index, length: m[0].length };
+  };
   const tiers: SearchHit[][] = [[], [], [], [], [], []];
   for (const item of items) {
     if (groups && !groups.has(item.group)) continue;
@@ -80,13 +86,13 @@ export function search(
         });
         continue;
       }
-      const at = description.toLowerCase().indexOf(q);
-      if (at !== -1)
-        tiers[4].push({ item, kind: 'prop', label: prop.name, snippet: snippet(description, at, q.length) });
+      const found = find(description);
+      if (found)
+        tiers[4].push({ item, kind: 'prop', label: prop.name, snippet: snippet(description, found.at, found.length) });
     }
     const doc = item.doc.replace(/\s+/g, ' ');
-    const at = doc.toLowerCase().indexOf(q);
-    if (at !== -1) tiers[5].push({ item, kind: 'description', snippet: snippet(doc, at, q.length) });
+    const found = find(doc);
+    if (found) tiers[5].push({ item, kind: 'description', snippet: snippet(doc, found.at, found.length) });
   }
   const tailwindTiers: SearchHit[][] = [[], []];
   const tier = (text: string) => tailwindTiers[text.toLowerCase().startsWith(q) ? 0 : 1];
