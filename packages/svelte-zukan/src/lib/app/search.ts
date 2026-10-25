@@ -31,8 +31,17 @@ export type SearchHit =
 const AROUND = 30;
 
 function snippet(text: string, at: number, length: number) {
-  const start = Math.max(0, at - AROUND);
-  const end = Math.min(text.length, at + length + AROUND);
+  let start = Math.max(0, at - AROUND);
+  let end = Math.min(text.length, at + length + AROUND);
+  // a cut inside a word moves to the nearest space towards the match; text without spaces (Japanese) is cut as it is
+  if (start > 0 && text[start - 1] !== ' ') {
+    const space = text.indexOf(' ', start);
+    if (space !== -1 && space < at) start = space + 1;
+  }
+  if (end < text.length && text[end] !== ' ') {
+    const space = text.lastIndexOf(' ', end);
+    if (space >= at + length) end = space;
+  }
   return `${start > 0 ? '…' : ''}${text.slice(start, end).trim()}${end < text.length ? '…' : ''}`;
 }
 
@@ -52,6 +61,12 @@ export function search(
 ): SearchHit[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
+  // in the text as written: an index found in the lowercased text moves where lowercasing changes the length (`İ`)
+  const pattern = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu');
+  const find = (text: string) => {
+    const m = pattern.exec(text);
+    return m && { at: m.index, length: m[0].length };
+  };
   const tiers: SearchHit[][] = [[], [], [], [], [], []];
   for (const item of items) {
     if (groups && !groups.has(item.group)) continue;
@@ -71,13 +86,13 @@ export function search(
         });
         continue;
       }
-      const at = description.toLowerCase().indexOf(q);
-      if (at !== -1)
-        tiers[4].push({ item, kind: 'prop', label: prop.name, snippet: snippet(description, at, q.length) });
+      const found = find(description);
+      if (found)
+        tiers[4].push({ item, kind: 'prop', label: prop.name, snippet: snippet(description, found.at, found.length) });
     }
     const doc = item.doc.replace(/\s+/g, ' ');
-    const at = doc.toLowerCase().indexOf(q);
-    if (at !== -1) tiers[5].push({ item, kind: 'description', snippet: snippet(doc, at, q.length) });
+    const found = find(doc);
+    if (found) tiers[5].push({ item, kind: 'description', snippet: snippet(doc, found.at, found.length) });
   }
   const tailwindTiers: SearchHit[][] = [[], []];
   const tier = (text: string) => tailwindTiers[text.toLowerCase().startsWith(q) ? 0 : 1];

@@ -378,6 +378,19 @@ describe('the Tailwind CSS page', () => {
     await expect.poll(() => doc.body.textContent).toContain('No matching tokens');
   });
 
+  it('counts what each category holds of the filter, and dims those without a match', async () => {
+    const screen = await render(App, { props: props('#/tailwind?source=app') });
+    const nav = screen.getByRole('navigation', { name: 'Tailwind CSS categories' });
+    const count = (name: string) => nav.getByRole('link', { name }).element().querySelector('.count')?.textContent;
+    await expect.poll(() => count('Background Color')).toBe('2');
+    await screen.getByRole('searchbox', { name: 'Filter tokens' }).fill('brand');
+    await expect.poll(() => count('Background Color')).toBe('1');
+    expect(count('Font Size')).toBe('0');
+    expect(count('Full config')).toBe('1');
+    expect(nav.getByRole('link', { name: 'Font Size' }).element().classList.contains('none')).toBe(true);
+    expect(nav.getByRole('link', { name: 'Background Color' }).element().classList.contains('none')).toBe(false);
+  });
+
   it('keeps the filter in the route without adding history entries', async () => {
     const screen = await render(App, { props: props('#/tailwind?source=app&q=brand') });
     const { doc } = await frame(screen.container);
