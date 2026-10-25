@@ -1,5 +1,15 @@
 # svelte-zukan
 
+## 0.14.0
+
+### Minor Changes
+
+- 03cb1f2: feat: the agent skill now covers setting up svelte-zukan (plugin order, which options a project needs, and monorepos) and documenting a component with JSDoc on its props and a `.zukan.md` file.
+
+### Patch Changes
+
+- 3fa1211: fix: a preview opened with a theme (a preview in its own tab, or the WebMCP `check_accessibility` tool) keeps the html and body background of the app's CSS instead of covering it with the theme's color, so axe-core measures contrast against the app's own background.
+
 ## 0.13.2
 
 ### Patch Changes
