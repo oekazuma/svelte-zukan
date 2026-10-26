@@ -60,7 +60,7 @@ A button for the main action on a page. Use one per screen.
 
 ## Props の一覧
 
-`Button.zukan.svelte` の隣に `Button.svelte` があれば、詳細ページのセクションの下に、その props の一覧を出します。一覧には名前、型、既定値、JSDoc コメントが並びます。JSDoc コメントは最初の `@` タグの手前までを、インラインの Markdown として表示します。`?` も既定値もない props には「必須」、既定値が `$bindable()` の props には「bind 可」と付きます。
+`Button.zukan.svelte` の隣に `Button.svelte` があれば、詳細ページの[説明](#markdown-の説明)の下、セクションの上に、その props の一覧を出します。一覧には名前、型、デフォルト値、JSDoc コメントが並びます。JSDoc コメントは最初の `@` タグの手前までを、インラインの Markdown として表示します。`?` もデフォルト値もない props には「必須」、デフォルト値が `$bindable()` の props には「バインド可能」と付きます。
 
 ```svelte
 <!-- src/lib/Button/Button.svelte -->
