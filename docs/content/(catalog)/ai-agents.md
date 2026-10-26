@@ -51,7 +51,7 @@ The dev server serves `/__zukan/catalog.json`, and `vite build` with `build: tru
 | `components[].propsType`  | A props type the table cannot read, such as one from a package, as written in the source; otherwise `null`                                                                        |
 | `components[].sections[]` | Each section's `title`, its `code` as the code view shows it, and `preview`, the hash of its preview page                                                                         |
 | `components[].error`      | Set when the catalog file is not plain Svelte markup or breaks a [`<Section>` rule](/catalog-files#sections), with the message of that build error; its `sections` are then empty |
-| `uncataloged[]`           | `.svelte` files in the scanned directories with no catalog file next to them                                                                                                      |
+| `uncataloged[]`           | `.svelte` files in the scanned directories with no catalog file next to them, leaving out the same files as the [top page](/catalog-ui#top-page)                                  |
 | `tailwind`                | `null` when no [Tailwind CSS entry](/tailwind) was found (or Tailwind is missing or v3), else one object per entry, described below                                               |
 
 Each `tailwind` object has:
