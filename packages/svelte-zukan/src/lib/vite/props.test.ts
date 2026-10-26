@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { normalizePath } from 'vite';
@@ -247,6 +247,23 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
     ]);
     // a package does not change while the dev server runs
     expect(found.files).toEqual([]);
+  });
+
+  it('reads a workspace package afresh and reports its files, like the project files', () => {
+    write(
+      'packages/ui/package.json',
+      JSON.stringify({ name: '@acme/ui', exports: { '.': { types: './src/index.ts' } } })
+    );
+    const types = write('packages/ui/src/index.ts', 'export type UiProps = { size?: number };\n');
+    mkdirSync(join(tmp, 'node_modules/@acme'), { recursive: true });
+    // a junction, as pnpm links a workspace package on Windows
+    symlinkSync(join(tmp, 'packages/ui'), join(tmp, 'node_modules/@acme/ui'), 'junction');
+    const file = component("  import type { UiProps } from '@acme/ui';\n  let { size }: UiProps = $props();");
+    expect(read(file)!.props.map((p) => [p.name, p.type])).toEqual([['size', 'number']]);
+    writeFileSync(types, 'export type UiProps = { size?: string };\n');
+    const found = read(file)!;
+    expect(found.props.map((p) => [p.name, p.type])).toEqual([['size', 'string']]);
+    expect(found.files).toEqual([types]);
   });
 
   it('reads the types entry of a package root and leaves a package without types untyped', () => {

@@ -80,7 +80,7 @@ const isFile = (file: string) => existsSync(file) && statSync(file).isFile();
 
 const isRelative = (spec: string) => spec.startsWith('./') || spec.startsWith('../');
 
-/** the declaration file of a bare import, from the `types` condition of the package's `exports`, or its `types` */
+/** the types file of a bare import, from the `types` condition of the package's `exports`, or its `types` */
 function resolvePackage(from: string, spec: string): string | null {
   const [, name, sub = ''] = spec.match(/^((?:@[^/]+\/)?[^/]+)(\/.+)?$/) ?? [];
   const dir = name ? findPackage(name, dirname(from)) : null;
@@ -113,7 +113,8 @@ function resolvePackage(from: string, spec: string): string | null {
   while (entry && typeof entry === 'object') entry = entry.types ?? entry.import ?? entry.default;
   if (typeof entry === 'string' && star !== null) entry = entry.replaceAll('*', star);
   if (entry === undefined && !exports) entry = sub ? `.${sub}.d.ts` : (manifest.types ?? manifest.typings);
-  const file = typeof entry === 'string' && /\.d\.[cm]?ts$/.test(entry) ? resolve(dir, entry) : null;
+  // a workspace package often points at its source `.ts` rather than a built `.d.ts`
+  const file = typeof entry === 'string' && /\.[cm]?ts$/.test(entry) ? resolve(dir, entry) : null;
   return file && isFile(file) ? normalizePath(file) : null;
 }
 
@@ -146,8 +147,8 @@ function readScope(file: string, pkg: boolean): Scope | null {
 }
 
 /**
- * Package files by path, across calls: a declaration file such as `svelte/elements` is large, and every component
- * typed with it reads it. A package's files do not change while the dev server runs; an upgrade means a restart.
+ * Installed package files by path, across calls: a declaration file such as `svelte/elements` is large, and every
+ * component typed with it reads it. They do not change while the dev server runs; an upgrade means a restart.
  */
 const packageScopes = new Map<string, Scope | null>();
 
@@ -222,11 +223,13 @@ export function extractProps(
       const file = resolveImport(scope.file, from);
       if (!file) continue;
       const pkg = scope.package || !isRelative(from);
-      const cache = pkg ? packageScopes : scopes;
+      // a workspace package links outside `node_modules`: its files are the project's own, edited while it runs
+      const installed = pkg && file.includes('/node_modules/');
+      const cache = installed ? packageScopes : scopes;
       if (!cache.has(file)) cache.set(file, readScope(file, pkg));
       const found = cache.get(file);
       if (!found) continue;
-      if (!pkg) files.add(file);
+      if (!installed) files.add(file);
       const result = lookup(found, target, depth + 1, star);
       if (result) return result;
     }
