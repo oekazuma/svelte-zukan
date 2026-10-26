@@ -53,7 +53,6 @@ Put `<Name>.zukan.svelte` next to the component, not next to the story file: sto
 
 - `/__zukan/catalog.json`: every component from step 1 is there with no `error`, and its sections include every story name from step 1 (sections you added for control values come on top)
 - `uncataloged[]`: components that had no story before. List them for the user rather than writing catalog files they did not ask for
-- While the story files stay, the `*.stories.svelte` and `*.story.svelte` files in a scanned directory are in `uncataloged[]` too: they are not components, so leave them out of that list
 - In the report, name what has no equivalent: each `play` function (an interaction test), controls, and addons. The accessibility addon's job is done by the catalog's own check
 
 ## 6. Remove the old tool only when asked
