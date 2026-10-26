@@ -6,7 +6,7 @@ sidebar:
 
 svelte-zukan は素の Vite + Svelte でも SvelteKit 3 以上でも動きます。Vite 8 以上、Svelte 5.46.4 以上、Node 22.17 以上が必要です。Vite 専用のフック（`configureServer`、`hotUpdate`、`buildApp`）を使うため、Vite 以外のバンドラーでは動きません。
 
-AI のコーディングエージェントを使っているなら、`npx skills add oekazuma/svelte-zukan` で[スキル](/ja/ai-agents#スキル)を入れて、svelte-zukan の導入を頼めます。エージェントはこのページの手順に沿って、プロジェクトに合ったオプションを選び、カタログファイルと説明を書きます。
+AI のコーディングエージェントを使っているなら、`npx skills add oekazuma/svelte-zukan` で[エージェントスキル](/ja/skills)を入れて、svelte-zukan の導入を頼めます。エージェントはこのページの手順に沿って、プロジェクトに合ったオプションを選び、カタログファイルと説明を書きます。
 
 ## インストール
 
@@ -92,7 +92,7 @@ Vite の `base` や SvelteKit の `paths.base` を設定しているときは、
   <Card title="設定" icon="list" href="/ja/options">
     `zukan()` のすべてのオプション。
   </Card>
-  <Card title="AI エージェントと使う" icon="bot" href="/ja/ai-agents">
-    スキル、`catalog.json`、WebMCP のツール。
+  <Card title="エージェントスキル" icon="bot" href="/ja/skills">
+    Claude Code、Cursor、Codex に、導入、カタログファイルの作成、Storybook からの移行を任せる。
   </Card>
 </CardGroup>

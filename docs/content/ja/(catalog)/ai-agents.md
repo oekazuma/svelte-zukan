@@ -4,31 +4,11 @@ sidebar:
   order: 5
 ---
 
-AI のコーディングエージェントは、ブラウザーを使わずに svelte-zukan を導入し、カタログファイルを書いて確かめられます。いちばん手早いのは、次に説明するスキルを使う方法です。ほかにも svelte-zukan は、テキストで読めるドキュメントと、データとしてのカタログ（ブラウザーでは WebMCP のツールとしても）を用意しています。
+AI のコーディングエージェントは、ブラウザーを使わずに svelte-zukan を導入し、カタログファイルを書いて確かめられます。いちばん手早いのは、[エージェントスキル](/ja/skills)を使う方法です。ほかにも svelte-zukan は、テキストで読めるドキュメントと、データとしてのカタログ（ブラウザーでは WebMCP のツールとしても）を用意しています。
 
 ## スキル
 
-svelte-zukan には、Claude Code、Cursor、Codex など [Agent Skills](https://agentskills.io) を読むエージェント向けのスキルがあります。これを入れると、エージェントはカタログのないプロジェクトから、説明のそろったカタログまでを作れます。プロジェクトに合ったオプションで svelte-zukan を導入し（モノレポも含みます）、コンポーネントごとにカタログファイルを書き、props の JSDoc と `<Name>.zukan.md` ファイルで説明を付け、`catalog.json` で結果を確かめます。[skills CLI](https://github.com/vercel-labs/skills) でインストールします。
-
-```sh
-npx skills add oekazuma/svelte-zukan
-```
-
-あとは、ふだんの言葉で頼むだけです。たとえば次のように頼みます。
-
-- 「このプロジェクトに svelte-zukan を入れて、`src/lib` のコンポーネントをカタログに載せて」
-- 「新しく作った `DatePicker` のカタログファイルと説明を書いて」
-- 「Button のセクションでアクセシビリティ検査をして、違反を直して」
-
-もう 1 つのスキル `migrate-svelte-zukan` は、Storybook や Histoire からカタログを移します。ストーリーはそれぞれ `<Section>` になり、`argTypes` の説明は props の JSDoc に、ストーリーファイルの説明は `<Name>.zukan.md` になります。元の環境は、エージェントに削除を頼むまで残ります。`play` 関数のあるストーリーは、その操作テストをどうするか決めるまで残します。たとえば「Storybook のストーリーとドキュメントを svelte-zukan に移して」と頼みます。
-
-CLI が 2 つのスキルのどれを、どのエージェントに入れるかを尋ね、プロジェクト内のそれぞれのスキルのディレクトリに置きます。スキルは `--skill` で選べます（例: `--skill svelte-zukan`）。エージェントは `-a` で選べます（例: `-a claude-code`）。`-g` を付けると、すべてのプロジェクトで使えるように入ります。
-
-npm のパッケージにも同じスキルが `node_modules/svelte-zukan/skills/` に入っていて、インストールしたバージョンに合っています。これを自分でエージェントのスキルのディレクトリにコピーして使うこともできます。
-
-```sh
-mkdir -p .claude/skills && cp -r node_modules/svelte-zukan/skills/* .claude/skills/
-```
+svelte-zukan には 2 つのエージェントスキルが付いています。svelte-zukan の導入と、カタログファイルを書いて説明を付けて確かめるための `svelte-zukan` と、Storybook や Histoire からカタログを移すための `migrate-svelte-zukan` です。それぞれの内容とインストール方法は[エージェントスキル](/ja/skills)にまとめています。
 
 ## テキストで読めるドキュメント
 
@@ -84,15 +64,3 @@ dev サーバーは `/__zukan/catalog.json` を返します。`build: true` で 
 | `list_tailwind_tokens` | Tailwind CSS のデータがあるときだけ使えます。`category` を省くと、エントリーごとにカテゴリーとトークンの数を返します。カテゴリーの ID（`background-color`、`padding`、`font-size` など）を渡すとそのトークンを、`full-config` を渡すとすべてのテーマ変数を `{ 変数: 値 }` の形で、`tokens` ではなく `variables` に入れて返します。`query` は、クラス名・変数名・値のどれかにその文字を含むものだけに絞ります |
 
 WebMCP に対応していないブラウザーではツールは使われず、そのためのコードも読み込みません。
-
-## AGENTS.md に書く例
-
-`AGENTS.md` や `CLAUDE.md` を読むエージェントには数行書いておけば足ります。
-
-```md
-## Component catalog
-
-Components are cataloged with svelte-zukan. When you add or change a component in `src/lib`, add or update
-`<Name>.zukan.svelte` next to it. Follow `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md`, and check the
-result in `/__zukan/catalog.json` on the dev server.
-```
