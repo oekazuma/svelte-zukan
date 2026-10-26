@@ -20,12 +20,14 @@ npx skills add oekazuma/svelte-zukan
 - 「新しく作った `DatePicker` のカタログファイルと説明を書いて」
 - 「Button のセクションでアクセシビリティ検査をして、違反を直して」
 
-CLI がどのエージェントに入れるかを尋ね、プロジェクト内のそれぞれのスキルのディレクトリに置きます。エージェントは `-a` で選べます（例: `-a claude-code`）。`-g` を付けると、すべてのプロジェクトで使えるように入ります。
+もう 1 つのスキル `migrate-svelte-zukan` は、Storybook や Histoire からカタログを移します。ストーリーはそれぞれ `<Section>` になり、`argTypes` の説明は props の JSDoc に、ストーリーファイルの説明は `<Name>.zukan.md` になります。元の環境は、エージェントに削除を頼むまで残ります。`play` 関数のあるストーリーは、その操作テストをどうするか決めるまで残します。たとえば「Storybook のストーリーとドキュメントを svelte-zukan に移して」と頼みます。
 
-npm のパッケージにも同じスキルが `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md` に入っていて、インストールしたバージョンに合っています。このフォルダーを自分でエージェントのスキルのディレクトリにコピーして使うこともできます。
+CLI が 2 つのスキルのどれを、どのエージェントに入れるかを尋ね、プロジェクト内のそれぞれのスキルのディレクトリに置きます。スキルは `--skill` で選べます（例: `--skill svelte-zukan`）。エージェントは `-a` で選べます（例: `-a claude-code`）。`-g` を付けると、すべてのプロジェクトで使えるように入ります。
+
+npm のパッケージにも同じスキルが `node_modules/svelte-zukan/skills/` に入っていて、インストールしたバージョンに合っています。これを自分でエージェントのスキルのディレクトリにコピーして使うこともできます。
 
 ```sh
-mkdir -p .claude/skills && cp -r node_modules/svelte-zukan/skills/svelte-zukan .claude/skills/
+mkdir -p .claude/skills && cp -r node_modules/svelte-zukan/skills/* .claude/skills/
 ```
 
 ## テキストで読めるドキュメント

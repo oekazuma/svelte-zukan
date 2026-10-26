@@ -20,12 +20,14 @@ Then ask in your own words, for example:
 - "Add a catalog file and docs for the new `DatePicker`"
 - "Run the accessibility check on the Button sections and fix the violations"
 
-The CLI asks which of your agents to install it for and puts it in each one's skill directory in your project. Choose agents with `-a` (for example `-a claude-code`), or add `-g` to install it for all your projects.
+A second skill, `migrate-svelte-zukan`, moves a catalog from Storybook or Histoire. Each story becomes a `<Section>`, `argTypes` descriptions become JSDoc on the props, and the docs of a story file become its `<Name>.zukan.md`. The old setup stays until you ask the agent to remove it, and a story with a `play` function is kept until you decide what to do with that interaction test. Ask, for example, "Migrate our Storybook stories and docs to svelte-zukan".
 
-The npm package ships the same skill, at `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md`, matching the version you installed. You can also copy that folder to your agent's skill directory yourself:
+The CLI asks which of the two skills to install and for which of your agents, and puts them in each one's skill directory in your project. Choose skills with `--skill` (for example `--skill svelte-zukan`). Choose agents with `-a` (for example `-a claude-code`), or add `-g` to install it for all your projects.
+
+The npm package ships the same skills, in `node_modules/svelte-zukan/skills/`, matching the version you installed. You can also copy them to your agent's skill directory yourself:
 
 ```sh
-mkdir -p .claude/skills && cp -r node_modules/svelte-zukan/skills/svelte-zukan .claude/skills/
+mkdir -p .claude/skills && cp -r node_modules/svelte-zukan/skills/* .claude/skills/
 ```
 
 ## The docs as text
