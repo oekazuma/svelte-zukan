@@ -52,3 +52,7 @@ Storybook does much more than a catalog. Pick it if you need any of these:
 - Components from several frameworks in one catalog
 - SvelteKit 2, Vite 7 or earlier, or a bundler other than Vite
 - Per-story values for SvelteKit's `page` and other `$app/*` modules
+
+## Moving from Storybook
+
+The [`migrate-svelte-zukan` skill](/ai-agents#the-skill) lets an AI agent do the move. Each story becomes a `<Section>`, `argTypes` descriptions become JSDoc on the props, and the MDX prose becomes a `.zukan.md` file. Storybook stays in place until you ask the agent to remove it, and a story with a `play` function is kept until you decide what to do with that interaction test.

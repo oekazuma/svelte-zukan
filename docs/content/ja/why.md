@@ -52,3 +52,7 @@ Storybook はカタログよりずっと多くのことができます。次の�
 - 複数のフレームワークのコンポーネントを 1 つのカタログにまとめること
 - SvelteKit 2、Vite 7 以前、または Vite 以外のバンドラー
 - ストーリーごとに、SvelteKit の `page` などの `$app/*` の値を変えること
+
+## Storybook から移る
+
+[`migrate-svelte-zukan` スキル](/ja/ai-agents#スキル)を使うと、移行を AI エージェントに任せられます。ストーリーはそれぞれ `<Section>` になり、`argTypes` の説明は props の JSDoc に、MDX の本文は `.zukan.md` ファイルになります。Storybook は、エージェントに削除を頼むまで残ります。`play` 関数のあるストーリーは、その操作テストをどうするか決めるまで残します。
