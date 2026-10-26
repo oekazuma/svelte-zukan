@@ -264,6 +264,25 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
     ]);
   });
 
+  it('resolves a pattern in exports and an .mjs re-export of a declaration file', () => {
+    write(
+      'node_modules/kit/package.json',
+      JSON.stringify({
+        exports: { './*': { types: './dist/*.d.ts' }, './forms/*.js': { types: './dist/forms/*/index.d.mts' } }
+      })
+    );
+    write('node_modules/kit/dist/card.d.ts', 'export type CardProps = { padded?: boolean };\n');
+    write('node_modules/kit/dist/forms/field/index.d.mts', "export type { FieldProps } from './props.mjs';\n");
+    write('node_modules/kit/dist/forms/field/props.d.mts', 'export type FieldProps = { label?: string };\n');
+    const file = component(
+      "  import type { CardProps } from 'kit/card';\n  import type { FieldProps } from 'kit/forms/field.js';\n  let { padded, label }: CardProps & FieldProps = $props();"
+    );
+    expect(read(file)!.props.map((p) => [p.name, p.type])).toEqual([
+      ['padded', 'boolean'],
+      ['label', 'string']
+    ]);
+  });
+
   it('follows the re-exports of a barrel', () => {
     const button = write('lib/button.ts', 'export type ButtonProps = { label: string };\n');
     const extra = write('lib/extra.ts', 'export type Extra = { hint?: string };\n');

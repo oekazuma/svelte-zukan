@@ -97,8 +97,21 @@ function resolvePackage(from: string, spec: string): string | null {
     exports && typeof exports === 'object' && !Object.keys(exports).some((k) => k.startsWith('.'))
       ? { '.': exports }
       : exports;
-  let entry = map && typeof map === 'object' ? map[`.${sub}`] : undefined;
+  const path = `.${sub}`;
+  let entry = map && typeof map === 'object' ? map[path] : undefined;
+  let star: string | null = null;
+  // a pattern such as `./*`: the longest prefix that matches wins, as in Node
+  if (entry === undefined && map && typeof map === 'object')
+    for (const key of Object.keys(map).sort((a, b) => b.indexOf('*') - a.indexOf('*'))) {
+      const [prefix, suffix] = key.split('*');
+      if (suffix === undefined || !path.startsWith(prefix) || !path.endsWith(suffix)) continue;
+      if (path.length < prefix.length + suffix.length) continue;
+      entry = map[key];
+      star = path.slice(prefix.length, path.length - suffix.length);
+      break;
+    }
   while (entry && typeof entry === 'object') entry = entry.types ?? entry.import ?? entry.default;
+  if (typeof entry === 'string' && star !== null) entry = entry.replaceAll('*', star);
   if (entry === undefined && !exports) entry = sub ? `.${sub}.d.ts` : (manifest.types ?? manifest.typings);
   const file = typeof entry === 'string' && /\.d\.[cm]?ts$/.test(entry) ? resolve(dir, entry) : null;
   return file && isFile(file) ? normalizePath(file) : null;
@@ -108,9 +121,10 @@ function resolvePackage(from: string, spec: string): string | null {
 function resolveImport(from: string, spec: string): string | null {
   if (!isRelative(spec)) return resolvePackage(from, spec);
   const base = resolve(dirname(from), spec);
-  const stem = base.replace(/\.js$/, '');
-  for (const c of [base, `${stem}.ts`, `${stem}.d.ts`, `${base}.ts`, `${base}.d.ts`, `${base}/index.ts`])
-    if (/\.(ts|svelte)$/.test(c) && isFile(c)) return normalizePath(c);
+  // `./props.mjs` is declared by `./props.mts` or `./props.d.mts`
+  const [, stem = base, m = ''] = base.match(/^(.*)\.([cm]?)js$/) ?? [];
+  for (const c of [base, `${stem}.${m}ts`, `${stem}.d.${m}ts`, `${base}.ts`, `${base}.d.ts`, `${base}/index.ts`])
+    if (/\.([cm]?ts|svelte)$/.test(c) && isFile(c)) return normalizePath(c);
   return null;
 }
 
