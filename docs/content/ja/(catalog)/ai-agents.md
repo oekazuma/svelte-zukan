@@ -51,7 +51,7 @@ dev サーバーは `/__zukan/catalog.json` を返します。`build: true` で 
 | `components[].propsType`  | 一覧で読めない Props の型（パッケージの型など）。ソースに書かれたとおりの文字列で、なければ `null`                                                                                                       |
 | `components[].sections[]` | セクションごとの `title`、コード表示と同じ `code`、プレビューのページのハッシュ `preview`                                                                                                                |
 | `components[].error`      | カタログファイルが素の Svelte として読めない、または [`<Section>` の決まり](/ja/catalog-files#セクション)に反しているときに、そのビルドエラーのメッセージが入ります。このとき `sections` は空です        |
-| `uncataloged[]`           | 探索するディレクトリにある `.svelte` ファイルのうち、隣にカタログファイルがないもの                                                                                                                      |
+| `uncataloged[]`           | 探索するディレクトリにある `.svelte` ファイルのうち、隣にカタログファイルがないもの。[トップページ](/ja/catalog-ui#トップページ)と同じファイルは含めません                                               |
 | `tailwind`                | [Tailwind CSS のエントリー](/ja/tailwind)が 1 つも見つからなかったとき（Tailwind が入っていない、または v3 のときも）は `null`。読み込めたときはエントリーごとのオブジェクトで、中身は下の表のとおりです |
 
 `tailwind` のオブジェクトには次のフィールドがあります。

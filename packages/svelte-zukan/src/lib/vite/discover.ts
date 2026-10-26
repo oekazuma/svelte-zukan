@@ -102,13 +102,14 @@ export function listCatalog(groups: CatalogGroup[], suffix: string): CatalogItem
 
 /**
  * Whether `rel`, a `.svelte` file relative to the scanned directory `dir`, is a component of the library: SvelteKit's
- * route files (`+page.svelte`), tests, and `routes/` under a scanned `src` are not.
+ * route files (`+page.svelte`), tests, Storybook and Histoire stories (`.stories.svelte`, `.story.svelte`), and `routes/`
+ * under a scanned `src` are not.
  */
 export function isComponentFile(dir: string, rel: string) {
   const base = rel.slice(rel.lastIndexOf('/') + 1);
   return (
     !base.startsWith('+') &&
-    !/\.(test|spec)\.svelte$/.test(base) &&
+    !/\.(test|spec|stories|story)\.svelte$/.test(base) &&
     !rel.split('/').includes('node_modules') &&
     !(dir.endsWith('/src') && rel.startsWith('routes/'))
   );

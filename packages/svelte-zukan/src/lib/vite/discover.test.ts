@@ -339,6 +339,8 @@ describe('listUncataloged', () => {
     write('app/src/lib/Card.svelte');
     write('app/src/lib/forms/Input.svelte');
     write('app/src/lib/Card.test.svelte');
+    write('app/src/lib/Card.stories.svelte');
+    write('app/src/lib/Card.story.svelte');
     write('app/src/routes/+page.svelte');
     write('app/src/routes/Header.svelte');
     write('app/src/lib/node_modules/x/X.svelte');
