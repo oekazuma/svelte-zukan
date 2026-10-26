@@ -88,18 +88,17 @@ Put `<Name>.zukan.svelte` next to `<Name>.svelte` (the suffix can differ: check 
 
 A component's docs have two parts, each in its own place.
 
-Each prop gets a JSDoc comment on its type in the component. The props table on the detail page reads the name, type and default from the source and the description from this comment. Adding the comments changes no behaviour, so add them when you document a component. A prop that comes only from a package type, such as `children` from `HTMLButtonAttributes`, has no comment to read: declare it in the component's own type, with the same type, and comment it there:
+Each prop gets a JSDoc comment on its type in the component. The props table on the detail page reads the name, type and default from the source and the description from this comment. Adding the comments changes no behaviour, so add them when you document a component. A prop that comes only from a package type, such as `children` from `HTMLButtonAttributes`, gets its type from the package but rarely a comment: comment it where it is destructured, which the table reads when the type has no comment:
 
 ```ts
 let {
   variant = 'primary',
+  /** The label: a verb for what the button does, such as "Save changes" */
   children,
   ...rest
 }: HTMLButtonAttributes & {
   /** `primary` for the main action on a screen, `danger` for one that deletes data */
   variant?: 'primary' | 'secondary' | 'danger';
-  /** The label: a verb for what the button does, such as "Save changes" */
-  children?: Snippet;
 } = $props();
 ```
 

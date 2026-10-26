@@ -150,8 +150,8 @@
                     <tr role="row">
                       <td role="cell">
                         <code class="name">{p.name}</code>
-                        {#if p.required}<span class="flag">{t.required}</span>{/if}
-                        {#if p.bindable}<span class="flag">{t.bindable}</span>{/if}
+                        {#if p.required}<span class="flag required">{t.required}</span>{/if}
+                        {#if p.bindable}<span class="flag bindable">{t.bindable}</span>{/if}
                       </td>
                       <!-- a union wraps between its members, never inside one such as `() => void` -->
                       <!-- the separator is a mustache because Svelte trims the spaces of plain text at the edges of a block, and those spaces are where the union wraps -->
@@ -490,9 +490,22 @@
   }
 
   .flag {
+    display: inline-block;
     margin-left: 6px;
-    color: var(--_muted);
-    font-size: 12px;
+    padding: 0 6px;
+    border: 1px solid;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 16px;
+    vertical-align: 1px;
+  }
+
+  .required {
+    color: var(--_danger);
+  }
+
+  .bindable {
+    color: var(--_accent);
   }
 
   .props-type {
