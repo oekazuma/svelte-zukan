@@ -5,7 +5,7 @@ description: Move a Svelte project's component catalog from Storybook or Histoir
 
 # migrate-svelte-zukan
 
-Each story file becomes a svelte-zukan catalog file, each story a `<Section>`, and the docs move into the component's JSDoc and a `.zukan.md` file. For setting up svelte-zukan, writing catalog files and checking them, follow the svelte-zukan skill; if it is not installed, read `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md`.
+Each story file becomes a svelte-zukan catalog file, each story a `<Section>`, and the docs move into the component's JSDoc and a `.zukan.md` file. For setting up svelte-zukan, writing catalog files and checking them, follow the svelte-zukan skill. If that skill is not installed, add `svelte-zukan` as a dev dependency first (with the package manager of the lockfile) and read `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md`, which ships in the package; https://oekazuma.github.io/svelte-zukan/llms-full.txt has the full docs.
 
 ## 1. Take stock
 
@@ -29,7 +29,7 @@ Follow the svelte-zukan skill's setup, carrying over what the old tool had:
 
 ## 3. Write a catalog file for each story file
 
-Put `<Name>.zukan.svelte` next to the component, not next to the story file: stories often live in a separate `src/stories/`.
+Put `<Name>.zukan.svelte` next to the component, not next to the story file: stories often live in a separate `src/stories/`. When two story files show the same component, write all their stories into that one catalog file.
 
 | In the story file                                                           | In the catalog file                                                                        |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
@@ -51,7 +51,7 @@ Put `<Name>.zukan.svelte` next to the component, not next to the story file: sto
 
 ## 5. Check and report
 
-- `/__zukan/catalog.json`: every component from step 1 is there with no `error`, and its section titles are its story names from step 1
+- `/__zukan/catalog.json`: every component from step 1 is there with no `error`, and its sections include every story name from step 1 (sections you added for control values come on top)
 - `uncataloged[]`: components that had no story before. List them for the user rather than writing catalog files they did not ask for
 - While the story files stay, the `*.stories.svelte` and `*.story.svelte` files in a scanned directory are in `uncataloged[]` too: they are not components, so leave them out of that list
 - In the report, name what has no equivalent: each `play` function (an interaction test), controls, and addons. The accessibility addon's job is done by the catalog's own check
