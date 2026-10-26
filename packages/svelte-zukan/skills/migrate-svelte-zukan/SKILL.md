@@ -29,17 +29,17 @@ Follow the svelte-zukan skill's setup, carrying over what the old tool had:
 
 ## 3. Write a catalog file for each story file
 
-Put `<Name>.zukan.svelte` next to the component, not next to the story file: stories often live in a separate `src/stories/`. When two story files show the same component, write all their stories into that one catalog file.
+Put `<Name>.zukan.svelte` next to the component, not next to the story file: stories often live in a separate `src/stories/`. When two story files show the same component, write all their stories into that one catalog file. Section titles must stay unique and static: when two stories share a name, add what tells them apart (`Primary (compact)`), and name a section for a control value after that value (`Danger, not dismissible`).
 
-| In the story file                                                           | In the catalog file                                                                        |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Each story or variant, including one with a `play` function                 | A `<Section>` with the same name                                                           |
-| The meta's `args` and the story's `args`                                    | Props written on the component, the story's winning: `<Button primary label="Button" />`   |
-| A `template` snippet, `render`, or a CSF `render`                           | A top-level `{#snippet}` that the sections render                                          |
-| A story's own decorator                                                     | The same wrapping markup inside that section                                               |
-| Histoire state and controls (`Hst.Text`, `Hst.Checkbox`, …)                 | `$state` in the `<script>`, and one section for each control value worth seeing            |
-| `fn()`, `action()`, `logEvent()`                                            | Leave the handler out, or show its effect in the section with `$state` ("Clicked 2 times") |
-| Svelte 4 syntax in Histoire stories (`export let Hst`, `let:`, `on:`, `$:`) | Svelte 5: runes, snippets and `onclick`                                                    |
+| In the story file                                                           | In the catalog file                                                                            |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Each story or variant, including one with a `play` function                 | A `<Section>` with the same name                                                               |
+| The `args` of `preview.*`, of the meta and of the story                     | Props written on the component, the more specific winning: `<Button primary label="Button" />` |
+| A `template` snippet, `render`, or a CSF `render`                           | A top-level `{#snippet}` that the sections render                                              |
+| A story's own decorator                                                     | The same wrapping markup inside that section                                                   |
+| Histoire state and controls (`Hst.Text`, `Hst.Checkbox`, …)                 | `$state` in the `<script>`, and one section for each control value worth seeing                |
+| `fn()`, `action()`, `logEvent()`                                            | Leave the handler out, or show its effect in the section with `$state` ("Clicked 2 times")     |
+| Svelte 4 syntax in Histoire stories (`export let Hst`, `let:`, `on:`, `$:`) | Svelte 5: runes, snippets and `onclick`                                                        |
 
 ## 4. Move the docs
 
@@ -51,7 +51,7 @@ Put `<Name>.zukan.svelte` next to the component, not next to the story file: sto
 
 ## 5. Check and report
 
-- `/__zukan/catalog.json`: every component from step 1 is there with no `error`, and its sections include every story name from step 1 (sections you added for control values come on top)
+- `/__zukan/catalog.json`: every component from step 1 is there with no `error`, and every story from step 1 has its section, under its name or the name you gave it to keep titles unique (sections you added for control values come on top)
 - `uncataloged[]`: components that had no story before. List them for the user rather than writing catalog files they did not ask for
 - In the report, name what has no equivalent: each `play` function (an interaction test), controls, and addons. The accessibility addon's job is done by the catalog's own check
 
