@@ -56,7 +56,7 @@ dev サーバーを起動して `/__zukan/` を開きます。詳しくは[ク�
 
 ## AI エージェントと使う
 
-[スキル](https://oekazuma.github.io/svelte-zukan/ja/ai-agents/#スキル)を入れて、エージェント（Claude Code、Cursor、Codex など）に svelte-zukan の導入とコンポーネントのカタログ作りを頼めます。
+[エージェントスキル](https://oekazuma.github.io/svelte-zukan/ja/skills/)を入れて、エージェント（Claude Code、Cursor、Codex など）に svelte-zukan の導入とコンポーネントのカタログ作り、Storybook からの移行を頼めます。
 
 ```sh
 npx skills add oekazuma/svelte-zukan

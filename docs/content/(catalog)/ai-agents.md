@@ -4,31 +4,11 @@ sidebar:
   order: 5
 ---
 
-An AI coding agent can set up svelte-zukan, write catalog files and check them without a browser. The quickest way to get there is the skill below. svelte-zukan also gives an agent these docs as text and the catalog as data (also as WebMCP tools in the browser).
+An AI coding agent can set up svelte-zukan, write catalog files and check them without a browser. The quickest way to get there is the [agent skills](/skills). svelte-zukan also gives an agent these docs as text and the catalog as data (also as WebMCP tools in the browser).
 
-## The skill
+## The skills
 
-svelte-zukan has a skill for agents that read [Agent Skills](https://agentskills.io), such as Claude Code, Cursor and Codex. With it, an agent takes a project from no catalog to a documented one: it adds svelte-zukan with the options the project needs (a monorepo included), writes a catalog file for each component, documents each component with JSDoc on its props and a `<Name>.zukan.md` file, and checks the result in `catalog.json`. Install it with the [skills CLI](https://github.com/vercel-labs/skills):
-
-```sh
-npx skills add oekazuma/svelte-zukan
-```
-
-Then ask in your own words, for example:
-
-- "Set up svelte-zukan in this project and catalog the components in `src/lib`"
-- "Add a catalog file and docs for the new `DatePicker`"
-- "Run the accessibility check on the Button sections and fix the violations"
-
-A second skill, `migrate-svelte-zukan`, moves a catalog from Storybook or Histoire. Each story becomes a `<Section>`, `argTypes` descriptions become JSDoc on the props, and the docs of a story file become its `<Name>.zukan.md`. The old setup stays until you ask the agent to remove it, and a story with a `play` function is kept until you decide what to do with that interaction test. Ask, for example, "Migrate our Storybook stories and docs to svelte-zukan".
-
-The CLI asks which of the two skills to install and for which of your agents, and puts them in each one's skill directory in your project. Choose skills with `--skill` (for example `--skill svelte-zukan`). Choose agents with `-a` (for example `-a claude-code`), or add `-g` to install it for all your projects.
-
-The npm package ships the same skills, in `node_modules/svelte-zukan/skills/`, matching the version you installed. You can also copy them to your agent's skill directory yourself:
-
-```sh
-mkdir -p .claude/skills && cp -r node_modules/svelte-zukan/skills/* .claude/skills/
-```
+svelte-zukan ships two agent skills: `svelte-zukan`, to set svelte-zukan up and to write, document and check catalog files, and `migrate-svelte-zukan`, to move a catalog from Storybook or Histoire. [Agent skills](/skills) describes each one and how to install them.
 
 ## The docs as text
 
@@ -84,15 +64,3 @@ In a browser that implements [WebMCP](https://webmachinelearning.github.io/webmc
 | `list_tailwind_tokens` | With Tailwind CSS data only. Without a `category`, lists each entry's categories and their token counts. With one of the category IDs (`background-color`, `padding`, `font-size`, …), returns its tokens, and with `full-config`, every theme variable as `{ variable: value }` under `variables` instead of `tokens`. `query` keeps the tokens whose class, variable or value contains the text |
 
 Browsers without WebMCP ignore them, and nothing is loaded for them.
-
-## A line for AGENTS.md
-
-For an agent that reads `AGENTS.md` or `CLAUDE.md`, a few lines are enough:
-
-```md
-## Component catalog
-
-Components are cataloged with svelte-zukan. When you add or change a component in `src/lib`, add or update
-`<Name>.zukan.svelte` next to it. Follow `node_modules/svelte-zukan/skills/svelte-zukan/SKILL.md`, and check the
-result in `/__zukan/catalog.json` on the dev server.
-```

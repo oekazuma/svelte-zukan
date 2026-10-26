@@ -42,7 +42,7 @@ Start the dev server and open `/__zukan/`.
 
 ## With an AI agent
 
-This package ships an agent skill. Install it and ask your agent (Claude Code, Cursor, Codex, …) to set up svelte-zukan and catalog your components:
+This package ships [two agent skills](https://oekazuma.github.io/svelte-zukan/skills/). Install them and ask your agent (Claude Code, Cursor, Codex, …) to set up svelte-zukan and catalog your components, or to move your stories from Storybook:
 
 ```sh
 npx skills add oekazuma/svelte-zukan

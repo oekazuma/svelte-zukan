@@ -55,4 +55,4 @@ Storybook does much more than a catalog. Pick it if you need any of these:
 
 ## Moving from Storybook
 
-The [`migrate-svelte-zukan` skill](/ai-agents#the-skill) lets an AI agent do the move. Each story becomes a `<Section>`, `argTypes` descriptions become JSDoc on the props, and the MDX prose becomes a `.zukan.md` file. Storybook stays in place until you ask the agent to remove it, and a story with a `play` function is kept until you decide what to do with that interaction test.
+The [`migrate-svelte-zukan` skill](/skills#migrate-svelte-zukan) lets an AI agent do the move. Each story becomes a `<Section>`, `argTypes` descriptions become JSDoc on the props, and the MDX prose becomes a `.zukan.md` file. Storybook stays in place until you ask the agent to remove it, and a story with a `play` function is kept until you decide what to do with that interaction test.

@@ -55,4 +55,4 @@ Storybook はカタログよりずっと多くのことができます。次の�
 
 ## Storybook から移る
 
-[`migrate-svelte-zukan` スキル](/ja/ai-agents#スキル)を使うと、移行を AI エージェントに任せられます。ストーリーはそれぞれ `<Section>` になり、`argTypes` の説明は props の JSDoc に、MDX の本文は `.zukan.md` ファイルになります。Storybook は、エージェントに削除を頼むまで残ります。`play` 関数のあるストーリーは、その操作テストをどうするか決めるまで残します。
+[`migrate-svelte-zukan` スキル](/ja/skills#migrate-svelte-zukan)を使うと、移行を AI エージェントに任せられます。ストーリーはそれぞれ `<Section>` になり、`argTypes` の説明は props の JSDoc に、MDX の本文は `.zukan.md` ファイルになります。Storybook は、エージェントに削除を頼むまで残ります。`play` 関数のあるストーリーは、その操作テストをどうするか決めるまで残します。
