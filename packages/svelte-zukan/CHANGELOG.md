@@ -1,5 +1,15 @@
 # svelte-zukan
 
+## 0.15.0
+
+### Minor Changes
+
+- b0ef4dd: feat: add the `migrate-svelte-zukan` agent skill, which moves a component catalog from Storybook or Histoire to svelte-zukan.
+
+### Patch Changes
+
+- 9f45837: fix: leave Storybook (`*.stories.svelte`) and Histoire (`*.story.svelte`) story files out of `uncataloged`.
+
 ## 0.14.0
 
 ### Minor Changes
