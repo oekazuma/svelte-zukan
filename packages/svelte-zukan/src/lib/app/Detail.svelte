@@ -57,9 +57,9 @@
   /** the section in view, or the first one, fills the page; again, it goes back */
   export function toggleExpanded() {
     const titles = [...headings.keys()];
-    // the props come after the last section
+    // the props come before the first section
     if (expandedTitle !== null) expandedTitle = null;
-    else expandedTitle = (active === PROPS ? titles.at(-1) : (active ?? titles[0])) ?? null;
+    else expandedTitle = (active === PROPS ? null : active) ?? titles[0] ?? null;
   }
 
   // a link to the URL already shown navigates without a hashchange, so `reveal` does not run
@@ -121,33 +121,6 @@
           <!-- eslint-disable-next-line svelte/no-at-html-tags -->
           <div class="doc">{@html meta.doc}</div>
         {/if}
-        {#if !meta.sections.length}
-          <p class="empty">{t.noSections}</p>
-        {/if}
-        {#each meta.sections as s (s.title)}
-          <h2 use:reveal={section === s.title} use:track={s.title}>
-            <!-- a hash route of this catalog, not a SvelteKit route -->
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-            <a href={formatHash('detail', entry.path, s.title)}>{s.title}</a>
-          </h2>
-          <div class="example">
-            <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
-            <PreviewFrame
-              src={location.pathname + formatHash('preview', entry.path, s.title)}
-              tabHref={location.pathname + formatHash('preview', entry.path, s.title, { theme })}
-              shareUrl={(w) =>
-                location.href.split('#')[0] +
-                formatHash('detail', entry.path, s.title, { width: w ?? undefined, theme })}
-              requestedWidth={section === s.title ? width : undefined}
-              bind:expanded={() => expandedTitle === s.title, (v) => (expandedTitle = v ? s.title : null)}
-              title={s.title}
-              {axe}
-              {theme}
-              labels={t}
-            />
-            <CodeBlock code={s.code} labels={t} />
-          </div>
-        {/each}
         {#if hasProps}
           <h2 id="zukan-props" tabindex="-1" use:track={PROPS}>{t.props}</h2>
           {#if meta.propsType}
@@ -207,6 +180,33 @@
             </div>
           {/if}
         {/if}
+        {#if !meta.sections.length}
+          <p class="empty">{t.noSections}</p>
+        {/if}
+        {#each meta.sections as s (s.title)}
+          <h2 use:reveal={section === s.title} use:track={s.title}>
+            <!-- a hash route of this catalog, not a SvelteKit route -->
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+            <a href={formatHash('detail', entry.path, s.title)}>{s.title}</a>
+          </h2>
+          <div class="example">
+            <!-- the page's own path: "./" drops index.html, and the query is not part of the catalog -->
+            <PreviewFrame
+              src={location.pathname + formatHash('preview', entry.path, s.title)}
+              tabHref={location.pathname + formatHash('preview', entry.path, s.title, { theme })}
+              shareUrl={(w) =>
+                location.href.split('#')[0] +
+                formatHash('detail', entry.path, s.title, { width: w ?? undefined, theme })}
+              requestedWidth={section === s.title ? width : undefined}
+              bind:expanded={() => expandedTitle === s.title, (v) => (expandedTitle = v ? s.title : null)}
+              title={s.title}
+              {axe}
+              {theme}
+              labels={t}
+            />
+            <CodeBlock code={s.code} labels={t} />
+          </div>
+        {/each}
         {#if previous || next}
           <nav class="pager" aria-label="{t.previous} / {t.next}">
             {#if previous}{@render pagerLink(previous, 'prev')}{/if}
@@ -218,17 +218,6 @@
         <nav class="contents" aria-label={t.onThisPage}>
           <p>{t.onThisPage}</p>
           <ul>
-            {#each meta.sections as s (s.title)}
-              <li>
-                <!-- a hash route of this catalog, not a SvelteKit route -->
-                <!-- eslint-disable svelte/no-navigation-without-resolve -->
-                <a
-                  href={formatHash('detail', entry.path, s.title)}
-                  aria-current={active === s.title ? 'location' : undefined}>{s.title}</a
-                >
-                <!-- eslint-enable svelte/no-navigation-without-resolve -->
-              </li>
-            {/each}
             {#if hasProps}
               <li>
                 <!-- the hash stays the catalog route, which a shared or bookmarked URL needs -->
@@ -244,6 +233,17 @@
                 >
               </li>
             {/if}
+            {#each meta.sections as s (s.title)}
+              <li>
+                <!-- a hash route of this catalog, not a SvelteKit route -->
+                <!-- eslint-disable svelte/no-navigation-without-resolve -->
+                <a
+                  href={formatHash('detail', entry.path, s.title)}
+                  aria-current={active === s.title ? 'location' : undefined}>{s.title}</a
+                >
+                <!-- eslint-enable svelte/no-navigation-without-resolve -->
+              </li>
+            {/each}
           </ul>
         </nav>
       {/if}

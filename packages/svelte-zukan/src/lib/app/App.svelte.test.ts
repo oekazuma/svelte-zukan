@@ -419,8 +419,9 @@ describe('App', () => {
     await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(0);
   });
 
+  // the doc keeps every heading below the top third until the test scrolls
   const withProps =
-    (doc: string | null = null) =>
+    (doc = '<div style="height: 1000px"></div>') =>
     () =>
       Promise.resolve({
         default: {
@@ -429,7 +430,17 @@ describe('App', () => {
             { title: 'Two', code: '' }
           ],
           doc,
-          props: [{ name: 'a', type: 'string', default: null, required: true, bindable: false, description: null }],
+          props: [
+            {
+              name: 'a',
+              type: 'string',
+              default: null,
+              required: true,
+              bindable: false,
+              // keeps the first section's heading below the top third when the props heading is at the top
+              description: '<div style="height: 1000px"></div>'
+            }
+          ],
           propsType: null
         }
       });
@@ -442,7 +453,7 @@ describe('App', () => {
     await expect.element(link).toHaveAttribute('aria-current', 'location');
   }
 
-  it('F with the props in view expands the last section', async () => {
+  it('F with the props in view expands the first section', async () => {
     const { props } = setup('#/ui/Card');
     props.catalog[0].meta = withProps();
     const screen = await render(App, { props });
@@ -450,7 +461,7 @@ describe('App', () => {
     try {
       await scrollToProps(screen);
       await userEvent.keyboard('f');
-      await expect.poll(() => document.querySelector('.preview.expanded iframe')?.getAttribute('title')).toBe('Two');
+      await expect.poll(() => document.querySelector('.preview.expanded iframe')?.getAttribute('title')).toBe('One');
     } finally {
       document.body.style.minHeight = '';
     }
@@ -459,8 +470,7 @@ describe('App', () => {
   it('the next page starts with nothing marked or expanded', async () => {
     const props = three();
     props.catalog[1].meta = withProps();
-    // the doc keeps every heading of the next page below the top third
-    props.catalog[2].meta = withProps('<div style="height: 1000px"></div>');
+    props.catalog[2].meta = withProps();
     const screen = await render(App, { props });
     document.body.style.minHeight = '5000px';
     try {

@@ -60,7 +60,7 @@ A button for the main action on a page. Use one per screen.
 
 ## Props table
 
-When `Button.svelte` sits next to `Button.zukan.svelte`, the detail page lists its props below the sections: each name, its type, its default, and its JSDoc comment (rendered as inline Markdown, up to the first `@` tag). Props marked `required` have no `?` and no default; props marked `bindable` default to `$bindable()`.
+When `Button.svelte` sits next to `Button.zukan.svelte`, the detail page lists its props under the [description](#markdown-description) and above the sections: each name, its type, its default, and its JSDoc comment (rendered as inline Markdown, up to the first `@` tag). Props marked `required` have no `?` and no default; props marked `bindable` default to `$bindable()`.
 
 ```svelte
 <!-- src/lib/Button/Button.svelte -->

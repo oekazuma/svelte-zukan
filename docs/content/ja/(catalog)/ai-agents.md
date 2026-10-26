@@ -29,7 +29,7 @@ dev サーバーは `/__zukan/catalog.json` を返します。`build: true` で 
 | `components[].file`       | カタログファイル                                                                                                                                                                                         |
 | `components[].component`  | `Button.zukan.svelte` の隣にある `Button.svelte`。なければ `null`                                                                                                                                        |
 | `components[].doc`        | `.md` ファイルの Markdown。なければ `null`                                                                                                                                                               |
-| `components[].props`      | [Props の一覧](/ja/catalog-files#props-の一覧)。名前、型、既定値、必須か、bind できるか、説明（HTML）                                                                                                    |
+| `components[].props`      | [Props の一覧](/ja/catalog-files#props-の一覧)。名前、型、デフォルト値、必須か、バインド可能か、説明（HTML）                                                                                             |
 | `components[].propsType`  | 一覧で読めない Props の型（パッケージの型など）。ソースに書かれたとおりの文字列で、なければ `null`                                                                                                       |
 | `components[].sections[]` | セクションごとの `title`、コード表示と同じ `code`、プレビューのページのハッシュ `preview`                                                                                                                |
 | `components[].error`      | カタログファイルが素の Svelte として読めない、または [`<Section>` の決まり](/ja/catalog-files#セクション)に反しているときに、そのビルドエラーのメッセージが入ります。このとき `sections` は空です        |
