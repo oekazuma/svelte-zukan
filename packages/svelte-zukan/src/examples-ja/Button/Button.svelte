@@ -17,8 +17,11 @@
     size = 'md',
     loading = false,
     icon,
+    /** ボタンの文言 */
     children,
+    /** クリックを止める。`loading` のあいだも止まる */
     disabled,
+    /** ボタン自身のクラスに足すクラス */
     class: className,
     ...rest
   }: Props = $props();

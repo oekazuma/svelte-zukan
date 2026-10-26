@@ -17,8 +17,11 @@
     size = 'md',
     loading = false,
     icon,
+    /** the label */
     children,
+    /** blocks clicks, as `loading` does */
     disabled,
+    /** added to the button's own classes */
     class: className,
     ...rest
   }: Props = $props();

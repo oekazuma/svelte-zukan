@@ -60,7 +60,7 @@ A button for the main action on a page. Use one per screen.
 
 ## Props table
 
-When `Button.svelte` sits next to `Button.zukan.svelte`, the detail page lists its props under the [description](#markdown-description) and above the sections: each name, its type, its default, and its JSDoc comment (rendered as inline Markdown, up to the first `@` tag). Props marked `required` have no `?` and no default; props marked `bindable` default to `$bindable()`.
+When `Button.svelte` sits next to `Button.zukan.svelte`, the detail page lists its props under the [description](#markdown-description) and above the sections: each name, its type, its default, and its JSDoc comment (rendered as inline Markdown, up to the first `@` tag). A prop whose type has no comment takes the one on its destructuring (`let { /** … */ children }`): that is where to describe a prop that comes from a package type. Props marked `required` have no `?` and no default; props marked `bindable` default to `$bindable()`.
 
 ```svelte
 <!-- src/lib/Button/Button.svelte -->
@@ -84,7 +84,7 @@ When `Button.svelte` sits next to `Button.zukan.svelte`, the detail page lists i
 </button>
 ```
 
-The props are read from the component's source, not by running it. The type can be written inline, or as a type alias or interface declared in the component (an interface's `extends` included). A type imported by a relative path is read too: from a `.ts` file (`./types`, `./types.js`, `./types/index.ts`, with its `export … from` re-exports) or from another component's `<script module>`, following imports up to three files deep. A type the table can not read, such as one from a package (`HTMLButtonAttributes` from `svelte/elements`) or a union (`{ href: string } | { onclick: () => void }`), is shown as written. In an intersection like the one above, the parts it can read still give their props with types (`variant`, `disabled`); the other destructured props (`children`) are listed without types. Editing a file a props type comes from refreshes the table. A component that does not parse, or that has no `$props()`, gets no table. Like the `.md` file, a JSDoc comment is inserted as HTML, so review it like code before you publish the catalog.
+The props are read from the component's source, not by running it. The type can be written inline, or as a type alias or interface declared in the component (an interface's `extends` included). A type imported by a relative path is read too: from a `.ts` file (`./types`, `./types.js`, `./types/index.ts`, with its `export … from` re-exports) or from another component's `<script module>`, following imports up to three files deep. A type from a package (`HTMLButtonAttributes` from `svelte/elements`) is shown by name above the table. Of its members, only the destructured ones are listed, with the type and JSDoc comment from the package's declaration file (the `types` condition of its `exports`, or its `types` field), so `children` above reads `Snippet`; what goes into `...rest` is not listed. A type the table can not read, such as a union (`{ href: string } | { onclick: () => void }`), is shown as written, and the destructured props it would type are listed without types. Editing a file of your project that a props type comes from refreshes the table. A component that does not parse, or that has no `$props()`, gets no table. Like the `.md` file, a JSDoc comment is inserted as HTML, so review it like code before you publish the catalog.
 
 ## Changing the suffix
 

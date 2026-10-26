@@ -202,6 +202,68 @@ describe('extractProps with imported types', () => {
     expect(found.files).toEqual([]);
   });
 
+  it('types the destructured props of a package type, and only those', () => {
+    write('node_modules/ui/package.json', JSON.stringify({ exports: { './elements': { types: './elements.d.ts' } } }));
+    write(
+      'node_modules/ui/elements.d.ts',
+      `export interface DOMAttributes<T extends EventTarget> {
+  children?: import('svelte').Snippet;
+  onclick?: (e: MouseEvent & { currentTarget: T }) => void;
+}
+export interface HTMLAttributes<T extends EventTarget> extends DOMAttributes<T> {
+  class?: string | undefined | null;
+  title?: string | undefined | null;
+}
+export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> {
+  /** blocks the button */
+  disabled?: boolean | undefined | null;
+}
+`
+    );
+    const file = component(
+      "  import type { HTMLButtonAttributes } from 'ui/elements';\n  let {\n    label,\n    /** the label */\n    children,\n    /** ignored: the package's comment wins */\n    disabled = false,\n    class: className,\n    ...rest\n  }: HTMLButtonAttributes & { label: string } = $props();"
+    );
+    const found = read(file)!;
+    expect(found.typeName).toBe('HTMLButtonAttributes');
+    expect(found.props).toEqual([
+      { name: 'label', type: 'string', default: null, required: true, bindable: false, description: null },
+      {
+        name: 'disabled',
+        type: 'boolean | undefined | null',
+        default: 'false',
+        required: false,
+        bindable: false,
+        description: 'blocks the button'
+      },
+      {
+        name: 'class',
+        type: 'string | undefined | null',
+        default: null,
+        required: false,
+        bindable: false,
+        description: null
+      },
+      { name: 'children', type: 'Snippet', default: null, required: false, bindable: false, description: 'the label' }
+    ]);
+    // a package does not change while the dev server runs
+    expect(found.files).toEqual([]);
+  });
+
+  it('reads the types entry of a package root and leaves a package without types untyped', () => {
+    write('node_modules/plain/package.json', JSON.stringify({ types: './index.d.ts' }));
+    write('node_modules/plain/index.d.ts', 'export type Props = { size?: number; color?: string };\n');
+    write('node_modules/js-only/package.json', JSON.stringify({ exports: { '.': './index.js' } }));
+    const file = component(
+      "  import type { Props } from 'plain';\n  import type { Other } from 'js-only';\n  let {\n    size,\n    /** the space between */\n    gap\n  }: Props & Other = $props();"
+    );
+    const found = read(file)!;
+    expect(found.typeName).toBe('Props');
+    expect(found.props.map((p) => [p.name, p.type, p.description])).toEqual([
+      ['size', 'number', null],
+      ['gap', null, 'the space between']
+    ]);
+  });
+
   it('follows the re-exports of a barrel', () => {
     const button = write('lib/button.ts', 'export type ButtonProps = { label: string };\n');
     const extra = write('lib/extra.ts', 'export type Extra = { hint?: string };\n');
