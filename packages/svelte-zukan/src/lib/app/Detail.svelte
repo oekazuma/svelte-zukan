@@ -43,6 +43,8 @@
    * end of the page can not reach the top third, where the observer would mark the one above it
    */
   let pinned = false;
+  /** the reader ended a pin: their scroll marks the heading in the top third, which the observer may never report */
+  let released = false;
   function track(node: HTMLElement, title: string) {
     headings.set(title, node);
     const observer = new IntersectionObserver(
@@ -60,7 +62,17 @@
       }
     };
   }
-  const unpin = () => (pinned = false);
+  // marked on the scroll rather than here: a key or a click that does not scroll must not move the mark off the pin
+  function unpin() {
+    if (pinned) released = true;
+    pinned = false;
+  }
+  function onscroll() {
+    if (!released || pinned) return;
+    released = false;
+    const last = [...headings].findLast(([, h]) => h.getBoundingClientRect().top <= innerHeight * 0.34);
+    if (last) active = last[0];
+  }
 
   let expandedTitle = $state<string | null>(null);
 
@@ -100,7 +112,7 @@
 </script>
 
 <!-- what the reader does to scroll; a scroll event alone would also come from `show` -->
-<svelte:window {onclick} onwheel={unpin} ontouchmove={unpin} onkeydown={unpin} onpointerdown={unpin} />
+<svelte:window {onclick} {onscroll} onwheel={unpin} ontouchmove={unpin} onkeydown={unpin} onpointerdown={unpin} />
 
 {#snippet pagerLink(to: Entry, rel: 'prev' | 'next')}
   <!-- a hash route of this catalog, not a SvelteKit route -->

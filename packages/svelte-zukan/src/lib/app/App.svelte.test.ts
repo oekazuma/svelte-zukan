@@ -608,6 +608,24 @@ describe('App', () => {
     }
   });
 
+  it('scrolling a little from the last section marks the heading already in the top third', async () => {
+    await page.viewport(1280, 1600);
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = withProps();
+    const screen = await render(App, { props });
+    const toc = screen.getByRole('navigation', { name: 'On this page' });
+    await toc.getByRole('link', { name: 'Two' }).click();
+    await frames();
+    await expect.element(toc.getByRole('link', { name: 'Two' })).toHaveAttribute('aria-current', 'location');
+    // a key that does not scroll keeps the mark
+    await userEvent.keyboard('{Shift}');
+    await frames();
+    await expect.element(toc.getByRole('link', { name: 'Two' })).toHaveAttribute('aria-current', 'location');
+    dispatchEvent(new WheelEvent('wheel', { deltaY: -1 }));
+    scrollBy(0, -1);
+    await expect.element(toc.getByRole('link', { name: 'Props' })).toHaveAttribute('aria-current', 'location');
+  });
+
   it('Back onto an in-page anchor of a doc shows the page it was on', async () => {
     const props = three();
     const first = await render(App, { props });
