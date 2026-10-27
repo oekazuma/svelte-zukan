@@ -60,7 +60,7 @@ A button for the main action on a page. Use one per screen.
 
 ## Props の一覧
 
-`Button.zukan.svelte` の隣に `Button.svelte` があれば、詳細ページの[説明](#markdown-の説明)の下、セクションの上に、その props の一覧を出します。一覧には名前、型、デフォルト値、JSDoc コメントが並びます。JSDoc コメントは最初の `@` タグの手前までを、インラインの Markdown として表示します。エディターと同じく、コメント中の HTML は文字のまま表示し、`{@link}` は名前ならコード、URL ならリンクとして表示します。型に JSDoc コメントがない props には、分割代入に書いた JSDoc コメント（`let { /** … */ children }`）を使います。パッケージの型から来る props の説明は、ここに書きます。`?` もデフォルト値もない props には「必須」、デフォルト値が `$bindable()` の props には「バインド可能」と付きます。
+`Button.zukan.svelte` の隣に `Button.svelte` があれば、詳細ページの[説明](#markdown-の説明)の下、セクションの上に、その props の一覧を出します。一覧には名前、型、デフォルト値、JSDoc コメントが並びます。JSDoc コメントは最初の `@` タグの手前までを、インラインの Markdown として表示します。エディターと同じく、コメント中の HTML は文字のまま表示し、`{@link}` は名前ならコード、`http` や `https` の URL ならリンクとして表示します。型に JSDoc コメントがない props には、分割代入に書いた JSDoc コメント（`let { /** … */ children }`）を使います。パッケージの型から来る props の説明は、ここに書きます。`?` もデフォルト値もない props には「必須」、デフォルト値が `$bindable()` の props には「バインド可能」と付きます。
 
 ```svelte
 <!-- src/lib/Button/Button.svelte -->

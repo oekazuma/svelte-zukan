@@ -29,13 +29,22 @@ const keyName = (key: Node) => (key.type === 'Identifier' ? (key.name as string)
 
 // Markdown, but HTML as text, as an editor shows it: an installed package's comment would otherwise render as markup
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const jsdoc = new Marked({ renderer: { html: ({ text }) => escapeHtml(text) } });
+const jsdoc = new Marked({
+  renderer: { html: ({ text }) => escapeHtml(text) },
+  // marked takes the text after `<pre>`, `<code>` or `<script>` as already escaped, as in a raw HTML block
+  walkTokens: (t) => {
+    if (t.type === 'text') t.escaped = false;
+  }
+});
 
-/** `{@link Foo}`, `{@link Foo text}`, `{@link Foo|text}`, as an editor shows them: a URL as a link, a name as code */
+/**
+ * `{@link Foo}`, `{@link Foo text}`, `{@link Foo|text}`, as an editor shows them: a web URL as a link, anything else
+ * as a name, so a `javascript:` target never becomes a link
+ */
 const resolveLinks = (text: string) =>
   text.replace(/\{@link(code|plain)?\s+([^\s|}]+)(?:\s*\|\s*|\s+)?([^}]*)\}/g, (_, kind, target, label) => {
     label = label.trim();
-    if (/^[a-z][a-z\d+.-]*:\/\//i.test(target)) return `[${label || target}](${target})`;
+    if (/^https?:\/\//i.test(target)) return `[${label || target}](${target})`;
     if (label) return kind === 'code' ? `\`${label}\`` : label;
     return kind === 'plain' ? target : `\`${target}\``;
   });

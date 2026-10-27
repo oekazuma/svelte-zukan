@@ -71,11 +71,18 @@ describe('extractProps', () => {
     expect(description('a <div> & <img src=x onerror=alert(1)> **b**')).toBe(
       'a &lt;div&gt; &amp; &lt;img src=x onerror=alert(1)&gt; <strong>b</strong>'
     );
+    // marked leaves the text after `<pre>` unescaped, as it would be inside a raw HTML block
+    expect(description('<pre><img src=x onerror=alert(1) **x**</pre>')).toBe(
+      '&lt;pre&gt;&lt;img src=x onerror=alert(1) <strong>x</strong>&lt;/pre&gt;'
+    );
     expect(description('see {@link Foo}, {@link Foo.bar the bar}, {@linkcode Baz|baz} and {@linkplain Qux}')).toBe(
       'see <code>Foo</code>, the bar, <code>baz</code> and Qux'
     );
     expect(description('{@link https://example.com/docs MDN} or {@link https://example.com}')).toBe(
       '<a href="https://example.com/docs">MDN</a> or <a href="https://example.com">https://example.com</a>'
+    );
+    expect(description('{@link javascript://%0aalert(1) click} {@link file:///etc/passwd}')).toBe(
+      'click <code>file:///etc/passwd</code>'
     );
   });
 

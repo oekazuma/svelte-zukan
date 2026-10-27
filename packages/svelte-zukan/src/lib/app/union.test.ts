@@ -10,7 +10,9 @@ describe('unionMembers', () => {
       "{ k: 'c' | 'd' }",
       '[1 | 2]'
     ]);
-    expect(unionMembers("(e: Event) => 'a' | 'b'")).toEqual(["(e: Event) => 'a'", "'b'"]);
+    // a function type's return type runs to the end: `string | () => void` is not valid TypeScript
+    expect(unionMembers("(e: Event) => 'a' | 'b'")).toEqual(["(e: Event) => 'a' | 'b'"]);
+    expect(unionMembers('new () => A | B')).toEqual(['new () => A | B']);
   });
 
   it('does not split inside a string literal', () => {
