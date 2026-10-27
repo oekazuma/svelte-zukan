@@ -231,6 +231,21 @@ it.each([false, true])(
   }
 );
 
+it('a props type file deleted or created while the server runs updates the metadata', { timeout: 25_000 }, async () => {
+  const types = await withPropsType();
+  await list();
+  expect(await meta('app/A')).toContain('"name":"a","type":"number"');
+  send.mockClear();
+  rmSync(types);
+  await waitForReload();
+  expect(await meta('app/A')).toContain('"name":"a","type":null');
+  send.mockClear();
+  writeFileSync(types, 'export type Props = { a: string };\n');
+  await waitForReload();
+  expect(fullReloads()).toBe(0);
+  expect(await meta('app/A')).toContain('"name":"a","type":"string"');
+});
+
 it('editing a props type after its component is deleted is not an error', { timeout: 25_000 }, async () => {
   const types = await withPropsType();
   await list();

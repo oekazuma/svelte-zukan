@@ -598,8 +598,9 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         for (const mod of [list, ...metas()]) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
         this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
         return;
-      } else if (type === 'update' && (servedProps.has(normalizePath(file)) || propsDeps.has(normalizePath(file)))) {
-        // the component's own HMR updates the previews; only a change to its props changes the detail page
+      } else if (servedProps.has(normalizePath(file)) || propsDeps.has(normalizePath(file))) {
+        // the component's own HMR updates the previews; only a change to its props changes the detail page. A props
+        // type file counts when it is created or deleted too: the component may import one that is not there yet
         if (this.environment.config.consumer !== 'client') return;
         const changed = file.endsWith('.svelte') && servedProps.has(normalizePath(file)) ? [normalizePath(file)] : [];
         const affected = new Set([...changed, ...(propsDeps.get(normalizePath(file)) ?? [])]);
