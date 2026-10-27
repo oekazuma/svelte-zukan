@@ -80,21 +80,29 @@ const isFile = (file: string) => existsSync(file) && statSync(file).isFile();
 
 const isRelative = (spec: string) => spec.startsWith('./') || spec.startsWith('../');
 
-/** the types file of a bare import, from the `types` condition of the package's `exports`, or its `types` */
-function resolvePackage(from: string, spec: string): string | null {
+/** `./props.mjs` is declared by `./props.mts` or `./props.d.mts`, as TypeScript resolves it */
+function declarationsOf(file: string): string[] {
+  const js = file.match(/^(.*)\.([cm]?)js$/);
+  if (js) return [`${js[1]}.${js[2]}ts`, `${js[1]}.d.${js[2]}ts`];
+  return /\.[cm]?ts$/.test(file) ? [file] : [];
+}
+
+/** the files that may declare a bare import: the `types` condition of the package's `exports`, or its `types` */
+function packageCandidates(from: string, spec: string): string[] {
   const [, name, sub = ''] = spec.match(/^((?:@[^/]+\/)?[^/]+)(\/.+)?$/) ?? [];
   const dir = name ? findPackage(name, dirname(from)) : null;
-  if (!dir) return null;
+  if (!dir) return [];
   let manifest;
   try {
     manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8'));
   } catch {
-    return null;
+    return [];
   }
   const exports = manifest.exports;
-  // `exports` with only conditions is the root entry
+  // a string, or only conditions, is the root entry
   const map =
-    exports && typeof exports === 'object' && !Object.keys(exports).some((k) => k.startsWith('.'))
+    typeof exports === 'string' ||
+    (exports && typeof exports === 'object' && !Object.keys(exports).some((k) => k.startsWith('.')))
       ? { '.': exports }
       : exports;
   const path = `.${sub}`;
@@ -114,19 +122,19 @@ function resolvePackage(from: string, spec: string): string | null {
   if (typeof entry === 'string' && star !== null) entry = entry.replaceAll('*', star);
   if (entry === undefined && !exports) entry = sub ? `.${sub}.d.ts` : (manifest.types ?? manifest.typings);
   // a workspace package often points at its source `.ts` rather than a built `.d.ts`
-  const file = typeof entry === 'string' && /\.[cm]?ts$/.test(entry) ? resolve(dir, entry) : null;
-  return file && isFile(file) ? normalizePath(file) : null;
+  return typeof entry === 'string' ? declarationsOf(resolve(dir, entry)).map(normalizePath) : [];
 }
 
-/** what `import … from './types'` points to, the way TypeScript with a bundler resolves a relative path */
-function resolveImport(from: string, spec: string): string | null {
-  if (!isRelative(spec)) return resolvePackage(from, spec);
+/** the files `import … from './types'` may point to, in the order TypeScript with a bundler tries them */
+function candidatesOf(from: string, spec: string): string[] {
+  if (!isRelative(spec)) return packageCandidates(from, spec);
   const base = resolve(dirname(from), spec);
-  // `./props.mjs` is declared by `./props.mts` or `./props.d.mts`
-  const [, stem = base, m = ''] = base.match(/^(.*)\.([cm]?)js$/) ?? [];
-  for (const c of [base, `${stem}.${m}ts`, `${stem}.d.${m}ts`, `${base}.ts`, `${base}.d.ts`, `${base}/index.ts`])
-    if (/\.([cm]?ts|svelte)$/.test(c) && isFile(c)) return normalizePath(c);
-  return null;
+  const declared = base.endsWith('.svelte')
+    ? [base]
+    : /\.[cm]?[jt]s$/.test(base)
+      ? declarationsOf(base)
+      : [`${base}.ts`, `${base}.d.ts`, `${base}/index.ts`, `${base}/index.d.ts`];
+  return declared.map(normalizePath);
 }
 
 /** a `.ts` file parses as the module script of a component, which allows its exports */
@@ -205,33 +213,40 @@ export function extractProps(
         (d.type === 'TSTypeAliasDeclaration' || d.type === 'TSInterfaceDeclaration') && (d.id as Node).name === name
     );
 
-  /** the declaration a name refers to in a scope: its own, or one it imports or re-exports from a relative path */
-  /** `exportedOnly` is for a file reached through `export *`, which passes on only what that file exports */
+  /**
+   * The declaration a name refers to in a scope: its own, or one it imports or re-exports. `via` is how the name
+   * reached the scope: written in it (`local`), imported from it by its exported name (`import`), or through
+   * `export *` (`star`), which passes on only what that file exports
+   */
   function lookup(
     scope: Scope,
     name: string,
     depth: number,
-    exportedOnly = false
+    via: 'local' | 'import' | 'star' = 'local'
   ): { node: Node; scope: Scope; depth: number } | null {
-    const local = exportedOnly ? scope.exported.get(name) : name;
+    const local =
+      via === 'local' ? name : via === 'import' ? (scope.exported.get(name) ?? name) : scope.exported.get(name);
     const node = local === undefined ? null : declared(scope, local);
     if (node) return { node, scope, depth };
     if (depth >= MAX_DEPTH) return null;
     const imported = scope.reexports.get(name) ?? (local === undefined ? undefined : scope.imports.get(local));
     const next = imported ? [{ ...imported, star: false }] : scope.stars.map((from) => ({ from, name, star: true }));
     for (const { from, name: target, star } of next) {
-      const file = resolveImport(scope.file, from);
-      if (!file) continue;
+      const candidates = candidatesOf(scope.file, from);
+      const file = candidates.find(isFile);
       const pkg = scope.package || !isRelative(from);
       // a workspace package links outside `node_modules`: its files are the project's own, edited while it runs
-      const installed = pkg && file.includes('/node_modules/');
+      const installed = pkg && (file ?? candidates[0] ?? '').includes('/node_modules/');
+      // even when it does not parse, or is not there yet: fixing it, or creating one that comes before it, should
+      // refresh the props
+      if (!installed)
+        for (const c of file ? candidates.slice(0, candidates.indexOf(file) + 1) : candidates) files.add(c);
+      if (!file) continue;
       const cache = installed ? packageScopes : scopes;
-      // even when it does not parse: fixing it should refresh the props
-      if (!installed) files.add(file);
       if (!cache.has(file)) cache.set(file, readScope(file, pkg));
       const found = cache.get(file);
       if (!found) continue;
-      const result = lookup(found, target, depth + 1, star);
+      const result = lookup(found, target, depth + 1, star ? 'star' : 'import');
       if (result) return result;
     }
     return null;
@@ -287,14 +302,18 @@ export function extractProps(
   // the component's own types first, so that they win over a package's member of the same name
   // ponytail: a package member keeps its type parameters as written (`MouseEventHandler<T>`); substitute the
   // arguments (`HTMLAttributes<HTMLButtonElement>`) if that reads badly in practice
+  // a name declared again (an interface narrowing what it extends, both sides of an intersection) is listed once: the
+  // first one read, an interface's own member before the one it extends
   const props: ZukanProp[] = [];
+  const listed = new Set<string>();
   for (const { node: m, scope } of [
     ...members.filter((m) => !m.scope.package),
     ...members.filter((m) => m.scope.package)
   ]) {
     if ((m.type !== 'TSPropertySignature' && m.type !== 'TSMethodSignature') || m.computed) continue;
     const name = keyName(m.key as Node);
-    if (scope.package && !defaults.has(name)) continue;
+    if (listed.has(name) || (scope.package && !defaults.has(name))) continue;
+    listed.add(name);
     const d = defaults.get(name);
     defaults.delete(name);
     const annotation = (m.typeAnnotation as Node | undefined)?.typeAnnotation as Node | undefined;

@@ -80,15 +80,37 @@ describe('extractProps', () => {
     expect(found?.typeName).toBeNull();
   });
 
+  it("lists a name declared twice once: the interface's own member, or the first side of an intersection", () => {
+    const narrowed = extractProps(
+      ts(`  interface Base { /** any look */ variant?: string; id: string }
+  interface Props extends Base { variant?: 'a' | 'b' }
+  let { variant = 'a', id }: Props = $props();`),
+      'N.svelte'
+    );
+    expect(narrowed?.props.map((p) => [p.name, p.type, p.default])).toEqual([
+      ['variant', "'a' | 'b'", "'a'"],
+      ['id', 'string', null]
+    ]);
+    const both = extractProps(
+      ts(`  type A = { size?: number };
+  type B = { size?: 'sm'; tone?: string };
+  let props: A & B = $props();`),
+      'O.svelte'
+    );
+    expect(both?.props.map((p) => [p.name, p.type])).toEqual([
+      ['size', 'number'],
+      ['tone', 'string']
+    ]);
+  });
+
   it('names a type it can not see and lists what is destructured', () => {
     const found = extractProps(
       ts(`  import type { ButtonProps } from './types';
   let { variant = 'primary', disabled }: ButtonProps = $props();`),
       'C.svelte'
     );
-    expect(found).toEqual({
+    expect(found).toMatchObject({
       typeName: 'ButtonProps',
-      files: [],
       props: [
         { name: 'variant', type: null, default: "'primary'", required: false, bindable: false, description: null },
         { name: 'disabled', type: null, default: null, required: false, bindable: false, description: null }
@@ -199,8 +221,38 @@ describe('extractProps with imported types', () => {
     const found = read(file)!;
     expect(found.typeName).toBe('HTMLButtonAttributes');
     expect(found.props.map((p) => p.name)).toEqual(['a']);
-    // fixing the broken file refreshes the props; the missing one is not a file to watch
-    expect(found.files).toEqual([broken]);
+    // fixing the broken file or creating the missing one refreshes the props
+    expect(found.files.sort()).toEqual(
+      [broken, ...['gone.ts', 'gone.d.ts', 'gone/index.ts', 'gone/index.d.ts'].map((f) => `${tmp}/lib/${f}`)].sort()
+    );
+  });
+
+  it('follows a type exported under another name', () => {
+    write(
+      'lib/types.ts',
+      "type Inner = {\n  /** the text */\n  label: string;\n};\nexport { Inner as Props };\nimport type { Base } from './base';\nexport type { Base as Extra };\n"
+    );
+    write('lib/base.ts', 'export type Base = { tone?: string };\n');
+    const file = component(
+      "  import type { Props, Extra } from './types';\n  let { label, tone }: Props & Extra = $props();"
+    );
+    const found = read(file)!;
+    expect(found.typeName).toBeNull();
+    expect(found.props.map((p) => [p.name, p.type, p.description])).toEqual([
+      ['label', 'string', 'the text'],
+      ['tone', 'string', null]
+    ]);
+  });
+
+  it('reads an index.d.ts of a folder', () => {
+    write('lib/types/index.d.ts', 'export interface Props { size?: number }\n');
+    const file = component("  import type { Props } from './types';\n  let { size }: Props = $props();");
+    const found = read(file)!;
+    expect(found.props.map((p) => [p.name, p.type])).toEqual([['size', 'number']]);
+    // creating a file that comes first refreshes the props too
+    expect(found.files.sort()).toEqual(
+      ['types.ts', 'types.d.ts', 'types/index.ts', 'types/index.d.ts'].map((f) => `${tmp}/lib/${f}`).sort()
+    );
   });
 
   it('types the destructured props of a package type, and only those', () => {
@@ -282,6 +334,20 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
     ]);
   });
 
+  it('reads the declaration file next to a JavaScript entry of exports, as TypeScript does', () => {
+    write('node_modules/conds/package.json', JSON.stringify({ exports: { '.': { import: './dist/index.mjs' } } }));
+    write('node_modules/conds/dist/index.d.mts', 'export type CondsProps = { open?: boolean };\n');
+    write('node_modules/single/package.json', JSON.stringify({ exports: './index.js', types: './other.d.ts' }));
+    write('node_modules/single/index.d.ts', 'export type SingleProps = { count?: number };\n');
+    const file = component(
+      "  import type { CondsProps } from 'conds';\n  import type { SingleProps } from 'single';\n  let { open, count }: CondsProps & SingleProps = $props();"
+    );
+    expect(read(file)!.props.map((p) => [p.name, p.type])).toEqual([
+      ['open', 'boolean'],
+      ['count', 'number']
+    ]);
+  });
+
   it('resolves a pattern in exports and an .mjs re-export of a declaration file', () => {
     write(
       'node_modules/kit/package.json',
@@ -319,7 +385,9 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
       ['size', 'number']
     ]);
     expect(found.typeName).toBeNull();
-    expect(found.files.sort()).toEqual([button, extra, inner, index].sort());
+    expect(found.files.sort()).toEqual(
+      [button, extra, inner, index, `${tmp}/lib/types.ts`, `${tmp}/lib/types.d.ts`].sort()
+    );
   });
 
   it('takes through `export *` only a name the file exports, not one it imports for itself', () => {

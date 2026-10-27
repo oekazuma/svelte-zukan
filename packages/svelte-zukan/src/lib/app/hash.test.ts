@@ -33,6 +33,12 @@ describe('parseHash / formatHash', () => {
     });
   });
 
+  it('round-trips an empty section, which is the props of a detail page', () => {
+    const hash = formatHash('detail', 'ui/Card', '');
+    expect(hash).toBe('#/ui/Card?section=');
+    expect(parseHash(hash)).toEqual({ view: 'detail', path: 'ui/Card', section: '' });
+  });
+
   it('a preview without ?section has a null section', () => {
     expect(parseHash('#/preview/ui/Button')).toEqual({ view: 'preview', path: 'ui/Button', section: null });
   });

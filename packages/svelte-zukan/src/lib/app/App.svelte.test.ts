@@ -549,18 +549,81 @@ describe('App', () => {
     document.body.style.minHeight = '5000px';
     try {
       const link = screen.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Props' });
-      await expect.element(link).toBeInTheDocument();
+      // a catalog route, so a new tab opens this page at the props
+      await expect.element(link).toHaveAttribute('href', '#/ui/Card?section=');
+      await setHash('#/ui/Card?section=One');
       scrollTo(0, 3000);
       (link.element() as HTMLElement).focus();
       await userEvent.keyboard('{Enter}');
       const heading = document.getElementById('zukan-props')!;
       await expect.poll(() => Math.round(heading.getBoundingClientRect().top)).toBe(0);
       expect(document.activeElement).toBe(heading);
-      // the URL stays one that opens this page
-      expect(location.hash).toBe('#/ui/Card');
+      // the section left in the URL would scroll away from the props on a reload
+      expect(location.hash).toBe('#/ui/Card?section=');
+      await expect.element(link).toHaveAttribute('aria-current', 'location');
     } finally {
       document.body.style.minHeight = '';
     }
+  });
+
+  it('a URL with an empty section opens the page at the props', async () => {
+    const { props } = setup('#/ui/Card?section=');
+    props.catalog[0].meta = withProps();
+    const screen = await render(App, { props });
+    const heading = screen.getByRole('heading', { level: 2, name: 'Props' });
+    await expect.element(heading).toBeInTheDocument();
+    await expect.poll(() => Math.round(heading.element().getBoundingClientRect().top)).toBe(0);
+    await expect
+      .element(screen.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Props' }))
+      .toHaveAttribute('aria-current', 'location');
+  });
+
+  /** a few rendered frames, in which an IntersectionObserver delivers what a scroll changed */
+  const frames = async () => {
+    for (let i = 0; i < 3; i++) await new Promise((r) => requestAnimationFrame(r));
+    await new Promise((r) => setTimeout(r));
+  };
+
+  it('the last section stays marked after its link scrolls to the end of the page', async () => {
+    // tall enough that what follows the last heading can not lift it into the top third
+    await page.viewport(1280, 1600);
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = withProps();
+    const screen = await render(App, { props });
+    const toc = screen.getByRole('navigation', { name: 'On this page' });
+    await toc.getByRole('link', { name: 'Two' }).click();
+    expect(location.hash).toBe('#/ui/Card?section=Two');
+    // the observer reports the headings in the top third after the scroll
+    await frames();
+    await expect.element(toc.getByRole('link', { name: 'Two' })).toHaveAttribute('aria-current', 'location');
+    // the reader's own scrolling hands the mark back to the observer
+    document.body.style.minHeight = '5000px';
+    try {
+      dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }));
+      scrollTo(0, 0);
+      await frames();
+      await scrollToProps(screen);
+    } finally {
+      document.body.style.minHeight = '';
+    }
+  });
+
+  it('scrolling a little from the last section marks the heading already in the top third', async () => {
+    await page.viewport(1280, 1600);
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = withProps();
+    const screen = await render(App, { props });
+    const toc = screen.getByRole('navigation', { name: 'On this page' });
+    await toc.getByRole('link', { name: 'Two' }).click();
+    await frames();
+    await expect.element(toc.getByRole('link', { name: 'Two' })).toHaveAttribute('aria-current', 'location');
+    // a key that does not scroll keeps the mark
+    await userEvent.keyboard('{Shift}');
+    await frames();
+    await expect.element(toc.getByRole('link', { name: 'Two' })).toHaveAttribute('aria-current', 'location');
+    dispatchEvent(new WheelEvent('wheel', { deltaY: -1 }));
+    scrollBy(0, -1);
+    await expect.element(toc.getByRole('link', { name: 'Props' })).toHaveAttribute('aria-current', 'location');
   });
 
   it('Back onto an in-page anchor of a doc shows the page it was on', async () => {
@@ -682,6 +745,18 @@ describe('App', () => {
       "'sm'",
       "'md'"
     ]);
+  });
+
+  it('two props of one name do not break the page', async () => {
+    const { props } = setup('#/ui/Card');
+    const prop = { name: 'a', type: 'string', default: null, required: false, bindable: false, description: null };
+    props.catalog[0].meta = () =>
+      Promise.resolve({
+        default: { sections: [{ title: 'One', code: '' }], doc: null, props: [prop, { ...prop, type: 'number' }] }
+      });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 2, name: 'One' })).toBeInTheDocument();
+    expect(document.querySelectorAll('.props tbody tr').length).toBe(2);
   });
 
   it('a narrow props table stacks each prop and stays a table', async () => {
