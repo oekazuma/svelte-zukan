@@ -247,7 +247,12 @@ describe('extractProps with imported types', () => {
   it('reads an index.d.ts of a folder', () => {
     write('lib/types/index.d.ts', 'export interface Props { size?: number }\n');
     const file = component("  import type { Props } from './types';\n  let { size }: Props = $props();");
-    expect(read(file)!.props.map((p) => [p.name, p.type])).toEqual([['size', 'number']]);
+    const found = read(file)!;
+    expect(found.props.map((p) => [p.name, p.type])).toEqual([['size', 'number']]);
+    // creating a file that comes first refreshes the props too
+    expect(found.files.sort()).toEqual(
+      ['types.ts', 'types.d.ts', 'types/index.ts', 'types/index.d.ts'].map((f) => `${tmp}/lib/${f}`).sort()
+    );
   });
 
   it('types the destructured props of a package type, and only those', () => {
@@ -380,7 +385,9 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
       ['size', 'number']
     ]);
     expect(found.typeName).toBeNull();
-    expect(found.files.sort()).toEqual([button, extra, inner, index].sort());
+    expect(found.files.sort()).toEqual(
+      [button, extra, inner, index, `${tmp}/lib/types.ts`, `${tmp}/lib/types.d.ts`].sort()
+    );
   });
 
   it('takes through `export *` only a name the file exports, not one it imports for itself', () => {

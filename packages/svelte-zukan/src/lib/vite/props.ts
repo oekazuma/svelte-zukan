@@ -237,8 +237,10 @@ export function extractProps(
       const pkg = scope.package || !isRelative(from);
       // a workspace package links outside `node_modules`: its files are the project's own, edited while it runs
       const installed = pkg && (file ?? candidates[0] ?? '').includes('/node_modules/');
-      // even when it does not parse, or is not there yet: fixing or creating it should refresh the props
-      if (!installed) for (const c of file ? [file] : candidates) files.add(c);
+      // even when it does not parse, or is not there yet: fixing it, or creating one that comes before it, should
+      // refresh the props
+      if (!installed)
+        for (const c of file ? candidates.slice(0, candidates.indexOf(file) + 1) : candidates) files.add(c);
       if (!file) continue;
       const cache = installed ? packageScopes : scopes;
       if (!cache.has(file)) cache.set(file, readScope(file, pkg));
