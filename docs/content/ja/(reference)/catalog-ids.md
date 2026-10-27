@@ -11,6 +11,7 @@ sidebar:
 | `/__zukan/`                               | 一覧                                       |
 | `/__zukan/#/<ID>`                         | 詳細ページ                                 |
 | `/__zukan/#/<ID>?section=<title>`         | 詳細ページ（そのセクションまでスクロール） |
+| `/__zukan/#/<ID>?section=`                | 詳細ページ（Props の一覧までスクロール）   |
 | `/__zukan/#/preview/<ID>?section=<title>` | iframe 用プレビュー（カタログの UI なし）  |
 
 詳細ページの各セクション見出しはそのセクションへのリンクなので、共有に使えます。

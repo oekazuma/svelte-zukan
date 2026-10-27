@@ -29,17 +29,26 @@
 
   // the section whose heading was last scrolled past the top third of the window
   let active = $state<string | null>(null);
-  /** the props heading in `active`; section titles are never empty, so it can not clash with one */
+  /**
+   * The props heading in `active` and in the URL's `section`; section titles are never empty, so it can not clash
+   * with one
+   */
   const PROPS = '';
-  /** the section headings by title, in page order: they mount in order */
+  /** the headings by title, the props' included, in page order: they mount in order */
   // only read by the handlers, never by the markup, so it needs no reactivity
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const headings = new Map<string, HTMLElement>();
+  /**
+   * Set when the URL brings a heading into view: the heading stays marked until the reader scrolls, as one near the
+   * end of the page can not reach the top third, where the observer would mark the one above it
+   */
+  let pinned = false;
   function track(node: HTMLElement, title: string) {
-    if (title !== PROPS) headings.set(title, node);
+    headings.set(title, node);
     const observer = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) active = title;
+      // the last entry: one call can carry the heading leaving and entering again
+      (entries) => {
+        if (entries.at(-1)!.isIntersecting && !pinned) active = title;
       },
       { rootMargin: '0px 0px -66% 0px' }
     );
@@ -47,25 +56,35 @@
     return {
       destroy: () => {
         observer.disconnect();
-        if (title !== PROPS) headings.delete(title);
+        headings.delete(title);
       }
     };
   }
+  const unpin = () => (pinned = false);
 
   let expandedTitle = $state<string | null>(null);
 
   /** the section in view, or the first one, fills the page; again, it goes back */
   export function toggleExpanded() {
-    const titles = [...headings.keys()];
+    const titles = [...headings.keys()].filter((t) => t !== PROPS);
     // the props come before the first section
     if (expandedTitle !== null) expandedTitle = null;
     else expandedTitle = (active === PROPS ? null : active) ?? titles[0] ?? null;
   }
 
+  /** scrolls to a heading and marks it; the props heading takes the focus, so the keyboard goes on from it */
+  function show(title: string, heading = headings.get(title)) {
+    if (!heading) return;
+    heading.scrollIntoView();
+    active = title;
+    pinned = true;
+    if (title === PROPS) heading.focus({ preventScroll: true });
+  }
+
   // a link to the URL already shown navigates without a hashchange, so `reveal` does not run
   function onclick(e: MouseEvent) {
     const link = e.target instanceof Element ? e.target.closest('a') : null;
-    if (section !== null && link?.hash === location.hash) headings.get(section)?.scrollIntoView();
+    if (section !== null && link?.hash === location.hash) show(section);
   }
 
   /** Vite's own endpoint, the one its error overlay uses; it is under the app's `base` like the catalog */
@@ -74,13 +93,14 @@
   }
 
   // the detail page is not remounted when only the section changes, so the action also runs on update
-  function reveal(node: HTMLElement, active: boolean) {
-    if (active) node.scrollIntoView();
-    return { update: (next: boolean) => next && node.scrollIntoView() };
+  function reveal(node: HTMLElement, title: string | null) {
+    if (title !== null) show(title, node);
+    return { update: (next: string | null) => next !== null && show(next, node) };
   }
 </script>
 
-<svelte:window {onclick} />
+<!-- what the reader does to scroll; a scroll event alone would also come from `show` -->
+<svelte:window {onclick} onwheel={unpin} ontouchmove={unpin} onkeydown={unpin} onpointerdown={unpin} />
 
 {#snippet pagerLink(to: Entry, rel: 'prev' | 'next')}
   <!-- a hash route of this catalog, not a SvelteKit route -->
@@ -122,7 +142,9 @@
           <div class="doc">{@html meta.doc}</div>
         {/if}
         {#if hasProps}
-          <h2 id="zukan-props" tabindex="-1" use:track={PROPS}>{t.props}</h2>
+          <h2 id="zukan-props" tabindex="-1" use:track={PROPS} use:reveal={section === PROPS ? PROPS : null}>
+            {t.props}
+          </h2>
           {#if meta.propsType}
             <p class="props-type">{t.propsType} <code>{meta.propsType}</code></p>
           {/if}
@@ -145,7 +167,7 @@
                 </thead>
                 <!-- svelte-ignore a11y_no_redundant_roles -->
                 <tbody role="rowgroup">
-                  {#each meta.props as p (p.name)}
+                  {#each meta.props as p, i (i)}
                     <!-- svelte-ignore a11y_no_redundant_roles -->
                     <tr role="row">
                       <td role="cell">
@@ -184,7 +206,7 @@
           <p class="empty">{t.noSections}</p>
         {/if}
         {#each meta.sections as s (s.title)}
-          <h2 use:reveal={section === s.title} use:track={s.title}>
+          <h2 use:track={s.title} use:reveal={section === s.title ? s.title : null}>
             <!-- a hash route of this catalog, not a SvelteKit route -->
             <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
             <a href={formatHash('detail', entry.path, s.title)}>{s.title}</a>
@@ -220,17 +242,13 @@
           <ul>
             {#if hasProps}
               <li>
-                <!-- the hash stays the catalog route, which a shared or bookmarked URL needs -->
+                <!-- a hash route of this catalog, not a SvelteKit route -->
+                <!-- eslint-disable svelte/no-navigation-without-resolve -->
                 <a
-                  href="#zukan-props"
-                  aria-current={active === PROPS ? 'location' : undefined}
-                  onclick={(e) => {
-                    e.preventDefault();
-                    const heading = document.getElementById('zukan-props')!;
-                    heading.scrollIntoView();
-                    heading.focus({ preventScroll: true });
-                  }}>{t.props}</a
+                  href={formatHash('detail', entry.path, PROPS)}
+                  aria-current={active === PROPS ? 'location' : undefined}>{t.props}</a
                 >
+                <!-- eslint-enable svelte/no-navigation-without-resolve -->
               </li>
             {/if}
             {#each meta.sections as s (s.title)}
