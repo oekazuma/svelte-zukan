@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { marked } from 'marked';
+import { Marked } from 'marked';
 import { normalizePath } from 'vite';
 import type { ZukanProp } from '../types.js';
 import { parseSvelte } from './extract.js';
@@ -27,6 +27,28 @@ type Scope = {
 
 const keyName = (key: Node) => (key.type === 'Identifier' ? (key.name as string) : String(key.value));
 
+// Markdown, but HTML as text, as an editor shows it: an installed package's comment would otherwise render as markup
+const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const jsdoc = new Marked({
+  renderer: { html: ({ text }) => escapeHtml(text) },
+  // marked takes the text after `<pre>`, `<code>` or `<script>` as already escaped, as in a raw HTML block
+  walkTokens: (t) => {
+    if (t.type === 'text') t.escaped = false;
+  }
+});
+
+/**
+ * `{@link Foo}`, `{@link Foo text}`, `{@link Foo|text}`, as an editor shows them: a web URL as a link, anything else
+ * as a name, so a `javascript:` target never becomes a link
+ */
+const resolveLinks = (text: string) =>
+  text.replace(/\{@link(code|plain)?\s+([^\s|}]+)(?:\s*\|\s*|\s+)?([^}]*)\}/g, (_, kind, target, label) => {
+    label = label.trim();
+    if (/^https?:\/\//i.test(target)) return `[${label || target}](${target})`;
+    if (label) return kind === 'code' ? `\`${label}\`` : label;
+    return kind === 'plain' ? target : `\`${target}\``;
+  });
+
 /** the text of a `/** … *\/` comment without its stars, up to the first block tag */
 function jsdocOf(node: Node) {
   const comment = (node.leadingComments as { type: string; value: string }[] | undefined)
@@ -39,7 +61,7 @@ function jsdocOf(node: Node) {
     .map((l) => l.replace(/^\s*\* ?/, '').trimEnd());
   const tag = lines.findIndex((l) => l.trimStart().startsWith('@'));
   const text = (tag === -1 ? lines : lines.slice(0, tag)).join('\n').trim();
-  return text ? marked.parseInline(text, { async: false }) : null;
+  return text ? jsdoc.parseInline(resolveLinks(text), { async: false }) : null;
 }
 
 function scopeOf(file: string, lf: string, body: Node[], pkg = false): Scope {
