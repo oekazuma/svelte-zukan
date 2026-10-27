@@ -60,7 +60,7 @@ A button for the main action on a page. Use one per screen.
 
 ## Props の一覧
 
-`Button.zukan.svelte` の隣に `Button.svelte` があれば、詳細ページの[説明](#markdown-の説明)の下、セクションの上に、その props の一覧を出します。一覧には名前、型、デフォルト値、JSDoc コメントが並びます。JSDoc コメントは最初の `@` タグの手前までを、インラインの Markdown として表示します。型に JSDoc コメントがない props には、分割代入に書いた JSDoc コメント（`let { /** … */ children }`）を使います。パッケージの型から来る props の説明は、ここに書きます。`?` もデフォルト値もない props には「必須」、デフォルト値が `$bindable()` の props には「バインド可能」と付きます。
+`Button.zukan.svelte` の隣に `Button.svelte` があれば、詳細ページの[説明](#markdown-の説明)の下、セクションの上に、その props の一覧を出します。一覧には名前、型、デフォルト値、JSDoc コメントが並びます。JSDoc コメントは最初の `@` タグの手前までを、インラインの Markdown として表示します。エディターと同じく、コメント中の HTML は文字のまま表示し、`{@link}` は名前ならコード、URL ならリンクとして表示します。型に JSDoc コメントがない props には、分割代入に書いた JSDoc コメント（`let { /** … */ children }`）を使います。パッケージの型から来る props の説明は、ここに書きます。`?` もデフォルト値もない props には「必須」、デフォルト値が `$bindable()` の props には「バインド可能」と付きます。
 
 ```svelte
 <!-- src/lib/Button/Button.svelte -->
@@ -84,7 +84,7 @@ A button for the main action on a page. Use one per screen.
 </button>
 ```
 
-props はコンポーネントを実行せず、ソースを読んで取り出します。型はその場に書いても、コンポーネント内で宣言した type エイリアスや interface（interface の `extends` を含む）でもかまいません。interface が `extends` した型のメンバーを絞り込んだときのように、同じ名前の prop が 2 回宣言されていれば、その interface 自身の宣言で 1 行だけ並びます。相対パスで import した型も読みます。`.ts` や `.d.ts` のファイル（`./types`、`./types.js`、`./types/index.ts`、`./types/index.d.ts`。`export … from` による再エクスポートや、`export { Inner as Props }` のように別の名前で export した型も含む）や、ほかのコンポーネントの `<script module>` から import した型で、import は 3 ファイル先までたどります。パッケージの型（`svelte/elements` の `HTMLButtonAttributes` など）は、一覧の上に型の名前を出します。そのメンバーのうち一覧に並ぶのは分割代入した props だけで、型と JSDoc コメントは、パッケージの型のファイル（`exports` の `types` 条件、`exports` が指す JavaScript ファイルの隣にある `.d.ts`、または `types` フィールドが指すもの。`.d.ts` のほか、ワークスペースのパッケージならソースの `.ts`、`.mts`、`.cts` でもかまいません）から読みます。上の例の `children` は `Snippet` になります。`...rest` に入るものは並びません。ユニオン型（`{ href: string } | { onclick: () => void }`）のように読めない型は、一覧にその型を書かれたとおりに出し、その型で受け取るはずの分割代入した props は型なしで並びます。props の型を書いたプロジェクト内のファイルを編集、作成、削除すると、一覧も更新されます。`node_modules` の外からリンクされたワークスペースのパッケージの型を編集したときも同じです。パースできないコンポーネントや `$props()` のないコンポーネントには、一覧を出しません。JSDoc コメントも `.md` と同じく HTML として挿入するので、カタログを公開する前にコードと同じようにレビューしてください。
+props はコンポーネントを実行せず、ソースを読んで取り出します。型はその場に書いても、コンポーネント内で宣言した type エイリアスや interface（interface の `extends` を含む）でもかまいません。interface が `extends` した型のメンバーを絞り込んだときのように、同じ名前の prop が 2 回宣言されていれば、その interface 自身の宣言で 1 行だけ並びます。相対パスで import した型も読みます。`.ts` や `.d.ts` のファイル（`./types`、`./types.js`、`./types/index.ts`、`./types/index.d.ts`。`export … from` による再エクスポートや、`export { Inner as Props }` のように別の名前で export した型も含む）や、ほかのコンポーネントの `<script module>` から import した型で、import は 3 ファイル先までたどります。パッケージの型（`svelte/elements` の `HTMLButtonAttributes` など）は、一覧の上に型の名前を出します。そのメンバーのうち一覧に並ぶのは分割代入した props だけで、型と JSDoc コメントは、パッケージの型のファイル（`exports` の `types` 条件、`exports` が指す JavaScript ファイルの隣にある `.d.ts`、または `types` フィールドが指すもの。`.d.ts` のほか、ワークスペースのパッケージならソースの `.ts`、`.mts`、`.cts` でもかまいません）から読みます。上の例の `children` は `Snippet` になります。`...rest` に入るものは並びません。ユニオン型（`{ href: string } | { onclick: () => void }`）のように読めない型は、一覧にその型を書かれたとおりに出し、その型で受け取るはずの分割代入した props は型なしで並びます。props の型を書いたプロジェクト内のファイルを編集、作成、削除すると、一覧も更新されます。`node_modules` の外からリンクされたワークスペースのパッケージの型を編集したときも同じです。パースできないコンポーネントや `$props()` のないコンポーネントには、一覧を出しません。JSDoc コメントの Markdown のリンクと画像は HTML になるので、カタログを公開する前にコードと同じようにレビューしてください。
 
 ## 接尾辞を変える
 

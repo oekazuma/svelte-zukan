@@ -6,6 +6,7 @@
   import type { Entry } from '../types.js';
   import { formatHash } from './hash.js';
   import type { Messages } from './i18n.js';
+  import { unionMembers } from './union.js';
 
   let {
     entry,
@@ -192,7 +193,7 @@
                       <!-- eslint-disable svelte/no-useless-mustaches -->
                       <td role="cell" data-label={t.propType}
                         >{#if p.type}<code
-                            >{#each p.type.split(' | ') as part, i (i)}{#if i}{' | '}{/if}<span class="type-part"
+                            >{#each unionMembers(p.type) as part, i (i)}{#if i}{' | '}{/if}<span class="type-part"
                                 >{part}</span
                               >{/each}</code
                           >{/if}</td

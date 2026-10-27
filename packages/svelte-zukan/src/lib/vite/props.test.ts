@@ -64,6 +64,21 @@ describe('extractProps', () => {
     });
   });
 
+  it('shows raw HTML in JSDoc as text and resolves {@link} tags', () => {
+    const description = (comment: string) =>
+      extractProps(ts(`  let { a }: {\n    /** ${comment} */\n    a: string;\n  } = $props();`), 'A.svelte')!.props[0]
+        .description;
+    expect(description('a <div> & <img src=x onerror=alert(1)> **b**')).toBe(
+      'a &lt;div&gt; &amp; &lt;img src=x onerror=alert(1)&gt; <strong>b</strong>'
+    );
+    expect(description('see {@link Foo}, {@link Foo.bar the bar}, {@linkcode Baz|baz} and {@linkplain Qux}')).toBe(
+      'see <code>Foo</code>, the bar, <code>baz</code> and Qux'
+    );
+    expect(description('{@link https://example.com/docs MDN} or {@link https://example.com}')).toBe(
+      '<a href="https://example.com/docs">MDN</a> or <a href="https://example.com">https://example.com</a>'
+    );
+  });
+
   it('follows a type alias, an interface and what it extends, declared in the component', () => {
     const found = extractProps(
       ts(`  interface Base { id: string }
