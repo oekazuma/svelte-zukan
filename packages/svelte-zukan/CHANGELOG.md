@@ -1,5 +1,13 @@
 # svelte-zukan
 
+## 0.16.1
+
+### Patch Changes
+
+- 98e07fa: fix: list a prop declared twice once instead of breaking the detail page, and read more props types: a name exported under another name (`export { Inner as Props }`), a folder's `index.d.ts`, and the `.d.ts` next to the JavaScript file a package's `exports` points to when it has no `types` condition.
+- e51f247: fix: refresh the props table when a file a props type is imported from is created or deleted while the dev server runs.
+- be7faf3: fix: link the table of contents to the props with a catalog URL (`#/<ID>?section=`), so it opens in a new tab and replaces the section in the URL, and keep the section a link scrolled to marked, also near the end of the page.
+
 ## 0.16.0
 
 ### Minor Changes
