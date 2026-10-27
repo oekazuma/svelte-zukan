@@ -1,5 +1,17 @@
 # svelte-zukan
 
+## 0.16.0
+
+### Minor Changes
+
+- 10dab8a: feat: type the destructured props that come from a package type, such as `children`, `disabled` and `class` from `HTMLButtonAttributes`, from the package's declaration file, and describe a prop with the JSDoc comment on its destructuring when its type has none.
+
+### Patch Changes
+
+- 2bda212: fix: show the required and bindable labels of the props table as colored badges.
+- 3903e3c: fix: show the props table right under the component's description, above the sections, and reword the Japanese props labels (「デフォルト」, 「バインド可能」).
+- 87ddd0b: fix: refresh the props table when the types of a workspace package change, and read a package whose types point at its source `.ts`.
+
 ## 0.15.0
 
 ### Minor Changes
