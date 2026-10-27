@@ -192,14 +192,15 @@ describe('extractProps with imported types', () => {
   });
 
   it('names what it can not read: a package type, a missing file, a broken file', () => {
-    write('lib/broken.ts', 'export type Broken = {');
+    const broken = write('lib/broken.ts', 'export type Broken = {');
     const file = component(
       "  import type { HTMLButtonAttributes } from 'svelte/elements';\n  import type { Gone } from './gone';\n  import type { Broken } from './broken';\n  let { a }: HTMLButtonAttributes & Gone & Broken = $props();"
     );
     const found = read(file)!;
     expect(found.typeName).toBe('HTMLButtonAttributes');
     expect(found.props.map((p) => p.name)).toEqual(['a']);
-    expect(found.files).toEqual([]);
+    // fixing the broken file refreshes the props; the missing one is not a file to watch
+    expect(found.files).toEqual([broken]);
   });
 
   it('types the destructured props of a package type, and only those', () => {
