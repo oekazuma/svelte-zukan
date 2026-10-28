@@ -48,6 +48,8 @@ function identifiersOf(value: unknown) {
     else if (n.type === 'Identifier' && !skip.has(n)) names.add(n.name as string);
     else if (['Component', 'UseDirective', 'TransitionDirective', 'AnimateDirective'].includes(n.type))
       names.add((n.name as string).split('.')[0]);
+    // `style:color` alone reads the variable `color`
+    else if (n.type === 'StyleDirective' && n.value === true) names.add(n.name as string);
   });
   return names;
 }
@@ -123,6 +125,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
           [
             'VariableDeclaration',
             'FunctionDeclaration',
+            'TSDeclareFunction',
             'ClassDeclaration',
             'TSTypeAliasDeclaration',
             'TSInterfaceDeclaration',
@@ -188,7 +191,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
     for (let grew = true; grew;) {
       grew = false;
       for (const def of defs) {
-        if (used.has(def) || !def.names.some((n) => refs.has(n))) continue;
+        if (used.has(def) || !def.names.some((n) => refs.has(n) || refs.has('$' + n))) continue;
         used.add(def);
         def.uses.forEach((n) => refs.add(n));
         grew = true;

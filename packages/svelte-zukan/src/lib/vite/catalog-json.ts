@@ -55,13 +55,12 @@ export function catalogJson(opts: {
       let sections: CatalogJson['components'][number]['sections'] = [];
       let error: string | undefined;
       try {
-        sections = extractSections(read(item.file), item.file).map((s) => ({
+        sections = extractSections(read(item.file), rel(item.file)).map((s) => ({
           ...s,
           preview: formatHash('preview', item.path, s.title)
         }));
       } catch (e) {
-        // relative like the other paths, so the static build carries no local path
-        error = (e instanceof Error ? e.message : String(e)).replaceAll(opts.root + '/', '');
+        error = e instanceof Error ? e.message : String(e);
       }
       return {
         id: item.path,

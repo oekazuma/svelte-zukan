@@ -68,6 +68,54 @@ describe('extractSections', () => {
     expect(code).not.toContain('other');
   });
 
+  it('collects a style: shorthand directive', () => {
+    const source = `<script>
+  let color = 'red';
+  let other = 1;
+</script>
+
+<Section title="a"><p style:color>x</p></Section>`;
+    const { code } = extractSections(source, FILE)[0];
+    expect(code).toContain("let color = 'red';");
+    expect(code).not.toContain('other');
+  });
+
+  it('includes a store the section reads with $', () => {
+    const source = `<script>
+  import { writable } from 'svelte/store';
+  const count = writable(1);
+  const doubled = $derived($count * 2);
+</script>
+
+<Section title="direct"><p>{$count}</p></Section>
+<Section title="derived"><p>{doubled}</p></Section>`;
+    for (const { code } of extractSections(source, FILE)) {
+      expect(code).toContain("import { writable } from 'svelte/store';");
+      expect(code).toContain('const count = writable(1);');
+    }
+  });
+
+  it('keeps the overload signatures of a function', () => {
+    const source = `<script lang="ts">
+  function f(a: string): string;
+  function f(a: number): number;
+  function f(a: unknown) {
+    return a;
+  }
+</script>
+
+<Section title="a"><p>{f(1)}</p></Section>`;
+    expect(extractSections(source, FILE)[0].code).toBe(`<script lang="ts">
+  function f(a: string): string;
+  function f(a: number): number;
+  function f(a: unknown) {
+    return a;
+  }
+</script>
+
+<p>{f(1)}</p>`);
+  });
+
   it('collects dotted component root', () => {
     const source = `<script>
   import * as Foo from './Foo.svelte';
@@ -228,6 +276,10 @@ describe('extractSections', () => {
   <p>two</p>
 </Section>`;
     expect(extractSections(lf.replace(/\n/g, '\r\n'), FILE)).toEqual(extractSections(lf, FILE));
+  });
+
+  it('gives a multi-line title of a CRLF file with LF line endings', () => {
+    expect(extractSections('<Section title="two\r\nlines"><A /></Section>', FILE)[0].title).toBe('two\nlines');
   });
 
   it('reports the line of an error in a CRLF file', () => {
