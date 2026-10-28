@@ -59,6 +59,13 @@ describe('generateEntryModule', () => {
     expect(code).not.toMatch(/^import .* from "(virtual:svelte-zukan\/catalog|\/lib\/app\/App\.svelte)"/m);
   });
 
+  it('reloads a preview that failed to render on the next HMR update', () => {
+    const code = generateEntryModule({ ...base, logo: null, wrapper: null });
+    expect(code).toContain(
+      "import.meta.hot.on('vite:afterUpdate', () => {\n  if (document.querySelector('[data-zukan-error]')) location.reload();"
+    );
+  });
+
   it('reloads on a preload error outside the dev-only block, before loading anything', () => {
     const code = generateEntryModule({ ...base, logo: null, wrapper: null });
     const listen = code.indexOf(RELOAD_ON_PRELOAD_ERROR);

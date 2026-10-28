@@ -9,6 +9,7 @@ export type Messages = {
   notFoundBack: string;
   skipToContent: string;
   loadFailed: string;
+  renderFailed: string;
   code: string;
   copy: string;
   copied: string;
@@ -138,6 +139,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     notFoundBack: 'All components',
     skipToContent: 'Skip to content',
     loadFailed: 'Failed to load:',
+    renderFailed: 'Failed to render:',
     code: 'Code',
     copy: 'Copy',
     copied: 'Copied',
@@ -268,6 +270,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     notFoundBack: 'コンポーネント一覧へ',
     skipToContent: '本文へスキップ',
     loadFailed: '読み込めませんでした:',
+    renderFailed: '表示できませんでした:',
     code: 'コード',
     copy: 'コピー',
     copied: 'コピーしました',

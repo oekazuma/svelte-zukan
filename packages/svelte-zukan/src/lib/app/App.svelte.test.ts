@@ -65,6 +65,27 @@ describe('App', () => {
     expect(screen.container.querySelector('nav')).toBeNull();
   });
 
+  it('a preview shows a component that throws while rendering as an error, and marks the page as settled', async () => {
+    const { props } = setup('#/preview/ui/Card?section=Two');
+    const throws = () => {
+      throw new Error('boom');
+    };
+    props.catalog[0].load = () => Promise.resolve({ default: throws as unknown as typeof Catalog });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByText('Failed to render: boom')).toHaveAttribute('data-zukan-error');
+    await expect
+      .poll(() => screen.container.querySelector('[data-zukan-preview]')?.hasAttribute('data-zukan-ready'))
+      .toBe(true);
+  });
+
+  it('a preview marks the page once the section is in', async () => {
+    const { props } = setup('#/preview/ui/Card?section=Two');
+    const screen = await render(App, { props });
+    await expect
+      .poll(() => screen.container.querySelector('[data-zukan-preview][data-zukan-ready]')?.textContent?.trim())
+      .toBe('two');
+  });
+
   it('a preview page applies the stored theme', async () => {
     localStorage.setItem('svelte-zukan:theme', 'dark');
     try {

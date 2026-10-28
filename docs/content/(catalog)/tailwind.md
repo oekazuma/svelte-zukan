@@ -13,7 +13,7 @@ A "Tailwind CSS" link appears in the sidebar, below the components, and a card f
 - **Tailwind CSS 4.1.0 or later is installed with one of its build integrations**: `@tailwindcss/vite`, `@tailwindcss/postcss` or `@tailwindcss/cli`. svelte-zukan loads Tailwind through the same copy that builds your app's CSS, so the catalog and the app always agree. It looks in the `node_modules` of the entry's folder and the folders above it, then in those of Vite's root
 - **A Tailwind CSS entry exists**: a CSS file that has `@import "tailwindcss"` (or an import of a `tailwindcss/…` file), or that has `@theme`. They are searched in the directories svelte-zukan already scans for catalog files (see [`groups`](/options) and [monorepos](/monorepo)) and in Vite's root `src`, even when `groups` leaves it out, because a SvelteKit app usually keeps `src/app.css` while its `groups` point at `src/lib`
 
-A CSS file that another entry imports is a partial, not an entry. `@reference` does not count as an import.
+A CSS file that another entry imports, directly or through other CSS files, is a partial, not an entry. `@reference` does not count as an import.
 
 A file with `@theme` but no `@import "tailwindcss"` is read with `@import "tailwindcss";` in front of it, so its page shows Tailwind's defaults plus its own tokens, like any other entry. With several entries, each gets its own sidebar link labeled with its path relative to Vite's root.
 
@@ -62,7 +62,7 @@ Background Color, Text Color and the text categories are cards. Shadows are card
 - **Breakpoints** are bars proportional to their width
 - **Z-index** has no sample, only the names and the value
 
-The samples are drawn in a frame of their own, built from the CSS Tailwind generates for the entry: the theme variables, the entry's own rules, and its preflight. Nothing from the catalog reaches the samples, so their text is drawn in the font your app's `html` gets, such as the theme's `--font-sans`, and Tailwind's CSS does not reach the catalog or your component previews.
+The samples are drawn in a frame of their own, built from the CSS Tailwind generates for the entry: the theme variables, the entry's own rules, and its preflight. An entry that imports only some of Tailwind's files, such as `tailwindcss/theme.css`, gets Tailwind's utilities added for its samples. Nothing from the catalog reaches the samples, so their text is drawn in the font your app's `html` gets, such as the theme's `--font-sans`, and Tailwind's CSS does not reach the catalog or your component previews.
 
 The frame is always light, in every catalog theme, because the values shown are the base values. The page around it follows the catalog's theme.
 

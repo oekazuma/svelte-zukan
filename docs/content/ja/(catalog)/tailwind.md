@@ -13,7 +13,7 @@ sidebar:
 - **Tailwind CSS 4.1.0 以降と、そのビルド用の連携パッケージが入っている。** `@tailwindcss/vite`、`@tailwindcss/postcss`、`@tailwindcss/cli` のどれかです。svelte-zukan はアプリの CSS をビルドするのと同じ Tailwind を読み込むので、カタログとアプリで内容がずれません。探す場所は、エントリーのあるフォルダーとその親フォルダーの `node_modules`、そのあとで Vite の root の `node_modules` です
 - **Tailwind CSS のエントリーがある。** `@import "tailwindcss"`（または `tailwindcss/…` の import）を持つか、`@theme` を持つ CSS ファイルです。探すのは、svelte-zukan がカタログファイルを探すディレクトリ（[`groups`](/ja/options) と[モノレポ](/ja/monorepo)を参照）と、Vite の root の `src` です。`groups` に含まれていなくても root の `src` は探します。SvelteKit のアプリは `src/app.css` を置き、`groups` は `src/lib` を指すのがふつうだからです
 
-別のエントリーから import されている CSS ファイルは、エントリーではなく部品として扱います。`@reference` は import に数えません。
+別のエントリーから直接、またはほかの CSS ファイルを経由して import されている CSS ファイルは、エントリーではなく部品として扱います。`@reference` は import に数えません。
 
 `@theme` はあっても `@import "tailwindcss"` がないファイルは、先頭に `@import "tailwindcss";` を足して読み込みます。ほかのエントリーと同じように、Tailwind の既定値と、そのファイルのトークンが並びます。エントリーが複数あるときは、Vite の root からの相対パスを添えたリンクがエントリーごとにできます。
 
@@ -62,7 +62,7 @@ Tailwind が入っていない場合や Tailwind CSS v3 の場合は、ページ
 - **ブレークポイント**: 幅に比例したバーを描きます
 - **重なり順（z-index）**: サンプルはなく、名前と値だけを表示します
 
-サンプルは、専用のフレームの中に描きます。フレームには、Tailwind がそのエントリーから生成した CSS（テーマ変数、エントリー自身のルール、preflight）を入れています。カタログのスタイルがサンプルに影響することはないので、サンプルの文字はテーマの `--font-sans` など、アプリの `html` と同じフォントで描きます。また、Tailwind の CSS がカタログやコンポーネントのプレビューに漏れることもありません。
+サンプルは、専用のフレームの中に描きます。フレームには、Tailwind がそのエントリーから生成した CSS（テーマ変数、エントリー自身のルール、preflight）を入れています。`tailwindcss/theme.css` のように Tailwind のファイルの一部だけを import するエントリーでは、サンプル用に Tailwind のユーティリティを加えます。カタログのスタイルがサンプルに影響することはないので、サンプルの文字はテーマの `--font-sans` など、アプリの `html` と同じフォントで描きます。また、Tailwind の CSS がカタログやコンポーネントのプレビューに漏れることもありません。
 
 表示する値は基本の値なので、フレームはどのカタログのテーマでも常にライトです。フレームの外のページは、カタログのテーマに従います。
 
