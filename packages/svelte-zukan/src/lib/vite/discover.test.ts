@@ -264,11 +264,12 @@ describe('listCatalog IDs', () => {
     expect(paths(join(tmp, 'app'))).toEqual(['@acme/ui/lib/Card']);
   });
 
-  it('skips node_modules inside a searched dir', () => {
-    write('app/ui/Foo.zukan.svelte');
-    write('app/ui/node_modules/x/Foo.zukan.svelte');
-    write('app/ui/a/node_modules/y/Bar.zukan.svelte');
-    const items = listCatalog(discoverGroups(join(tmp, 'app'), { ui: 'ui' }), 'zukan');
+  // glob metacharacters in the directory's own path
+  it.each(['app', 'g (x) [y]', 'g {a,b}'])('skips node_modules inside a searched dir (in %s)', (app) => {
+    write(`${app}/ui/Foo.zukan.svelte`);
+    write(`${app}/ui/node_modules/x/Foo.zukan.svelte`);
+    write(`${app}/ui/a/node_modules/y/Bar.zukan.svelte`);
+    const items = listCatalog(discoverGroups(join(tmp, app), { ui: 'ui' }), 'zukan');
     expect(items.map((i) => i.path)).toEqual(['ui/Foo']);
   });
 
@@ -332,23 +333,23 @@ describe('listCatalog empties', () => {
 });
 
 describe('listUncataloged', () => {
-  it('lists the .svelte files that have no catalog file next to them', () => {
-    pkg('app', { name: 'app' });
-    write('app/src/lib/Button/Button.svelte');
-    write('app/src/lib/Button/Button.zukan.svelte', '<Section title="A"><p>a</p></Section>');
-    write('app/src/lib/Card.svelte');
-    write('app/src/lib/forms/Input.svelte');
-    write('app/src/lib/Card.test.svelte');
-    write('app/src/lib/Card.stories.svelte');
-    write('app/src/lib/Card.story.svelte');
-    write('app/src/routes/+page.svelte');
-    write('app/src/routes/Header.svelte');
-    write('app/src/lib/node_modules/x/X.svelte');
-    const groups = discoverGroups(join(tmp, 'app'));
-    const cataloged = new Set([p('app/src/lib/Button/Button.svelte')]);
+  it.each(['app', 'g (x) [y]'])('lists the .svelte files that have no catalog file next to them (in %s)', (app) => {
+    pkg(app, { name: 'app' });
+    write(`${app}/src/lib/Button/Button.svelte`);
+    write(`${app}/src/lib/Button/Button.zukan.svelte`, '<Section title="A"><p>a</p></Section>');
+    write(`${app}/src/lib/Card.svelte`);
+    write(`${app}/src/lib/forms/Input.svelte`);
+    write(`${app}/src/lib/Card.test.svelte`);
+    write(`${app}/src/lib/Card.stories.svelte`);
+    write(`${app}/src/lib/Card.story.svelte`);
+    write(`${app}/src/routes/+page.svelte`);
+    write(`${app}/src/routes/Header.svelte`);
+    write(`${app}/src/lib/node_modules/x/X.svelte`);
+    const groups = discoverGroups(join(tmp, app));
+    const cataloged = new Set([p(`${app}/src/lib/Button/Button.svelte`)]);
     expect(listUncataloged(groups, 'zukan', cataloged)).toEqual([
-      { group: 'app', file: p('app/src/lib/Card.svelte') },
-      { group: 'app', file: p('app/src/lib/forms/Input.svelte') }
+      { group: 'app', file: p(`${app}/src/lib/Card.svelte`) },
+      { group: 'app', file: p(`${app}/src/lib/forms/Input.svelte`) }
     ]);
   });
 

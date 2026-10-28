@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { OutgoingHttpHeaders, ServerResponse } from 'node:http';
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -146,6 +146,10 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   /** path → item, from the last listing; dropped when a catalog file is created or deleted */
   let items: Map<string, CatalogItem> | null = null;
   const scanned = () => groups.flatMap((g) => g.dirs);
+  // the watcher reports a file of a dir reached through a symlink (a `groups` dir under a `node_modules` link) by its
+  // real path, and Vite's watcher ignores node_modules
+  let realDirs: string[] = [];
+  const watchedDirs = () => [...scanned(), ...realDirs];
   // the root's `src` too: a SvelteKit app keeps `src/app.css` while its groups often point at `src/lib`
   const cssDirs = () => [...new Set([...scanned(), ...(existsSync(`${root}/src`) ? [`${root}/src`] : [])])];
   /** generated on the first demand and cached until a watched file changes */
@@ -233,6 +237,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         root = normalizePath(resolve(config.root ?? process.cwd()));
         resolved = resolveOptions(root, options);
         groups = discoverGroups(root, options.groups);
+        realDirs = scanned().map((dir) => normalizePath(realpathSync(dir)));
         // the wrapper's directory, for CSS and assets imported next to it; the logo is one file (the bundled one is inside libDir)
         const extra = [
           ...(resolved.wrapper ? [dirname(resolved.wrapper)] : []),
@@ -460,7 +465,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     configureServer(server) {
       const { root, base } = server.config;
       watcher = server.watcher;
-      const outside = scanned().filter((dir) => !isInside(dir, normalizePath(root)));
+      const realRoot = normalizePath(realpathSync(root));
+      const outside = realDirs.filter((dir) => !isInside(dir, realRoot));
       if (outside.length) server.watcher.add(outside);
 
       // called directly (not in a returned hook) to run before SvelteKit's middleware
@@ -579,7 +585,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         targets = metas();
       } else if (type === 'update' && isCatalogFile(file)) {
         targets = [...modules, ...metas()];
-      } else if (isCatalogFile(file) && scanned().some((dir) => isInside(normalizePath(file), dir))) {
+      } else if (isCatalogFile(file) && watchedDirs().some((dir) => isInside(normalized, dir))) {
         // created or deleted: the list is rebuilt when the module is loaded again, and Vite does not
         // invalidate the file's own module on add or unlink, so a re-created file would keep its old module;
         // the lookup map would still serve a deleted file
@@ -589,7 +595,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       } else if (
         type !== 'update' &&
         file.endsWith('.svelte') &&
-        scanned().some((dir) => isInside(normalized, dir) && isComponentFile(dir, normalized.slice(dir.length + 1)))
+        watchedDirs().some((dir) => isInside(normalized, dir) && isComponentFile(dir, normalized.slice(dir.length + 1)))
       ) {
         // a component created or deleted: the list of files without a catalog file changes, and so do the props of a
         // catalog file next to it; the app's own handling of the file goes on
