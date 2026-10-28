@@ -163,6 +163,63 @@ describe('extractProps', () => {
     expect(extractProps(source, 'S.svelte')?.props[0].type).toBe('number');
   });
 
+  it('collapses whitespace outside strings only and drops line comments', () => {
+    const found = extractProps(
+      ts(`  let { a = 'x   y', b = \`x
+    y\`, onpick, size = // fallback
+    'md' }: {
+    a?: 'x   y' | "p  q";
+    b?: string;
+    onpick: (
+      // the picked item
+      item: string
+    ) => void;
+    size?: string;
+  } = $props();`),
+      'W.svelte'
+    );
+    expect(found?.props.map((p) => [p.name, p.type, p.default])).toEqual([
+      ['a', `'x   y' | "p  q"`, "'x   y'"],
+      ['b', 'string', '`x\n    y`'],
+      ['onpick', '( item: string ) => void', null],
+      ['size', 'string', "'md'"]
+    ]);
+  });
+
+  it('merges the declarations of an interface declared twice', () => {
+    const found = extractProps(
+      ts(`  interface Props { a: string }
+  interface Props { b: number }
+  let { a, b }: Props = $props();`),
+      'M.svelte'
+    );
+    expect(found?.props.map((p) => [p.name, p.type])).toEqual([
+      ['a', 'string'],
+      ['b', 'number']
+    ]);
+    // a later declaration narrowing what the first one extends wins, as in TypeScript
+    const narrowed = extractProps(
+      ts(`  interface Base { variant: string }
+  interface Props extends Base { a: string }
+  interface Props { variant: 'x' | 'y' }
+  let { a, variant }: Props = $props();`),
+      'M.svelte'
+    );
+    expect(narrowed?.props.map((p) => [p.name, p.type])).toEqual([
+      ['a', 'string'],
+      ['variant', "'x' | 'y'"]
+    ]);
+  });
+
+  it('skips a computed key of the destructuring', () => {
+    const found = extractProps(
+      ts(`  const key = 'x';
+  let { [key]: x, a, ...rest }: { x: string; a: number } = $props();`),
+      'K.svelte'
+    );
+    expect(found?.props.map((p) => p.name)).toEqual(['x', 'a']);
+  });
+
   it('reads untyped props and a module script declaration', () => {
     expect(extractProps('<script>\n  let { a = 1, b } = $props();\n</script>', 'D.svelte')?.props).toEqual([
       { name: 'a', type: null, default: '1', required: false, bindable: false, description: null },
@@ -241,12 +298,83 @@ describe('extractProps with imported types', () => {
       "  import type { HTMLButtonAttributes } from 'svelte/elements';\n  import type { Gone } from './gone';\n  import type { Broken } from './broken';\n  let { a }: HTMLButtonAttributes & Gone & Broken = $props();"
     );
     const found = read(file)!;
-    expect(found.typeName).toBe('HTMLButtonAttributes');
+    expect(found.typeName).toBe('HTMLButtonAttributes, Gone, Broken');
     expect(found.props.map((p) => p.name)).toEqual(['a']);
     // fixing the broken file or creating the missing one refreshes the props
     expect(found.files.sort()).toEqual(
       [broken, ...['gone.ts', 'gone.d.ts', 'gone/index.ts', 'gone/index.d.ts'].map((f) => `${tmp}/lib/${f}`)].sort()
     );
+  });
+
+  it('reads a .ts file with </script> in a comment or a string', () => {
+    write('lib/types.ts', "/** wraps in `</script>` */\nexport type Props = { a: string; b?: '</SCRIPT>' };\n");
+    const file = component("  import type { Props } from './types';\n  let { a, b }: Props = $props();");
+    expect(read(file)!.props.map((p) => [p.name, p.type])).toEqual([
+      ['a', 'string'],
+      ['b', "'</SCRIPT>'"]
+    ]);
+  });
+
+  it('reads the .svelte.d.ts that svelte-package writes, and a .svelte.ts module', () => {
+    write(
+      'node_modules/my-ui/package.json',
+      JSON.stringify({ exports: { '.': { types: './dist/index.d.ts', svelte: './dist/index.js' } } })
+    );
+    write(
+      'node_modules/my-ui/dist/index.d.ts',
+      "export { default as Button, type ButtonProps } from './Button.svelte';\nexport { default as Section } from './Section.svelte';\n"
+    );
+    write(
+      'node_modules/my-ui/dist/Button.svelte',
+      "<script>\n  let { variant = 'primary', label } = $props();\n</script>\n"
+    );
+    write(
+      'node_modules/my-ui/dist/Button.svelte.d.ts',
+      `export type ButtonProps = {
+    /** the look */
+    variant?: 'primary' | 'secondary';
+    label: string;
+};
+declare const Button: import("svelte").Component<ButtonProps, {}, "">;
+type Button = ReturnType<typeof Button>;
+export default Button;
+`
+    );
+    write('node_modules/my-ui/dist/Section.svelte', '<script>\n  let { title, children } = $props();\n</script>\n');
+    // as svelte-package writes `packages/svelte-zukan/dist/Section.svelte.d.ts`
+    write(
+      'node_modules/my-ui/dist/Section.svelte.d.ts',
+      `import { type Snippet } from 'svelte';
+type $$ComponentProps = {
+    title: string;
+    children?: Snippet;
+};
+declare const Section: import("svelte").Component<$$ComponentProps, {}, "">;
+type Section = ReturnType<typeof Section>;
+export default Section;
+`
+    );
+    const stateful = write('lib/stateful.svelte.ts', 'export interface Props { /** st */ s: string }\n');
+    const file = component(
+      "  import type { ComponentProps } from 'svelte';\n  import type { ButtonProps, Section } from 'my-ui';\n  import type { Props } from './stateful.svelte';\n  let { variant, label, s, title, children }: ButtonProps & Props & ComponentProps<typeof Section> = $props();"
+    );
+    const found = read(file)!;
+    expect(found.typeName).toBe('ButtonProps, ComponentProps<typeof Section>');
+    expect(found.props.map((p) => [p.name, p.type, p.description])).toEqual([
+      ['s', 'string', 'st'],
+      ['variant', "'primary' | 'secondary'", 'the look'],
+      ['label', 'string', null],
+      ['title', 'string', null],
+      ['children', 'Snippet', null]
+    ]);
+    expect(found.files).toEqual([stateful]);
+  });
+
+  it('reads the .d.ts of a .js subpath of a package without exports', () => {
+    write('node_modules/noexp/package.json', JSON.stringify({ types: 'dist/index.d.ts' }));
+    write('node_modules/noexp/dist/types.d.ts', 'export interface NProps { /** n */ n?: number }\n');
+    const file = component("  import type { NProps } from 'noexp/dist/types.js';\n  let { n }: NProps = $props();");
+    expect(read(file)!.props.map((p) => [p.name, p.type, p.description])).toEqual([['n', 'number', 'n']]);
   });
 
   it('follows a type exported under another name', () => {
@@ -349,7 +477,7 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
       "  import type { Props } from 'plain';\n  import type { Other } from 'js-only';\n  let {\n    size,\n    /** the space between */\n    gap\n  }: Props & Other = $props();"
     );
     const found = read(file)!;
-    expect(found.typeName).toBe('Props');
+    expect(found.typeName).toBe('Props, Other');
     expect(found.props.map((p) => [p.name, p.type, p.description])).toEqual([
       ['size', 'number', null],
       ['gap', null, 'the space between']
