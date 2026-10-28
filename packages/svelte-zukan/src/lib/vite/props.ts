@@ -330,16 +330,20 @@ export function extractProps(
       if (found.node.type === 'TSTypeAliasDeclaration') {
         seen.add(found.node);
         collect(found.node.typeAnnotation as Node, found.scope, found.depth);
-      } else
-        for (const node of found.scope.declarations) {
-          // the declarations of an interface declared more than once merge
-          if (node.type !== 'TSInterfaceDeclaration' || (node.id as Node).name !== (found.node.id as Node).name)
-            continue;
+      } else {
+        // the declarations of an interface declared more than once merge, all of their own members before anything
+        // they extend, so that a later declaration narrowing an inherited member wins
+        const merged = found.scope.declarations.filter(
+          (node) => node.type === 'TSInterfaceDeclaration' && (node.id as Node).name === (found.node.id as Node).name
+        );
+        for (const node of merged) {
           seen.add(node);
           members.push(...((node.body as Node).body as Node[]).map((m) => ({ node: m, scope: found.scope })));
+        }
+        for (const node of merged)
           for (const h of (node.extends as Node[] | undefined) ?? [])
             collect({ ...h, type: 'TSTypeReference', typeName: h.expression }, found.scope, found.depth);
-        }
+      }
     }
     // a union, a qualified name (`Foo.Props`) and the like: the reader gets the type as written
     else name(scope, type);

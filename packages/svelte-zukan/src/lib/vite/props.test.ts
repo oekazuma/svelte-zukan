@@ -197,6 +197,18 @@ describe('extractProps', () => {
       ['a', 'string'],
       ['b', 'number']
     ]);
+    // a later declaration narrowing what the first one extends wins, as in TypeScript
+    const narrowed = extractProps(
+      ts(`  interface Base { variant: string }
+  interface Props extends Base { a: string }
+  interface Props { variant: 'x' | 'y' }
+  let { a, variant }: Props = $props();`),
+      'M.svelte'
+    );
+    expect(narrowed?.props.map((p) => [p.name, p.type])).toEqual([
+      ['a', 'string'],
+      ['variant', "'x' | 'y'"]
+    ]);
   });
 
   it('skips a computed key of the destructuring', () => {
