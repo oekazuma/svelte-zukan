@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { OutgoingHttpHeaders, ServerResponse } from 'node:http';
-import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, extname, isAbsolute, join, posix, relative, resolve } from 'node:path';
 import { marked } from 'marked';
 import {
   createIdResolver,
@@ -290,8 +290,16 @@ export function zukan(options: ZukanOptions = {}): Plugin {
 
         // relative, so that the catalog also works under a subpath; `base` can not be set per environment
         const renderBuiltUrl = config.experimental?.renderBuiltUrl;
-        (config.experimental ??= {}).renderBuiltUrl = (filename, ctx) =>
-          filename.startsWith(OUT_PREFIX) ? { relative: true } : renderBuiltUrl?.(filename, ctx);
+        (config.experimental ??= {}).renderBuiltUrl = (filename, ctx) => {
+          if (filename.startsWith(OUT_PREFIX)) return { relative: true };
+          // a Web Worker keeps the app's file name (`worker` options and Vite's worker bundles are shared by all
+          // environments); generateBundle moves it under OUT_PREFIX
+          if (ctx.type === 'asset' && ctx.hostType === 'js' && ctx.hostId.startsWith(OUT_PREFIX)) {
+            const url = posix.relative(posix.dirname(ctx.hostId), OUT_PREFIX + filename);
+            return { runtime: `new URL(${JSON.stringify('./' + url)}, import.meta.url).href` };
+          }
+          return renderBuiltUrl?.(filename, ctx);
+        };
 
         return {
           // without it, a plain `vite build` sets up only the app's environment
@@ -299,12 +307,17 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           environments: {
             zukan: {
               consumer: 'client',
-              // replacements SvelteKit defines only for its client environment, used by `$app/*`
+              // replacements SvelteKit makes only in its client build, used by `$app/*`
               ...(kit && {
                 define: {
-                  __SVELTEKIT_PAYLOAD__: 'undefined',
+                  // the page SvelteKit renders sets the payload; `$app/env/public` reads `env` from it on import
+                  __SVELTEKIT_PAYLOAD__: '({ env: {} })',
                   __SVELTEKIT_HAS_SERVER_LOAD__: 'false',
-                  __SVELTEKIT_HAS_UNIVERSAL_LOAD__: 'false'
+                  __SVELTEKIT_HAS_UNIVERSAL_LOAD__: 'false',
+                  __SVELTEKIT_MANIFEST_ASSETS__: '[]',
+                  __SVELTEKIT_MANIFEST_IMMUTABLE__: '[]',
+                  __SVELTEKIT_MANIFEST_PRERENDERED__: '[]',
+                  __SVELTEKIT_MANIFEST_ROUTES__: '[]'
                 }
               }),
               build: {
@@ -342,6 +355,34 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         chunkSizeWarningLimit: 1000
       });
       config.build.rolldownOptions = { ...config.build.rolldownOptions, input: { zukan: ENTRY } };
+    },
+    generateBundle: {
+      // after Vite's worker plugin and SvelteKit, which emit files named for the app: workers are moved where
+      // `renderBuiltUrl` points, and SvelteKit's version.json is not the catalog's
+      order: 'post',
+      handler(_, bundle) {
+        if (this.environment.name !== 'zukan') return;
+        const { base } = this.environment.config;
+        const moved = Object.keys(bundle).filter((f) => bundle[f].type === 'asset' && !f.startsWith(OUT_PREFIX));
+        for (const fileName of moved) {
+          const file = bundle[fileName];
+          delete bundle[fileName];
+          if (file.type !== 'asset') continue;
+          if (fileName === `${kitAppDir}/version.json`) continue;
+          let { source } = file;
+          // a worker names the assets it loads from the app's base, where the catalog has none; next to it, they move
+          // with it (a worker resolves a relative URL against its own script)
+          if (fileName.endsWith('.js') && !base.startsWith('.')) {
+            let code = typeof source === 'string' ? source : new TextDecoder().decode(source);
+            for (const other of moved) {
+              const url = posix.relative(posix.dirname(fileName), other);
+              code = code.replaceAll(base + other, url.startsWith('.') ? url : `./${url}`);
+            }
+            source = code;
+          }
+          this.emitFile({ type: 'asset', fileName: OUT_PREFIX + fileName, source });
+        }
+      }
     },
     buildApp: {
       // after the other hooks (e.g. SvelteKit's build), so that Vite's fallback below can be reproduced
@@ -385,11 +426,6 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           if (source.error)
             builder.config.logger.warn(`svelte-zukan: Tailwind CSS entry ${source.file}: ${source.error}`);
         writeFileSync(join(resolved.build, CATALOG_JSON), JSON.stringify(data, null, 2) + '\n');
-        if (kitAppDir) {
-          const kitDir = join(resolved.build, kitAppDir);
-          rmSync(join(kitDir, 'version.json'), { force: true });
-          if (existsSync(kitDir) && readdirSync(kitDir).length === 0) rmSync(kitDir, { recursive: true });
-        }
       }
     },
     resolveId(id) {
