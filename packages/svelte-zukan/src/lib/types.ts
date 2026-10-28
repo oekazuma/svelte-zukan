@@ -12,7 +12,7 @@ export type ZukanProp = {
   description: string | null;
 };
 
-/** `props` is null when the component next to the catalog file declares none; `propsType` names a type it imports */
+/** `props` is null when the component next to the catalog file declares none; `propsType` names the types it imports, comma-separated */
 export type ZukanMeta = {
   sections: ZukanSection[];
   doc: string | null;

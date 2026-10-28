@@ -71,24 +71,31 @@ function scopeOf(file: string, lf: string, body: Node[], pkg = false): Scope {
   const stars: string[] = [];
   for (const n of body) {
     const from = (n.source as { value: string } | null | undefined)?.value;
+    const declaration = n.declaration as Node | null | undefined;
     if (n.type === 'ExportNamedDeclaration') {
-      const declaration = n.declaration as Node | null;
       const id = declaration?.id as Node | undefined;
       if (id?.type === 'Identifier') exported.set(id.name as string, id.name as string);
       for (const s of n.specifiers as { local: Node; exported: Node }[])
         if (from === undefined) exported.set(keyName(s.exported), keyName(s.local));
         else reexports.set(keyName(s.exported), { from, name: keyName(s.local) });
-    }
+    } else if (n.type === 'ExportDefaultDeclaration' && declaration?.type === 'Identifier')
+      exported.set('default', declaration.name as string);
     if (from === undefined) continue;
     if (n.type === 'ImportDeclaration') {
       for (const s of n.specifiers as { type: string; imported?: Node; local: Node }[])
         if (s.type === 'ImportSpecifier' && s.imported)
           imports.set(s.local.name as string, { from, name: keyName(s.imported) });
+        else if (s.type === 'ImportDefaultSpecifier') imports.set(s.local.name as string, { from, name: 'default' });
     } else if (n.type === 'ExportAllDeclaration' && !n.exported) stars.push(from);
   }
   return {
     file,
-    text: (n) => lf.slice(n.start, n.end).replace(/\s+/g, ' ').trim(),
+    // a string keeps its spaces; a `//` comment would swallow what follows once the lines are joined
+    text: (n) =>
+      lf
+        .slice(n.start, n.end)
+        .replace(/(['"`])(?:\\[\s\S]|(?!\1)[^\\])*\1|(?:\s|\/\/.*|\/\*[\s\S]*?\*\/)+/g, (m, quote) => (quote ? m : ' '))
+        .trim(),
     declarations: body.map((n) => (n.type === 'ExportNamedDeclaration' && n.declaration ? (n.declaration as Node) : n)),
     imports,
     reexports,
@@ -142,7 +149,8 @@ function packageCandidates(from: string, spec: string): string[] {
     }
   while (entry && typeof entry === 'object') entry = entry.types ?? entry.import ?? entry.default;
   if (typeof entry === 'string' && star !== null) entry = entry.replaceAll('*', star);
-  if (entry === undefined && !exports) entry = sub ? `.${sub}.d.ts` : (manifest.types ?? manifest.typings);
+  if (entry === undefined && !exports)
+    entry = sub ? (/\.[cm]?[jt]s$/.test(sub) ? `.${sub}` : `.${sub}.d.ts`) : (manifest.types ?? manifest.typings);
   // a workspace package often points at its source `.ts` rather than a built `.d.ts`
   return typeof entry === 'string' ? declarationsOf(resolve(dir, entry)).map(normalizePath) : [];
 }
@@ -151,8 +159,9 @@ function packageCandidates(from: string, spec: string): string[] {
 function candidatesOf(from: string, spec: string): string[] {
   if (!isRelative(spec)) return packageCandidates(from, spec);
   const base = resolve(dirname(from), spec);
+  // svelte-package publishes a component's types as `Button.svelte.d.ts`, next to a `Button.svelte` without them
   const declared = base.endsWith('.svelte')
-    ? [base]
+    ? [`${base}.ts`, `${base}.d.ts`, base]
     : /\.[cm]?[jt]s$/.test(base)
       ? declarationsOf(base)
       : [`${base}.ts`, `${base}.d.ts`, `${base}/index.ts`, `${base}/index.d.ts`];
@@ -162,9 +171,12 @@ function candidatesOf(from: string, spec: string): string[] {
 /** a `.ts` file parses as the module script of a component, which allows its exports */
 function readScope(file: string, pkg: boolean): Scope | null {
   const source = readFileSync(file, 'utf-8').replace(/\r\n?/g, '\n');
-  const lf = file.endsWith('.svelte') ? source : `<script module lang="ts">\n${source}\n</script>`;
+  const wrap = (s: string) => `<script module lang="ts">\n${s}\n</script>`;
+  const lf = file.endsWith('.svelte') ? source : wrap(source);
   try {
-    const ast = parseSvelte(lf, file);
+    // a `</script` in a comment or a string would end the wrapping script early; a slash of the same length (U+2215)
+    // keeps the offsets, so the types are still sliced from the file as written
+    const ast = parseSvelte(file.endsWith('.svelte') ? lf : wrap(source.replace(/<\/(?=script)/gi, '<\u2215')), file);
     return scopeOf(
       file,
       lf,
@@ -189,8 +201,9 @@ const MAX_DEPTH = 3;
  * The props of a Svelte 5 component, read from `let { … }: Type = $props()` in its source.
  * `Type` may be a type literal, a type alias or interface declared in the component, or one imported from a relative
  * path (`./types`, `./types.js`, `../types/index.ts`, or another component's `<script module>`). A type from a
- * package (`svelte/elements`) is returned as `typeName`, and of its members only the destructured ones are listed,
- * typed from the package's declaration file when it has one; a type it can not read at all is returned the same way.
+ * package (`svelte/elements`) is named in `typeName`, and of its members only the destructured ones are listed,
+ * typed from the package's declaration file when it has one; a type it can not read at all is named the same way.
+ * `typeName` joins the names with commas.
  * `files` are the other files read, so that a change to them can refresh the props. `null` when the component
  * declares no props or can not be parsed.
  */
@@ -227,13 +240,18 @@ export function extractProps(
   const members: { node: Node; scope: Scope }[] = [];
   const files = new Set<string>();
   const scopes = new Map<string, Scope | null>();
-  let typeName: string | null = null;
+  const typeNames = new Set<string>();
 
-  const declared = (scope: Scope, name: string) =>
-    scope.declarations.find(
-      (d) =>
-        (d.type === 'TSTypeAliasDeclaration' || d.type === 'TSInterfaceDeclaration') && (d.id as Node).name === name
-    );
+  /** a type alias or interface, or with `value` a variable (`declare const Button: Component<…>`) */
+  const declared = (scope: Scope, name: string, value: boolean) =>
+    value
+      ? scope.declarations
+          .flatMap((d) => (d.type === 'VariableDeclaration' ? (d.declarations as Node[]) : []))
+          .find((d) => (d.id as Node).name === name)
+      : scope.declarations.find(
+          (d) =>
+            (d.type === 'TSTypeAliasDeclaration' || d.type === 'TSInterfaceDeclaration') && (d.id as Node).name === name
+        );
 
   /**
    * The declaration a name refers to in a scope: its own, or one it imports or re-exports. `via` is how the name
@@ -244,11 +262,12 @@ export function extractProps(
     scope: Scope,
     name: string,
     depth: number,
-    via: 'local' | 'import' | 'star' = 'local'
+    via: 'local' | 'import' | 'star' = 'local',
+    value = false
   ): { node: Node; scope: Scope; depth: number } | null {
     const local =
       via === 'local' ? name : via === 'import' ? (scope.exported.get(name) ?? name) : scope.exported.get(name);
-    const node = local === undefined ? null : declared(scope, local);
+    const node = local === undefined ? null : declared(scope, local, value);
     if (node) return { node, scope, depth };
     if (depth >= MAX_DEPTH) return null;
     const imported = scope.reexports.get(name) ?? (local === undefined ? undefined : scope.imports.get(local));
@@ -268,7 +287,7 @@ export function extractProps(
       if (!cache.has(file)) cache.set(file, readScope(file, pkg));
       const found = cache.get(file);
       if (!found) continue;
-      const result = lookup(found, target, depth + 1, star ? 'star' : 'import');
+      const result = lookup(found, target, depth + 1, star ? 'star' : 'import', value);
       if (result) return result;
     }
     return null;
@@ -276,27 +295,54 @@ export function extractProps(
 
   /** `depth` counts the files followed to reach `scope`; `seen` stops types that refer to themselves */
   const seen = new Set<Node>();
+  /** as written in the project: what a package type refers to inside its own files is behind the name already given */
+  const name = (scope: Scope, type: Node) => {
+    if (!scope.package) typeNames.add(scope.text(type));
+  };
   function collect(type: Node | undefined, scope: Scope, depth: number) {
     if (!type) return;
     if (type.type === 'TSParenthesizedType') collect(type.typeAnnotation as Node, scope, depth);
     else if (type.type === 'TSTypeLiteral') members.push(...(type.members as Node[]).map((node) => ({ node, scope })));
     else if (type.type === 'TSIntersectionType') for (const t of type.types as Node[]) collect(t, scope, depth);
     else if (type.type === 'TSTypeReference' && (type.typeName as Node).type === 'Identifier') {
-      const found = lookup(scope, (type.typeName as Node).name as string, depth);
-      if (!found || found.scope.package) typeName ??= scope.text(type);
+      const ref = (type.typeName as Node).name as string;
+      const query = ((type.typeArguments as Node | undefined)?.params as Node[] | undefined)?.[0];
+      const from = scope.imports.get(ref);
+      // `ComponentProps<typeof Button>`, with `Button` declared `Component<Props>` as svelte-package writes it
+      const queried = query?.type === 'TSTypeQuery' ? (query.exprName as Node) : null;
+      if (from?.from === 'svelte' && from.name === 'ComponentProps' && queried?.type === 'Identifier') {
+        const component = lookup(scope, queried.name as string, depth, 'local', true);
+        const t = ((component?.node.id as Node | undefined)?.typeAnnotation as Node | undefined)?.typeAnnotation as
+          Node | undefined;
+        const callee = (t?.type === 'TSImportType' ? t.qualifier : t?.typeName) as Node | undefined;
+        const props =
+          callee?.name === 'Component'
+            ? ((t!.typeArguments as Node | undefined)?.params as Node[] | undefined)?.[0]
+            : undefined;
+        if (component && props) {
+          if (component.scope.package) name(scope, type);
+          return collect(props, component.scope, component.depth);
+        }
+      }
+      const found = lookup(scope, ref, depth);
+      if (!found || found.scope.package) name(scope, type);
       if (!found || seen.has(found.node)) return;
       if (found.node.type === 'TSTypeAliasDeclaration') {
         seen.add(found.node);
         collect(found.node.typeAnnotation as Node, found.scope, found.depth);
-      } else {
-        seen.add(found.node);
-        members.push(...((found.node.body as Node).body as Node[]).map((node) => ({ node, scope: found.scope })));
-        for (const h of (found.node.extends as Node[] | undefined) ?? [])
-          collect({ ...h, type: 'TSTypeReference', typeName: h.expression }, found.scope, found.depth);
-      }
+      } else
+        for (const node of found.scope.declarations) {
+          // the declarations of an interface declared more than once merge
+          if (node.type !== 'TSInterfaceDeclaration' || (node.id as Node).name !== (found.node.id as Node).name)
+            continue;
+          seen.add(node);
+          members.push(...((node.body as Node).body as Node[]).map((m) => ({ node: m, scope: found.scope })));
+          for (const h of (node.extends as Node[] | undefined) ?? [])
+            collect({ ...h, type: 'TSTypeReference', typeName: h.expression }, found.scope, found.depth);
+        }
     }
     // a union, a qualified name (`Foo.Props`) and the like: the reader gets the type as written
-    else typeName ??= scope.text(type);
+    else name(scope, type);
   }
   collect((id.typeAnnotation as Node | undefined)?.typeAnnotation as Node | undefined, own, 0);
 
@@ -304,7 +350,7 @@ export function extractProps(
   const defaults = new Map<string, { value: string | null; bindable: boolean; description: string | null }>();
   if (id.type === 'ObjectPattern')
     for (const p of id.properties as Node[]) {
-      if (p.type !== 'Property') continue;
+      if (p.type !== 'Property' || p.computed) continue;
       const value = p.value as Node;
       let right = value.type === 'AssignmentPattern' ? (value.right as Node) : null;
       const bindable =
@@ -362,5 +408,5 @@ export function extractProps(
       bindable: d.bindable,
       description: d.description
     });
-  return { props, typeName, files: [...files] };
+  return { props, typeName: typeNames.size ? [...typeNames].join(', ') : null, files: [...files] };
 }
