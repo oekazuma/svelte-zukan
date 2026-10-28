@@ -280,32 +280,41 @@ describe('modules shared with the app', () => {
     expect(fullReloads()).toBe(0);
   });
 
-  it('a logo in publicDir is served without a warning', { timeout: 25_000 }, async () => {
-    await server.close();
-    link('svelte');
-    mkdirSync(join(tmp, 'app/public'));
-    // over Vite's inline limit, so that the page requests the file itself
-    writeFileSync(
-      join(tmp, 'app/public/logo.svg'),
-      `<svg xmlns="http://www.w3.org/2000/svg"><!--${'x'.repeat(5000)}--></svg>`
-    );
-    await start({ logo: 'public/logo.svg' });
-    const warn = vi.spyOn(server.config.logger, 'warn');
-    const get = (url: string) =>
-      new Promise<string>((resolve, reject) => {
-        const res = {
-          statusCode: 200,
-          getHeader() {},
-          setHeader() {},
-          end: (body: string | Buffer) => resolve(String(body))
-        };
-        server.middlewares({ url, method: 'GET', headers: { host: 'localhost' } } as never, res as never, reject);
-      });
-    const entry = await get('/@id/__x00__' + ENTRY);
-    const logo = entry.match(/import logo from "([^"]+)"/)![1];
-    expect(await get(logo)).toMatch(/^export default "\/logo\.svg"/);
-    expect(warn).not.toHaveBeenCalled();
-  });
+  it(
+    'a logo in publicDir is served without a warning, and editing it reloads only the catalog',
+    { timeout: 25_000 },
+    async () => {
+      await server.close();
+      link('svelte');
+      mkdirSync(join(tmp, 'app/public'));
+      // over Vite's inline limit, so that the page requests the file itself
+      writeFileSync(
+        join(tmp, 'app/public/logo.svg'),
+        `<svg xmlns="http://www.w3.org/2000/svg"><!--${'x'.repeat(5000)}--></svg>`
+      );
+      await start({ logo: 'public/logo.svg' });
+      const warn = vi.spyOn(server.config.logger, 'warn');
+      const get = (url: string) =>
+        new Promise<string>((resolve, reject) => {
+          const res = {
+            statusCode: 200,
+            getHeader() {},
+            setHeader() {},
+            end: (body: string | Buffer) => resolve(String(body))
+          };
+          server.middlewares({ url, method: 'GET', headers: { host: 'localhost' } } as never, res as never, reject);
+        });
+      const entry = await get('/@id/__x00__' + ENTRY);
+      const logo = entry.match(/import logo from "([^"]+)"/)![1];
+      expect(await get(logo)).toMatch(/^export default "\/logo\.svg"/);
+      expect(warn).not.toHaveBeenCalled();
+      send.mockClear();
+      writeFileSync(join(tmp, 'app/public/logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="1"/>');
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(fullReloads()).toBe(0);
+    }
+  );
 });
 
 const errors = () => send.mock.calls.filter(([p]: unknown[]) => (p as { type?: string })?.type === 'error');
