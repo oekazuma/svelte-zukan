@@ -571,10 +571,11 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       let targets: Iterable<(typeof modules)[number]>;
       const normalized = configuredPath(normalizePath(file));
       const inScanned = scanned().some((dir) => isInside(normalized, dir));
-      // what the app imports too: the chain of imports through the catalog's own modules ends at the entry, which
-      // accepts no update, so Vite would answer with `full-reload` on every tab
+      // what the app imports too: the chain of imports through the catalog's own modules (the list, and a meta module
+      // that watches the file) ends at the entry, which accepts no update, so Vite would answer with `full-reload` on
+      // every tab
       const appModules = () =>
-        modules.filter((m) => [...m.importers].some((i) => i.id !== '\0' + ENTRY && i.id !== '\0' + CATALOG));
+        modules.filter((m) => [...m.importers].some((i) => !i.id?.startsWith('\0virtual:svelte-zukan/')));
       const searchedCss = file.endsWith('.css') && cssDirs().some((dir) => isInside(normalized, dir));
       const watchedCss =
         tailwindWatch.has(normalized) || tailwindWatch.has(normalizePath(file)) || (searchedCss && type !== 'update');

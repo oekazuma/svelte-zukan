@@ -258,6 +258,8 @@ describe('modules shared with the app', () => {
     { timeout: 25_000 },
     async () => {
       await withApp({ compilerOptions: { hmr: false } });
+      // its detail page watches the file through the meta module, which is the catalog's too
+      await meta('app/A');
       send.mockClear();
       writeFileSync(join(tmp, 'app/src/A.zukan.svelte'), '<Section title="A"><p>changed</p></Section>');
       await waitForReload();

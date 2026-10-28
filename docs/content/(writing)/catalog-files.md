@@ -40,7 +40,7 @@ A catalog file is a Svelte component made of `<Section>` blocks. Each section is
 - `title` must be a non-empty static string, unique within the file
 - Write the markup and `<script>` in plain Svelte (TypeScript with `lang="ts"` is fine). Preprocessor languages, such as SCSS, work only inside `<style>`
 
-A missing, dynamic, or empty `title`, a duplicate `title`, or a `<Section>` that is not at the top level each cause a build error with the file name and line. A file that is not plain Svelte markup also causes a build error with the file name. On the dev server, the file's detail page shows the same message instead, and the app's tabs are left alone.
+A missing, dynamic, or empty `title`, a duplicate `title`, or a `<Section>` that is not at the top level each cause a build error with the file name and line. A file that is not plain Svelte markup also causes a build error with the file name. On the dev server, the file's detail page shows the same message instead, and the app's tabs are left alone, unless one of the app's own pages imports the file: Vite then shows the error there as usual.
 
 A file with no `<Section>` is not an error: its detail page says that there is nothing to preview. A `<Section>` without content renders nothing.
 
