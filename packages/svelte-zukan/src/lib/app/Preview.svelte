@@ -40,16 +40,17 @@
 
   // svelte-ignore state_referenced_locally
   const loaded = Promise.all([wrapper?.(), entry.load()]);
+  /** the content or its error is in: what a check of this page (webmcp.ts) waits for, as an element may never come */
+  let settled = $state(false);
   // the theme's color covers the page until the wrapper brings the app's CSS, which may paint html or body itself; read
   // once the content is mounted, as a component's own styles are added then. A newer preview (another hash) owns the
   // page once this one is gone
   $effect(() => {
-    if (!stored) return;
     let mounted = true;
-    loaded.then(tick).then(
-      () => mounted && paint(document, stored),
-      () => {}
-    );
+    loaded.then(tick, tick).then(() => {
+      settled = true;
+      if (mounted && stored) paint(document, stored);
+    });
     return () => {
       mounted = false;
     };
@@ -57,18 +58,27 @@
 </script>
 
 <!-- the wrapper is imported only here, so its global CSS never reaches the catalog UI -->
-<div data-zukan-preview>
+<div data-zukan-preview data-zukan-ready={settled || undefined}>
   {#await loaded then [w, mod]}
-    {#if w}
-      <w.default><mod.default /></w.default>
-    {:else}
-      <mod.default />
-    {/if}
+    <svelte:boundary>
+      {#if w}
+        <w.default><mod.default /></w.default>
+      {:else}
+        <mod.default />
+      {/if}
+      {#snippet failed(error)}
+        {@render failure(t.renderFailed, error)}
+      {/snippet}
+    </svelte:boundary>
   {:catch error}
-    <!-- runAxe reports this instead of checking it -->
-    <p data-zukan-error>{t.loadFailed} {error instanceof Error ? error.message : String(error)}</p>
+    {@render failure(t.loadFailed, error)}
   {/await}
 </div>
+
+{#snippet failure(label: string, error: unknown)}
+  <!-- runAxe reports this instead of checking it -->
+  <p data-zukan-error>{label} {error instanceof Error ? error.message : String(error)}</p>
+{/snippet}
 
 <style>
   /* keeps child margins inside, so the measured height covers them */

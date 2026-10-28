@@ -62,16 +62,28 @@ export async function findTailwindEntries(dirs: string[], resolveCss: Resolver):
   const byReal = new Map<string, string>();
   for (const file of candidates.keys()) if (!byReal.has(real(file))) byReal.set(real(file), file);
   const partials = new Set<string>();
-  for (const file of byReal.values()) {
-    const css = candidates.get(file)!;
+  // a plain CSS file between them (`app.css` -> `base.css` -> `theme.css`) still makes the last one a partial
+  const follow = async (file: string, css: string, from: string, seen: Set<string>) => {
     const base = path.dirname(file);
     for (const id of importIds(css)) {
       if (isTailwindId(id)) continue;
-      const resolved = (await resolveCss(id, base).catch(() => undefined)) || path.resolve(base, id);
-      const target = byReal.get(real(resolved));
-      if (target && target !== file) partials.add(target);
+      const resolved = real((await resolveCss(id, base).catch(() => undefined)) || path.resolve(base, id));
+      const target = byReal.get(resolved);
+      if (target) {
+        if (target !== from) partials.add(target);
+      } else if (!seen.has(resolved) && resolved.endsWith('.css') && !resolved.includes('/node_modules/')) {
+        seen.add(resolved);
+        let plain: string;
+        try {
+          plain = readFileSync(resolved, 'utf8');
+        } catch {
+          continue;
+        }
+        await follow(resolved, plain, from, seen);
+      }
     }
-  }
+  };
+  for (const file of byReal.values()) await follow(file, candidates.get(file)!, file, new Set());
   return [...byReal.values()].filter((file) => !partials.has(file));
 }
 
@@ -249,6 +261,12 @@ async function loadEntry(
   const base = path.dirname(entry);
   const source = readFileSync(entry, 'utf8');
   const css = importsTailwind(source) ? source : `@import "tailwindcss";\n${source}`;
+  // an entry that imports only some of Tailwind's files, such as `tailwindcss/theme.css`, has tokens but no utility
+  // layer, so its sample would style nothing
+  const hasUtilities =
+    importIds(css).some((id) => /^tailwindcss(\/(index|utilities)(\.css)?)?$/.test(id)) ||
+    /@tailwind\s+utilities\b/.test(stripComments(css));
+  const sample = hasUtilities ? css : `${css}\n@import "tailwindcss/utilities.css" layer(utilities);`;
 
   let resolveFile: ((base: string, id: string) => string | false) | undefined;
   const loadStylesheet = async (id: string, from: string) => {
@@ -279,7 +297,7 @@ async function loadEntry(
     throw new Error(unsupported);
   }
 
-  const compiled = await compile(css, {
+  const compiled = await compile(sample, {
     base,
     onDependency,
     customCssResolver: resolvers.css,

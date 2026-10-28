@@ -151,7 +151,7 @@ export function buildTools(opts: {
           });
           const doc = frame.contentDocument!;
           // the preview mounts the component after the page's load event
-          for (let i = 0; i < 50 && !doc.querySelector('[data-zukan-preview] *'); i++)
+          for (let i = 0; i < 50 && !doc.querySelector('[data-zukan-ready], [data-zukan-error]'); i++)
             await new Promise((r) => setTimeout(r, 100));
           return text(await runAxe(doc, axe));
         } catch (e) {

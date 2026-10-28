@@ -30,5 +30,6 @@ The accessibility button runs [axe-core](https://github.com/dequelabs/axe-core) 
   - "Tab order" numbers the elements the Tab key moves to, in that order, and numbers them again when the preview changes. Elements inside a shadow root or an iframe are left out
 - The vision simulation and both switches go back to off when the panel closes or the preview reloads
 - With `locale: 'ja'`, axe-core's messages are in Japanese too
+- A section that fails to load, or whose component throws while rendering, is reported as the error instead of being checked
 
 axe-core is loaded only when a check runs. The rule about landmarks around all page content is off, since a component on its own has none.

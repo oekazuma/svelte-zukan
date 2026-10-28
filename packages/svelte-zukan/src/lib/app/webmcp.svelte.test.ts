@@ -107,9 +107,9 @@ describe('WebMCP tools', () => {
     it("renders in the catalog's current theme unless the call names one", async () => {
       const src = vi.spyOn(HTMLIFrameElement.prototype, 'src', 'set');
       try {
-        await check('<div data-zukan-preview><p>ok</p></div>');
+        await check('<div data-zukan-preview data-zukan-ready><p>ok</p></div>');
         expect(src.mock.calls.at(-1)![0]).toMatch(/#\/preview\/ui\/Button\?section=Primary&theme=dark$/);
-        await check('<div data-zukan-preview><p>ok</p></div>', { theme: 'light' });
+        await check('<div data-zukan-preview data-zukan-ready><p>ok</p></div>', { theme: 'light' });
         expect(src.mock.calls.at(-1)![0]).toMatch(/&theme=light$/);
       } finally {
         src.mockRestore();
@@ -117,7 +117,7 @@ describe('WebMCP tools', () => {
     });
 
     it('renders the section and returns what axe-core finds', async () => {
-      const result = await check('<div data-zukan-preview><img src=""></div>');
+      const result = await check('<div data-zukan-preview data-zukan-ready><img src=""></div>');
       expect(result.isError).toBeUndefined();
       expect(JSON.parse(body(result))).toEqual({
         violations: [
@@ -140,6 +140,21 @@ describe('WebMCP tools', () => {
         ]
       });
       expect(document.querySelectorAll('iframe').length).toBe(0);
+    });
+
+    it('checks a section with no elements as soon as the preview has settled', async () => {
+      const start = performance.now();
+      const result = await check('<div data-zukan-preview data-zukan-ready>Just text</div>');
+      expect(result.isError).toBeUndefined();
+      expect(performance.now() - start).toBeLessThan(2000);
+    });
+
+    it('reports a section that failed to render instead of checking an empty page', async () => {
+      const result = await check(
+        '<div data-zukan-preview data-zukan-ready><p data-zukan-error>Failed to render: boom</p></div>'
+      );
+      expect(result.isError).toBe(true);
+      expect(body(result)).toBe('The check could not run: Failed to render: boom');
     });
 
     it('reports a preview that failed to load instead of checking its error message', async () => {

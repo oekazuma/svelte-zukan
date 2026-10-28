@@ -82,6 +82,14 @@ describe('findTailwindEntries', () => {
     expect(await findTailwindEntries([src, src], noResolver)).toEqual([entry]);
   });
 
+  it('treats a @theme file reached through plain CSS files as a partial, and survives an import cycle', async () => {
+    const { src, entry } = fixture('@import "tailwindcss";\n@import "./base.css";');
+    write(join(src, 'base.css'), '@import "./more/base.css";\n@import "./base.css";');
+    write(join(src, 'more/base.css'), '@import "../theme.css";\n@import "../base.css";');
+    write(join(src, 'theme.css'), '@theme { --color-brand: red; }');
+    expect(await findTailwindEntries([src], noResolver)).toEqual([entry]);
+  });
+
   it('resolves partial imports through the given resolver', async () => {
     const { src, entry } = fixture('@import "tailwindcss";\n@import "$lib/theme.css";');
     write(join(src, 'lib/theme.css'), '@theme { --color-brand: red; }');
@@ -216,6 +224,14 @@ describe('loadTailwind', () => {
     const classes = s.categories.find((c) => c.id === 'background-color')?.tokens.map((t) => t.class);
     expect(classes).toContain('bg-brand-500');
     expect(classes).toContain('bg-red-500');
+  });
+
+  it('adds the utilities to the sample of an entry that imports only part of Tailwind', async () => {
+    const { root, src } = fixture('@import "tailwindcss/theme.css";\n@theme { --color-brand-500: #ff3e00; }');
+    const [s] = (await loadTailwind(root, [src])).sources;
+    expect(s.error).toBeUndefined();
+    expect(s.categories.find((c) => c.id === 'background-color')?.tokens.map((t) => t.class)).toContain('bg-brand-500');
+    expect(s.css).toContain('.bg-brand-500');
   });
 
   it('loads a TypeScript @plugin', async () => {
