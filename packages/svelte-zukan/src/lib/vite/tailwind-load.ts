@@ -15,8 +15,10 @@ const MIN_VERSION = '4.1.0';
 
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 // `@reference` is a different at-rule, so it never matches
-const importIds = (css: string) =>
-  [...stripComments(css).matchAll(/@import\s+(?:url\(\s*)?(['"])(.+?)\1/g)].map((m) => m[2]);
+const importIds = (css: string, url = true) =>
+  [...stripComments(css).matchAll(url ? /@import\s+(?:url\(\s*)?(['"])(.+?)\1/g : /@import\s+(['"])(.+?)\1/g)].map(
+    (m) => m[2]
+  );
 const isTailwindId = (id: string) => id === 'tailwindcss' || id.startsWith('tailwindcss/');
 const importsTailwind = (css: string) => importIds(css).some(isTailwindId);
 export const isCandidate = (css: string) => importsTailwind(css) || /@theme\b/.test(stripComments(css));
@@ -65,7 +67,8 @@ export async function findTailwindEntries(dirs: string[], resolveCss: Resolver):
   // a plain CSS file between them (`app.css` -> `base.css` -> `theme.css`) still makes the last one a partial
   const follow = async (file: string, css: string, from: string, seen: Set<string>) => {
     const base = path.dirname(file);
-    for (const id of importIds(css)) {
+    // Tailwind inlines `@import "x"` only, never `@import url(x)`
+    for (const id of importIds(css, false)) {
       if (isTailwindId(id)) continue;
       const resolved = real((await resolveCss(id, base).catch(() => undefined)) || path.resolve(base, id));
       const target = byReal.get(resolved);

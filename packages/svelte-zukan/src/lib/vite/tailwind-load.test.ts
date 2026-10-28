@@ -90,6 +90,13 @@ describe('findTailwindEntries', () => {
     expect(await findTailwindEntries([src], noResolver)).toEqual([entry]);
   });
 
+  it('keeps a @theme file imported with url() as an entry, as Tailwind does not inline it', async () => {
+    const { src, entry } = fixture('@import "tailwindcss";\n@import "./base.css";');
+    write(join(src, 'base.css'), '@import url("./theme.css");');
+    write(join(src, 'theme.css'), '@theme { --color-brand: red; }');
+    expect(await findTailwindEntries([src], noResolver)).toEqual([entry, normalizePath(join(src, 'theme.css'))]);
+  });
+
   it('resolves partial imports through the given resolver', async () => {
     const { src, entry } = fixture('@import "tailwindcss";\n@import "$lib/theme.css";');
     write(join(src, 'lib/theme.css'), '@theme { --color-brand: red; }');

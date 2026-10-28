@@ -83,6 +83,11 @@ export function generateEntryModule(opts: {
     `if (import.meta.hot) import.meta.hot.on('zukan:reload', () => {`,
     `  if (!inPreview()) location.reload();`,
     `});`,
+    // a section that failed to render stays failed through its component's HMR update, as the failed boundary holds
+    // no component to update; loading the page again renders it with the new module
+    `if (import.meta.hot) import.meta.hot.on('vite:afterUpdate', () => {`,
+    `  if (document.querySelector('[data-zukan-error]')) location.reload();`,
+    `});`,
     opts.tailwind
       ? `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)}), import(${s(TAILWIND)})]).then(([{ default: App }, { catalog, uncataloged }, { tailwind }]) =>`
       : `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)})]).then(([{ default: App }, { catalog, uncataloged }]) =>`,
