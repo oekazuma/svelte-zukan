@@ -1,7 +1,10 @@
 import type { Theme } from '../components/PreviewFrame/storage.js';
 
-/** `width` and `theme` reproduce a shared view; they are undefined when the link does not set them */
-export type View = { width?: number; theme?: Theme };
+/**
+ * `width` and `theme` reproduce a shared view; they are undefined when the link does not set them. A `null` width is
+ * full width, which must be in the link: without it the preview takes the width remembered in the tab.
+ */
+export type View = { width?: number | null; theme?: Theme };
 
 export type Route =
   | { view: 'list' }
@@ -25,10 +28,11 @@ const decode = (s: string) => {
 const encodePath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
 
 function viewOf(params: URLSearchParams): View {
-  const width = Number(params.get('width'));
+  const raw = params.get('width');
+  const width = Number(raw);
   const theme = params.get('theme');
   return {
-    width: Number.isInteger(width) && width > 0 ? width : undefined,
+    width: raw === 'full' ? null : Number.isInteger(width) && width > 0 ? width : undefined,
     theme: theme === 'light' || theme === 'dark' ? theme : undefined
   };
 }
@@ -56,7 +60,7 @@ const query = (params: URLSearchParams) => [...params].map(([k, v]) => `${k}=${e
 export function formatHash(view: 'detail' | 'preview', path: string, section?: string, shared: View = {}): string {
   const params = new URLSearchParams();
   if (section !== undefined) params.set('section', section);
-  if (shared.width) params.set('width', String(shared.width));
+  if (shared.width !== undefined) params.set('width', shared.width === null ? 'full' : String(shared.width));
   if (shared.theme) params.set('theme', shared.theme);
   const q = query(params);
   return `#/${view === 'preview' ? PREVIEW : ''}${encodePath(path)}${q && `?${q}`}`;

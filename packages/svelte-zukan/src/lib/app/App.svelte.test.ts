@@ -862,6 +862,54 @@ describe('App', () => {
     }
   });
 
+  it('a section from the URL goes on to the top as the previews grow, until the reader scrolls', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card?section=Two');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      const two = screen.getByRole('heading', { level: 2, name: 'Two' });
+      await expect.element(two).toBeInTheDocument();
+      const top = () => Math.round(two.element().getBoundingClientRect().top);
+      // the page is still too short to bring the heading to the top, as it is before the previews have their height
+      expect(top()).toBeGreaterThan(10);
+      document.querySelector<HTMLElement>('.example')!.style.minHeight = '1200px';
+      document.body.style.paddingBottom = '2000px';
+      await expect.poll(top).toBeLessThan(10);
+      dispatchEvent(new WheelEvent('wheel'));
+      const calls = spy.mock.calls.length;
+      document.querySelector<HTMLElement>('.example')!.style.minHeight = '1600px';
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      expect(spy.mock.calls.length).toBe(calls);
+    } finally {
+      spy.mockRestore();
+      document.body.style.paddingBottom = '';
+    }
+  });
+
+  it('a click in a preview releases a section from the URL, so its growth does not scroll the page', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card?section=Two');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      const calls = spy.mock.calls.length;
+      (screen.getByTitle('Two').element() as HTMLIFrameElement).contentWindow!.focus();
+      await expect.poll(() => document.activeElement?.localName).toBe('iframe');
+      // focus may leave the preview before it grows
+      screen.getByRole('heading', { level: 2, name: 'One' }).element().closest('section')?.querySelector('a')?.focus();
+      window.focus();
+      document.querySelector<HTMLElement>('.example')!.style.minHeight = '1200px';
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      document.querySelector<HTMLElement>('.example')!.style.minHeight = '1600px';
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      expect(spy.mock.calls.length).toBe(calls);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('changing only the section scrolls without remounting the page', async () => {
     const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
     try {
@@ -1118,6 +1166,30 @@ describe('App', () => {
     expect(document.querySelector('.zukan')!.getAttribute('data-theme')).toBe('dark');
     await expect.poll(() => Math.round(screen.getByTitle('One').element().getBoundingClientRect().width)).toBe(375);
     expect(localStorage.getItem('svelte-zukan:theme')).toBeNull();
+  });
+
+  it('a link copied at full width opens at full width over a remembered width', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = () =>
+      Promise.resolve({ default: { sections: [{ title: 'One', code: '<p>one</p>' }], doc: null } });
+    sessionStorage.setItem(`svelte-zukan:width:${location.pathname}#/preview/ui/Card?section=One`, '375');
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    try {
+      const screen = await render(App, { props });
+      const iframeWidth = () => Math.round(screen.getByTitle('One').element().getBoundingClientRect().width);
+      await expect.poll(iframeWidth).toBe(375);
+      await screen.getByRole('button', { name: 'Full width' }).click();
+      await screen.getByRole('button', { name: 'Copy link to this view' }).click();
+      const link = writeText.mock.calls[0][0];
+      expect(link).toMatch(/[?&]width=full(&|$)/);
+      await screen.getByRole('button', { name: 'Tablet (768px)', exact: true }).click();
+      await expect.poll(iframeWidth).toBe(768);
+      await setHash(link.slice(link.indexOf('#')));
+      await expect.poll(iframeWidth).toBeGreaterThan(768);
+    } finally {
+      writeText.mockRestore();
+      sessionStorage.clear();
+    }
   });
 
   it('on a narrow screen the menu button shows the navigation', async () => {

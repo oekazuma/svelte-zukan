@@ -20,7 +20,7 @@
   }: {
     entry: Entry;
     section?: string | null;
-    width?: number;
+    width?: number | null;
     previous?: Entry;
     next?: Entry;
     theme: Theme;
@@ -63,10 +63,27 @@
       }
     };
   }
+  /**
+   * The content's height when the pinned heading was last scrolled to, rather than at the observer's first report,
+   * which comes a frame later and may already include the growth
+   */
+  let contentHeight = 0;
+  // the previews above a pinned heading grow as they load and push it down, and the page may only now be tall enough
+  // to bring it to the top
+  const follow = new ResizeObserver(([entry]) => {
+    if (pinned && active !== null && entry.borderBoxSize[0].blockSize !== contentHeight) show(active);
+  });
+  $effect(() => () => follow.disconnect());
   // marked on the scroll rather than here: a key or a click that does not scroll must not move the mark off the pin
   function unpin() {
     if (pinned) released = true;
     pinned = false;
+    follow.disconnect();
+  }
+  // a click in a preview sends the catalog no pointer event, only the blur of its window, and is the reader's like a
+  // scroll; focus may leave the preview again before it grows
+  function onblur() {
+    if (document.activeElement?.localName === 'iframe') unpin();
   }
   function onscroll() {
     if (!released || pinned) return;
@@ -91,6 +108,10 @@
     heading.scrollIntoView();
     active = title;
     pinned = true;
+    // the headings are children of the content
+    const content = heading.parentElement!;
+    contentHeight = content.getBoundingClientRect().height;
+    follow.observe(content);
     if (title === PROPS) heading.focus({ preventScroll: true });
   }
 
@@ -113,7 +134,15 @@
 </script>
 
 <!-- what the reader does to scroll; a scroll event alone would also come from `show` -->
-<svelte:window {onclick} {onscroll} onwheel={unpin} ontouchmove={unpin} onkeydown={unpin} onpointerdown={unpin} />
+<svelte:window
+  {onclick}
+  {onscroll}
+  {onblur}
+  onwheel={unpin}
+  ontouchmove={unpin}
+  onkeydown={unpin}
+  onpointerdown={unpin}
+/>
 
 {#snippet pagerLink(to: Entry, rel: 'prev' | 'next')}
   <!-- a hash route of this catalog, not a SvelteKit route -->
@@ -230,8 +259,7 @@
               src={location.pathname + formatHash('preview', entry.path, s.title)}
               tabHref={location.pathname + formatHash('preview', entry.path, s.title, { theme })}
               shareUrl={(w) =>
-                location.href.split('#')[0] +
-                formatHash('detail', entry.path, s.title, { width: w ?? undefined, theme })}
+                location.href.split('#')[0] + formatHash('detail', entry.path, s.title, { width: w, theme })}
               requestedWidth={section === s.title ? width : undefined}
               bind:expanded={() => expandedTitle === s.title, (v) => (expandedTitle = v ? s.title : null)}
               title={s.title}

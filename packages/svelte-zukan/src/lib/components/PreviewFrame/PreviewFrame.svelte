@@ -101,8 +101,8 @@
     tabHref: string;
     /** a link to this view at the given width, for the copy-link button */
     shareUrl?: (width: number | null) => string;
-    /** a width from a shared link; it wins over the remembered one */
-    requestedWidth?: number;
+    /** a width from a shared link, `null` for full width; it wins over the remembered one */
+    requestedWidth?: number | null;
     expanded?: boolean;
     /** the source of axe-core; without it there is no accessibility check */
     axe?: () => Promise<string>;
@@ -303,8 +303,27 @@
     queueMicrotask(() => expandButton?.focus());
   }
 
+  let preview: HTMLDivElement | undefined = $state();
+  let backdrop: HTMLDivElement | undefined = $state();
+  // the rest of the page is inert while expanded, so Tab and screen readers stay in the preview; a <dialog> would trap
+  // too, but this element can not become one without moving the iframe, which reloads it. Dialogs (search, shortcuts)
+  // still open over it, and the backdrop still takes the click that leaves
   $effect(() => {
-    if (requestedWidth) width = requestedWidth;
+    if (!expanded || !preview) return;
+    const others: HTMLElement[] = [];
+    for (let el: Element = preview; el.parentElement && el !== document.body; el = el.parentElement) {
+      for (const sibling of el.parentElement.children) {
+        if (!(sibling instanceof HTMLElement) || sibling === el || sibling === backdrop) continue;
+        if (sibling.localName === 'dialog' || sibling.inert) continue;
+        sibling.inert = true;
+        others.push(sibling);
+      }
+    }
+    return () => others.forEach((el) => (el.inert = false));
+  });
+
+  $effect(() => {
+    if (requestedWidth !== undefined) width = requestedWidth;
   });
 
   $effect(() => writeWidth(src, width));
@@ -430,10 +449,10 @@
 
 {#if expanded}
   <!-- clicking outside the expanded preview also leaves it -->
-  <div class="backdrop" aria-hidden="true" onclick={toggleExpanded}></div>
+  <div class="backdrop" aria-hidden="true" onclick={toggleExpanded} bind:this={backdrop}></div>
 {/if}
 
-<div class={['preview', { expanded }]}>
+<div class={['preview', { expanded }]} bind:this={preview}>
   <div class="toolbar" use:tooltips>
     <div class="group" role="group" aria-label={labels.previewWidth}>
       {#each PRESETS as preset (preset.width)}
