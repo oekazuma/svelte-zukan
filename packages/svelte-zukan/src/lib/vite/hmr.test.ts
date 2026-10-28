@@ -3,11 +3,12 @@ import { mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'nod
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { createServer, type InlineConfig, type Plugin, type ViteDevServer } from 'vite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { zukan } from './index.js';
 import { findPackage } from './tailwind-load.js';
-import { TAILWIND, TAILWIND_SOURCE, metaId } from './virtual.js';
+import { ENTRY, TAILWIND, TAILWIND_SOURCE, metaId } from './virtual.js';
 
 let tmp: string;
 let server: ViteDevServer;
@@ -21,7 +22,7 @@ async function start(options: Parameters<typeof zukan>[0] = {}, config: InlineCo
     root: join(tmp, 'app'),
     configFile: false,
     logLevel: 'silent',
-    plugins: [plugin],
+    plugins: [plugin, ...(config.plugins ?? [])],
     // no HTTP or WebSocket server: payloads are read from the spy on hot.send
     server: { middlewareMode: true, ws: false }
   });
@@ -216,6 +217,96 @@ it(
     expect(await list()).toContain('"file":"src/Lone.svelte"');
   }
 );
+
+/** links a package of this repository into the temporary app, the way pnpm would */
+const link = (name: string) => {
+  const at = join(tmp, 'app/node_modules', name);
+  mkdirSync(dirname(at), { recursive: true });
+  symlinkSync(findPackage(name, import.meta.dirname)!, at, 'junction');
+};
+
+const updated = (url: string) =>
+  send.mock.calls.some(([p]: unknown[]) =>
+    (p as { updates?: { path: string }[] })?.updates?.some((u) => u.path === url)
+  );
+
+describe('modules shared with the app', () => {
+  /** restarts the server with Svelte, a page of the app that imports the catalog file, and every module loaded */
+  async function withApp(svelteOptions: Parameters<typeof svelte>[0] = {}) {
+    await server.close();
+    link('svelte');
+    writeFileSync(join(tmp, 'app/src/main.js'), "import A from './A.zukan.svelte';\nexport default A;\n");
+    await start({}, { plugins: [svelte(svelteOptions)] });
+    const env = server.environments.client;
+    for (const id of [ENTRY, 'virtual:svelte-zukan/catalog', '/src/A.zukan.svelte']) await env.transformRequest(id);
+  }
+
+  it('an app page that imports a catalog file still hot-updates it', { timeout: 25_000 }, async () => {
+    await withApp();
+    await server.environments.client.transformRequest('/src/main.js');
+    send.mockClear();
+    writeFileSync(join(tmp, 'app/src/A.zukan.svelte'), '<Section title="A"><p>changed</p></Section>');
+    await waitForReload();
+    await expect.poll(() => updated('/src/A.zukan.svelte'), { timeout: 10_000 }).toBe(true);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(fullReloads()).toBe(0);
+  });
+
+  // without Svelte's HMR the file accepts no update, and the catalog's chain of imports ends at the entry
+  it(
+    'a catalog file only the catalog imports does not reload the app, even without HMR',
+    { timeout: 25_000 },
+    async () => {
+      await withApp({ compilerOptions: { hmr: false } });
+      send.mockClear();
+      writeFileSync(join(tmp, 'app/src/A.zukan.svelte'), '<Section title="A"><p>changed</p></Section>');
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(fullReloads()).toBe(0);
+    }
+  );
+
+  it('editing the logo reloads only the catalog', { timeout: 25_000 }, async () => {
+    await server.close();
+    link('svelte');
+    writeFileSync(join(tmp, 'app/logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    await start({ logo: 'logo.svg' });
+    const env = server.environments.client;
+    for (const id of [ENTRY, '/logo.svg?url']) await env.transformRequest(id);
+    send.mockClear();
+    writeFileSync(join(tmp, 'app/logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="1"/>');
+    await waitForReload();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(fullReloads()).toBe(0);
+  });
+
+  it('a logo in publicDir is served without a warning', { timeout: 25_000 }, async () => {
+    await server.close();
+    link('svelte');
+    mkdirSync(join(tmp, 'app/public'));
+    // over Vite's inline limit, so that the page requests the file itself
+    writeFileSync(
+      join(tmp, 'app/public/logo.svg'),
+      `<svg xmlns="http://www.w3.org/2000/svg"><!--${'x'.repeat(5000)}--></svg>`
+    );
+    await start({ logo: 'public/logo.svg' });
+    const warn = vi.spyOn(server.config.logger, 'warn');
+    const get = (url: string) =>
+      new Promise<string>((resolve, reject) => {
+        const res = {
+          statusCode: 200,
+          getHeader() {},
+          setHeader() {},
+          end: (body: string | Buffer) => resolve(String(body))
+        };
+        server.middlewares({ url, method: 'GET', headers: { host: 'localhost' } } as never, res as never, reject);
+      });
+    const entry = await get('/@id/__x00__' + ENTRY);
+    const logo = entry.match(/import logo from "([^"]+)"/)![1];
+    expect(await get(logo)).toMatch(/^export default "\/logo\.svg"/);
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
 
 const errors = () => send.mock.calls.filter(([p]: unknown[]) => (p as { type?: string })?.type === 'error');
 

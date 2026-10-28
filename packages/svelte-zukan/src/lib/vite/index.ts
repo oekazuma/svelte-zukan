@@ -165,6 +165,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   // Tailwind's dependencies are added to the dev server's watcher, not with `addWatchFile`: that would make each one an
   // import of the Tailwind modules, whose chain up to the entry accepts no update, so Vite would answer with `full-reload`
   let watcher: FSWatcher | null = null;
+  /** the dev server's publicDir, '' without one or in the build */
+  let publicDir = '';
   const generateTailwind = async (env: () => Environment) => {
     const css = viteResolver(
       env,
@@ -410,13 +412,28 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           this.addWatchFile(docPath);
           doc = marked.parse(readFileSync(docPath, 'utf-8'), { async: false });
         }
-        const sections = extractSections(readFileSync(item.file, 'utf-8'), item.file);
+        let sections: ReturnType<typeof extractSections> = [];
+        let error: string | undefined;
+        try {
+          sections = extractSections(readFileSync(item.file, 'utf-8'), item.file);
+        } catch (e) {
+          // on the dev server a throw is a transform error, which Vite shows in an overlay on every tab, the app's too,
+          // and which stays there after the fix, since that reloads only the catalog
+          if (!serving) throw e;
+          error = (e instanceof Error ? e.message : String(e)).replaceAll(root + '/', '');
+        }
         const component = componentFileOf(item.file);
         let found = null;
         // not `addWatchFile`: the component would become an import of the meta module, and deleting it would end in
         // `full-reload`; `hotUpdate` compares its props itself, and the scanned directories are watched
         if (existsSync(component)) found = readProps(normalizePath(component));
-        const meta = { sections, doc, props: found?.props ?? null, propsType: found?.typeName ?? null };
+        const meta = {
+          sections,
+          doc,
+          props: found?.props ?? null,
+          propsType: found?.typeName ?? null,
+          ...(error !== undefined && { error })
+        };
         return `export default ${JSON.stringify(meta)};\n`;
       }
       if (id === '\0' + CATALOG) {
@@ -458,9 +475,13 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           group: g.name,
           dirs: g.dirs.map((dir) => normalizePath(relative(root, dir)) || '.')
         }));
+        // by its file path, a logo in publicDir would be served under /public/, which Vite warns about on every request
+        const { logo } = resolved;
+        const inPublic = logo && publicDir && isInside(logo, publicDir);
         return generateEntryModule({
           appFile: appFile('App.svelte'),
           ...resolved,
+          logo: inPublic ? '/' + normalizePath(relative(publicDir, logo)) : logo,
           searched,
           tailwind: hasTailwind(cssDirs(), root)
         });
@@ -469,12 +490,14 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     configureServer(server) {
       const { root, base } = server.config;
       watcher = server.watcher;
+      publicDir = server.config.publicDir ? normalizePath(server.config.publicDir) : '';
       const realRoot = normalizePath(realpathSync(root));
       const outside = realDirs.map(([real]) => real).filter((dir) => !isInside(dir, realRoot));
       if (outside.length) server.watcher.add(outside);
 
       // called directly (not in a returned hook) to run before SvelteKit's middleware
       server.middlewares.use((req, res, next) => {
+        if (req.method !== 'GET' && req.method !== 'HEAD') return next();
         const url = req.url ?? '';
         const path = url.split(/[?#]/)[0];
         if (path === `${base}__zukan`) {
@@ -547,6 +570,11 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       const metas = () => [...moduleGraph.idToModuleMap.values()].filter((m) => m.id?.startsWith('\0' + META));
       let targets: Iterable<(typeof modules)[number]>;
       const normalized = configuredPath(normalizePath(file));
+      const inScanned = scanned().some((dir) => isInside(normalized, dir));
+      // what the app imports too: the chain of imports through the catalog's own modules ends at the entry, which
+      // accepts no update, so Vite would answer with `full-reload` on every tab
+      const appModules = () =>
+        modules.filter((m) => [...m.importers].some((i) => i.id !== '\0' + ENTRY && i.id !== '\0' + CATALOG));
       const searchedCss = file.endsWith('.css') && cssDirs().some((dir) => isInside(normalized, dir));
       const watchedCss =
         tailwindWatch.has(normalized) || tailwindWatch.has(normalizePath(file)) || (searchedCss && type !== 'update');
@@ -588,15 +616,17 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       }
       if (isDocFile(file)) {
         targets = metas();
-      } else if (type === 'update' && isCatalogFile(file)) {
+      } else if (type === 'update' && isCatalogFile(file) && inScanned) {
         targets = [...modules, ...metas()];
-      } else if (isCatalogFile(file) && scanned().some((dir) => isInside(normalized, dir))) {
+      } else if (isCatalogFile(file) && inScanned) {
         // created or deleted: the list is rebuilt when the module is loaded again, and Vite does not
         // invalidate the file's own module on add or unlink, so a re-created file would keep its old module;
         // the lookup map would still serve a deleted file
         items = null;
         const list = moduleGraph.getModuleById('\0' + CATALOG);
         targets = [...modules, ...metas(), ...(list ? [list] : [])];
+      } else if (normalized === resolved.logo) {
+        targets = modules;
       } else if (
         type !== 'update' &&
         file.endsWith('.svelte') &&
@@ -626,7 +656,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       if (this.environment.config.consumer !== 'client') return;
       // not `full-reload`: that would also reload the app's tabs on the same dev server
       this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
-      return [];
+      return appModules();
     }
   };
 }

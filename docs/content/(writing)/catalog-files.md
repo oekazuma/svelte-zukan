@@ -40,7 +40,7 @@ A catalog file is a Svelte component made of `<Section>` blocks. Each section is
 - `title` must be a non-empty static string, unique within the file
 - Write the markup and `<script>` in plain Svelte (TypeScript with `lang="ts"` is fine). Preprocessor languages, such as SCSS, work only inside `<style>`
 
-A missing, dynamic, or empty `title`, a duplicate `title`, or a `<Section>` that is not at the top level each cause a build error with the file name and line. A file that is not plain Svelte markup also causes a build error with the file name.
+A missing, dynamic, or empty `title`, a duplicate `title`, or a `<Section>` that is not at the top level each cause a build error with the file name and line. A file that is not plain Svelte markup also causes a build error with the file name. On the dev server, the file's detail page shows the same message instead, and the app's tabs are left alone.
 
 A file with no `<Section>` is not an error: its detail page says that there is nothing to preview. A `<Section>` without content renders nothing.
 
@@ -92,7 +92,8 @@ The `suffix` option changes the file names. `zukan({ suffix: 'catalog' })` uses 
 
 ## Watching and HMR
 
-- Creating, deleting, or editing a catalog file or a `.md` file reloads only the `/__zukan/` tab. Tabs of the app connected to the same dev server are not reloaded
+- Creating, deleting, or editing a catalog file or a `.md` file reloads only the `/__zukan/` tab. Tabs of the app connected to the same dev server are not reloaded. An app page that imports a catalog file still gets the edit through normal HMR
+- Editing the `logo` image also reloads only the `/__zukan/` tab
 - Editing a component itself (such as `Button.svelte`) goes through normal HMR and is reflected in both the app and the catalog. If the edit changes its props, the `/__zukan/` tab also reloads to update the props table
 - Directories outside Vite's root, such as other packages in a monorepo, are also watched
 - When two catalog files end up with the same ID, Vite's error overlay appears in the terminal and in the app tabs connected to the dev server
