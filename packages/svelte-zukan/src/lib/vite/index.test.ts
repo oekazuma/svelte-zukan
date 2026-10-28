@@ -36,6 +36,7 @@ beforeAll(async () => {
   docFile = path.join(dir, 'Foo.zukan.md');
   await writeFile(zukanFile, source);
   await writeFile(docFile, '# Foo');
+  await plugin.config.handler({ root: dir }, { command: 'serve', mode: 'development' });
 });
 
 afterAll(() => rmSync(tmpRoot, { recursive: true, force: true }));
@@ -71,15 +72,6 @@ describe('hotUpdate', () => {
     const { ctx, run } = setup('client', new Map([[other.id, other]]));
     expect(run('create', docFile)).toEqual([]);
     expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
-  });
-
-  it('reloads on catalog file update', () => {
-    const { ctx, run } = setup('client');
-    const mod = { id: zukanFile };
-    expect(run('update', zukanFile, [mod])).toEqual([]);
-    const invalidated = ctx.environment.moduleGraph.invalidateModule.mock.calls.map((c: unknown[]) => c[0]);
-    expect(invalidated).toEqual(expect.arrayContaining([mod, metaMod]));
-    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
   });
 
   it('server environment invalidates without sending', () => {
@@ -239,6 +231,18 @@ describe('virtual modules', () => {
     expect(entry).toContain('searched: [{"group":"app","dirs":["src"]}]');
   });
 
+  // imported by its file path it would be served under /public/, which Vite warns about on every request
+  it('on the dev server, imports a logo in publicDir by its public URL', async () => {
+    const { root } = await makeApp();
+    mkdirSync(path.join(root, 'public/img'), { recursive: true });
+    await writeFile(path.join(root, 'public/img/logo.svg'), '<svg/>');
+    const { p } = boot(root, { logo: 'public/img/logo.svg' });
+    p.configureServer({ ...fakeServer(root), config: { ...fakeServer(root).config, publicDir: `${root}/public` } });
+    expect(p.load('\0virtual:svelte-zukan/entry')).toContain('import logo from "/img/logo.svg?url"');
+    const built = (await bootBuild(root, { logo: 'public/img/logo.svg' })).p;
+    expect(built.load('\0virtual:svelte-zukan/entry')).toContain(`import logo from "${root}/public/img/logo.svg?url"`);
+  });
+
   it('passes the searched dirs relative to the root', async () => {
     const { tmp, root } = await makeApp();
     const { p } = boot(root, { groups: { a: '.', b: ['src', '../outside'] } });
@@ -315,6 +319,23 @@ describe('metadata modules', () => {
     expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/B.catalog.md`);
   });
 
+  // a throw would be a transform error, which Vite shows in an overlay on every tab of the dev server, the app's too
+  it('on the dev server, gives the error of a file that does not compile instead of failing', async () => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/Broken.zukan.svelte'), '<Section><p>x</p></Section>');
+    const { p } = boot(root);
+    const code = p.load.call({ addWatchFile: vi.fn() }, meta('app/Broken'));
+    const data = JSON.parse(code.replace(/^export default |;\n$/g, ''));
+    expect(data).toMatchObject({ sections: [], error: expect.stringMatching(/^src\/Broken\.zukan\.svelte:1 .*title/) });
+  });
+
+  it('fails the build on a file that does not compile', async () => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/Broken.zukan.svelte'), '<Section><p>x</p></Section>');
+    const { p } = await bootBuild(root, { build: true });
+    expect(() => p.load.call({ addWatchFile: vi.fn() }, meta('app/Broken'))).toThrow(/Broken\.zukan\.svelte:1/);
+  });
+
   it('throws for an unknown ID', async () => {
     const { root } = await makeApp();
     const { p } = boot(root);
@@ -366,7 +387,7 @@ type Res = {
   location?: string;
   headers?: Record<string, unknown>;
 };
-const request = (mw: (...a: unknown[]) => void, url: string) =>
+const request = (mw: (...a: unknown[]) => void, url: string, method = 'GET') =>
   new Promise<Res>((resolve) => {
     const out: Res = {};
     const res = {
@@ -380,7 +401,7 @@ const request = (mw: (...a: unknown[]) => void, url: string) =>
         resolve({ ...out, ...(this.statusCode !== 200 && { status: this.statusCode }), body: body?.toString() });
       }
     };
-    mw({ url, method: 'GET' }, res, () => resolve({ status: 'next' }));
+    mw({ url, method }, res, () => resolve({ status: 'next' }));
   });
 
 describe('configureServer', () => {
@@ -459,6 +480,17 @@ describe('configureServer', () => {
     // the query is dropped
     for (const [url] of server.transformIndexHtml.mock.calls) expect(url).toBe('/__zukan/');
     for (const url of ['/', '/__zukanx', '/__zukan/x']) expect(await request(mw, url)).toEqual({ status: 'next' });
+  });
+
+  it('answers only GET and HEAD', async () => {
+    const { root } = await makeApp();
+    const server = fakeServer(root);
+    boot(root).p.configureServer(server);
+    const mw = server.middlewares.use.mock.calls[0][0];
+    for (const method of ['POST', 'PUT', 'DELETE', 'OPTIONS'])
+      for (const url of ['/__zukan', '/__zukan/', '/__zukan/catalog.json'])
+        expect(await request(mw, url, method)).toEqual({ status: 'next' });
+    expect((await request(mw, '/__zukan/', 'HEAD')).type).toMatch(/^text\/html/);
   });
 
   it('sends the configured server.headers', async () => {
@@ -589,6 +621,7 @@ describe('configurePreviewServer', () => {
 });
 
 describe('hotUpdate of the catalog list', () => {
+  const catalogOnly = { id: '\0virtual:svelte-zukan/catalog' };
   const setup = async (consumer: 'client' | 'server' = 'client') => {
     const { root, outside } = await makeApp();
     const { p } = boot(root);
@@ -621,10 +654,61 @@ describe('hotUpdate of the catalog list', () => {
 
   it.each(['create', 'delete'])('also invalidates the file itself on %s', async (type) => {
     const { root, ctx, run, catalogMod, metaMod } = await setup();
-    const own = { id: `${root}/src/lib/New.zukan.svelte` };
+    const own = { id: `${root}/src/lib/New.zukan.svelte`, importers: new Set([catalogOnly]) };
     expect(run(type, `${root}/src/lib/New.zukan.svelte`, [own])).toEqual([]);
     const invalidated = ctx.environment.moduleGraph.invalidateModule.mock.calls.map((c: unknown[]) => c[0]);
     expect(invalidated).toEqual(expect.arrayContaining([own, catalogMod, metaMod]));
+  });
+
+  it('reloads on catalog file update', async () => {
+    const { root, ctx, run, metaMod } = await setup();
+    const mod = { id: `${root}/src/A.zukan.svelte`, importers: new Set([catalogOnly]) };
+    expect(run('update', `${root}/src/A.zukan.svelte`, [mod])).toEqual([]);
+    const invalidated = ctx.environment.moduleGraph.invalidateModule.mock.calls.map((c: unknown[]) => c[0]);
+    expect(invalidated).toEqual(expect.arrayContaining([mod, metaMod]));
+    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
+  });
+
+  it('ignores an update of a catalog file outside the scanned dirs', async () => {
+    const { root, outside, ctx, run } = await setup();
+    for (const file of [`${outside}/B.zukan.svelte`, `${root}/Other.zukan.svelte`])
+      expect(run('update', file, [{ id: file, importers: new Set() }])).toBeUndefined();
+    expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
+    expect(ctx.environment.hot.send).not.toHaveBeenCalled();
+  });
+
+  // the catalog's own import chain ends at the entry, which accepts no update: Vite would answer with `full-reload`
+  it('leaves to Vite only the modules that the app imports', async () => {
+    const { root, run } = await setup();
+    const file = `${root}/src/A.zukan.svelte`;
+    const shared = { id: file, importers: new Set([catalogOnly, { id: `${root}/src/routes/+page.svelte` }]) };
+    const css = { id: `${file}?svelte&type=style&lang.css`, importers: new Set([shared]) };
+    expect(run('update', file, [shared, css])).toEqual([shared, css]);
+    expect(run('update', file, [{ id: file, importers: new Set([catalogOnly]) }])).toEqual([]);
+  });
+
+  it('an edit of the logo reloads only the catalog', async () => {
+    const { root } = await makeApp();
+    const { p } = boot(root, { logo: 'logo.png' });
+    const ctx = {
+      environment: {
+        config: { consumer: 'client' },
+        hot: { send: vi.fn() },
+        moduleGraph: { getModuleById: vi.fn(), idToModuleMap: new Map(), invalidateModule: vi.fn() }
+      }
+    };
+    const url = { id: `${root}/logo.png?url`, importers: new Set([{ id: '\0' + ENTRY }]) };
+    const own = { id: `${root}/logo.png`, importers: new Set([{ id: `${root}/src/main.ts` }]) };
+    const result = p.hotUpdate.call(ctx, {
+      type: 'update',
+      file: `${root}/logo.png`,
+      modules: [url, own],
+      timestamp: 1
+    });
+    expect(result).toEqual([own]);
+    expect(ctx.environment.moduleGraph.invalidateModule.mock.calls.map((c: unknown[]) => c[0])).toContain(url);
+    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
+    expect(ctx.environment.hot.send).not.toHaveBeenCalledWith({ type: 'full-reload' });
   });
 
   it('server environment invalidates without sending', async () => {

@@ -244,7 +244,9 @@
             </div>
           {/if}
         {/if}
-        {#if !meta.sections.length}
+        {#if meta.error}
+          <p class="empty">{t.loadFailed} {meta.error}</p>
+        {:else if !meta.sections.length}
           <p class="empty">{t.noSections}</p>
         {/if}
         {#each meta.sections as s (s.title)}

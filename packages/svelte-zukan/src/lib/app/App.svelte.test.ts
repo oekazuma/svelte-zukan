@@ -820,6 +820,15 @@ describe('App', () => {
       .toBeInTheDocument();
   });
 
+  it('a file that does not compile shows its error', async () => {
+    const { props } = setup('#/ui/Card');
+    const error = 'src/Card.zukan.svelte:1 <Section> needs a title';
+    props.catalog[0].meta = () => Promise.resolve({ default: { sections: [], doc: null, error } });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByText(`Failed to load: ${error}`)).toBeInTheDocument();
+    await expect.element(screen.getByText(/has no <Section>/)).not.toBeInTheDocument();
+  });
+
   it('a file with sections shows no such message', async () => {
     const { props } = setup('#/ui/Card');
     props.catalog[0].meta = () =>
