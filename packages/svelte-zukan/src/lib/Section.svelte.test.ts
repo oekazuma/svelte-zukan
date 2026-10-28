@@ -20,6 +20,14 @@ describe('Section', () => {
     await expect.element(screen.getByText('content')).toBeInTheDocument();
   });
 
+  it('matches a CRLF multi-line title against the LF title of the preview URL', async () => {
+    const screen = await render(Section, {
+      props: { title: 'two\r\nlines', children },
+      context: new Map([[PREVIEW_SECTION_KEY, 'two\nlines']])
+    });
+    await expect.element(screen.getByText('content')).toBeInTheDocument();
+  });
+
   it('renders nothing when title differs', async () => {
     const screen = await render(Section, {
       props: { title: 'A', children },

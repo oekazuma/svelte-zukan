@@ -48,6 +48,8 @@ function identifiersOf(value: unknown) {
     else if (n.type === 'Identifier' && !skip.has(n)) names.add(n.name as string);
     else if (['Component', 'UseDirective', 'TransitionDirective', 'AnimateDirective'].includes(n.type))
       names.add((n.name as string).split('.')[0]);
+    // `style:color` alone reads the variable `color`
+    else if (n.type === 'StyleDirective' && n.value === true) names.add(n.name as string);
   });
   return names;
 }
@@ -68,6 +70,16 @@ function declaredNames(node: Node) {
   else if (node.type === 'VariableDeclaration') for (const d of node.declarations as { id: Node }[]) addPattern(d.id);
   else addPattern(node.id as Node);
   return names;
+}
+
+/** `let x = $state(0)`, `$derived.by(...)`, `$props()` */
+function isRuneDeclaration(node: Node) {
+  if (node.type !== 'VariableDeclaration') return false;
+  return (node.declarations as { init: Node | null }[]).every(({ init }) => {
+    let callee = init?.type === 'CallExpression' ? (init.callee as Node) : null;
+    if (callee?.type === 'MemberExpression') callee = callee.object as Node;
+    return callee?.type === 'Identifier' && (callee.name as string).startsWith('$');
+  });
 }
 
 // `import { Section as Example } from 'svelte-zukan'` names the tag `Example`
@@ -123,6 +135,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
           [
             'VariableDeclaration',
             'FunctionDeclaration',
+            'TSDeclareFunction',
             'ClassDeclaration',
             'TSTypeAliasDeclaration',
             'TSInterfaceDeclaration',
@@ -132,6 +145,8 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
       .map((node) => ({
         kind,
         names: declaredNames((node.type === 'ExportNamedDeclaration' ? node.declaration : node) as Node),
+        // as Svelte decides: `$state` is a store only when `state` is not itself declared with a rune
+        store: !isRuneDeclaration((node.type === 'ExportNamedDeclaration' ? node.declaration : node) as Node),
         uses: identifiersOf(node),
         text: textOf(node)
       }));
@@ -140,6 +155,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
     .map((node) => ({
       kind: 'snippet' as const,
       names: [(node.expression as { name: string }).name],
+      store: false,
       uses: identifiersOf(node),
       text: textOf(node)
     }));
@@ -188,7 +204,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
     for (let grew = true; grew;) {
       grew = false;
       for (const def of defs) {
-        if (used.has(def) || !def.names.some((n) => refs.has(n))) continue;
+        if (used.has(def) || !def.names.some((n) => refs.has(n) || (def.store && refs.has('$' + n)))) continue;
         used.add(def);
         def.uses.forEach((n) => refs.add(n));
         grew = true;

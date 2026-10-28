@@ -6,8 +6,10 @@
 
   // no context (outside the catalog, or a preview without ?section) -> always render
   const section = getContext<string | undefined>(PREVIEW_SECTION_KEY);
+  // the section in the URL comes from `extractSections`, which reads the file with LF line endings, while a CRLF
+  // checkout compiles a multi-line `title` with \r\n
 </script>
 
-{#if section === undefined || section === title}
+{#if section === undefined || section === title.replace(/\r\n?/g, '\n')}
   {@render children?.()}
 {/if}
