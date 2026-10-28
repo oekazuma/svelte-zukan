@@ -50,6 +50,10 @@ const expectWorker = (dir: string) => {
     .join('\n');
   expect(all).toMatch(/echo-[\w-]+\.js/);
   expect(all).not.toMatch(/[`'"]\/[^`'"]*echo-[\w-]+\.js/);
+  // the asset the worker loads is moved with it, so the worker must not name it from the root either
+  const [worker] = globSync('zukan-dist/_zukan/**/echo-*.js', { cwd: dir });
+  expect(globSync('zukan-dist/_zukan/**/message-*.txt', { cwd: dir })).toHaveLength(1);
+  expect(readFileSync(join(dir, worker), 'utf8')).not.toMatch(/[`'"]\/[^`'"]*message-[\w-]+\.txt/);
 };
 
 const catalogJs = (dir: string) =>

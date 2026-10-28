@@ -938,11 +938,16 @@ describe('build', () => {
     const bundle: Record<string, object> = {
       '_zukan/zukan-1.js': { type: 'chunk' },
       '_zukan/a-1.png': { type: 'asset', source: 'png' },
-      'kit-app/immutable/workers/w-1.js': { type: 'asset', source: 'worker' },
+      'kit-app/immutable/workers/w-1.js': { type: 'asset', source: 'fetch(`/app/kit-app/immutable/workers/m-1.txt`)' },
+      'kit-app/immutable/workers/m-1.txt': { type: 'asset', source: 'm' },
       'kit-app/version.json': { type: 'asset', source: '{}' }
     };
     const emitFile = vi.fn();
-    await p.generateBundle.handler.call({ environment: { name: env }, emitFile }, {}, bundle);
+    await p.generateBundle.handler.call(
+      { environment: { name: env, config: { base: '/app/' } }, emitFile },
+      {},
+      bundle
+    );
     return { bundle, emitFile };
   };
 
@@ -950,14 +955,16 @@ describe('build', () => {
     expect(plugin.generateBundle.order).toBe('post');
     const { bundle, emitFile } = await generate('zukan', { appDir: 'kit-app' });
     expect(Object.keys(bundle)).toEqual(['_zukan/zukan-1.js', '_zukan/a-1.png']);
+    // the worker loads the asset next to it, which moves with it, instead of from the app's base
     expect(emitFile.mock.calls).toEqual([
-      [{ type: 'asset', fileName: '_zukan/kit-app/immutable/workers/w-1.js', source: 'worker' }]
+      [{ type: 'asset', fileName: '_zukan/kit-app/immutable/workers/w-1.js', source: 'fetch(`./m-1.txt`)' }],
+      [{ type: 'asset', fileName: '_zukan/kit-app/immutable/workers/m-1.txt', source: 'm' }]
     ]);
     // without SvelteKit, a version.json is just a file
-    expect((await generate('zukan')).emitFile).toHaveBeenCalledTimes(2);
+    expect((await generate('zukan')).emitFile).toHaveBeenCalledTimes(3);
     // the app's own environments are left alone
     const app = await generate('client', { appDir: 'kit-app' });
-    expect(Object.keys(app.bundle)).toHaveLength(4);
+    expect(Object.keys(app.bundle)).toHaveLength(5);
     expect(app.emitFile).not.toHaveBeenCalled();
   });
 

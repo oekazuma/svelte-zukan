@@ -362,12 +362,26 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       order: 'post',
       handler(_, bundle) {
         if (this.environment.name !== 'zukan') return;
-        for (const [fileName, file] of Object.entries(bundle))
-          if (file.type === 'asset' && !fileName.startsWith(OUT_PREFIX)) {
-            delete bundle[fileName];
-            if (fileName !== `${kitAppDir}/version.json`)
-              this.emitFile({ type: 'asset', fileName: OUT_PREFIX + fileName, source: file.source });
+        const { base } = this.environment.config;
+        const moved = Object.keys(bundle).filter((f) => bundle[f].type === 'asset' && !f.startsWith(OUT_PREFIX));
+        for (const fileName of moved) {
+          const file = bundle[fileName];
+          delete bundle[fileName];
+          if (file.type !== 'asset') continue;
+          if (fileName === `${kitAppDir}/version.json`) continue;
+          let { source } = file;
+          // a worker names the assets it loads from the app's base, where the catalog has none; next to it, they move
+          // with it (a worker resolves a relative URL against its own script)
+          if (fileName.endsWith('.js') && !base.startsWith('.')) {
+            let code = typeof source === 'string' ? source : new TextDecoder().decode(source);
+            for (const other of moved) {
+              const url = posix.relative(posix.dirname(fileName), other);
+              code = code.replaceAll(base + other, url.startsWith('.') ? url : `./${url}`);
+            }
+            source = code;
           }
+          this.emitFile({ type: 'asset', fileName: OUT_PREFIX + fileName, source });
+        }
       }
     },
     buildApp: {
