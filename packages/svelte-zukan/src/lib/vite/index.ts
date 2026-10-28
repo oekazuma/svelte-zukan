@@ -148,8 +148,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   const scanned = () => groups.flatMap((g) => g.dirs);
   // the watcher reports a file of a dir reached through a symlink (a `groups` dir under a `node_modules` link) by its
   // real path, and Vite's watcher ignores node_modules
-  let realDirs: string[] = [];
-  const watchedDirs = () => [...scanned(), ...realDirs];
+  let realDirs: [real: string, dir: string][] = [];
+  /** a path the watcher reports, as the scanned dir it lies in names it */
+  const configuredPath = (file: string) => {
+    for (const [real, dir] of realDirs) if (real !== dir && isInside(file, real)) return dir + file.slice(real.length);
+    return file;
+  };
   // the root's `src` too: a SvelteKit app keeps `src/app.css` while its groups often point at `src/lib`
   const cssDirs = () => [...new Set([...scanned(), ...(existsSync(`${root}/src`) ? [`${root}/src`] : [])])];
   /** generated on the first demand and cached until a watched file changes */
@@ -237,7 +241,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         root = normalizePath(resolve(config.root ?? process.cwd()));
         resolved = resolveOptions(root, options);
         groups = discoverGroups(root, options.groups);
-        realDirs = scanned().map((dir) => normalizePath(realpathSync(dir)));
+        realDirs = scanned().map((dir) => [normalizePath(realpathSync(dir)), dir]);
         // the wrapper's directory, for CSS and assets imported next to it; the logo is one file (the bundled one is inside libDir)
         const extra = [
           ...(resolved.wrapper ? [dirname(resolved.wrapper)] : []),
@@ -466,7 +470,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       const { root, base } = server.config;
       watcher = server.watcher;
       const realRoot = normalizePath(realpathSync(root));
-      const outside = realDirs.filter((dir) => !isInside(dir, realRoot));
+      const outside = realDirs.map(([real]) => real).filter((dir) => !isInside(dir, realRoot));
       if (outside.length) server.watcher.add(outside);
 
       // called directly (not in a returned hook) to run before SvelteKit's middleware
@@ -542,9 +546,10 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       // the metadata of an entry depends on its catalog file and its .md, which the component's module does not track
       const metas = () => [...moduleGraph.idToModuleMap.values()].filter((m) => m.id?.startsWith('\0' + META));
       let targets: Iterable<(typeof modules)[number]>;
-      const normalized = normalizePath(file);
+      const normalized = configuredPath(normalizePath(file));
       const searchedCss = file.endsWith('.css') && cssDirs().some((dir) => isInside(normalized, dir));
-      const watchedCss = tailwindWatch.has(normalized) || (searchedCss && type !== 'update');
+      const watchedCss =
+        tailwindWatch.has(normalized) || tailwindWatch.has(normalizePath(file)) || (searchedCss && type !== 'update');
       if (watchedCss || (searchedCss && type === 'update')) {
         // the other environments see the same file: one regeneration is enough
         if (this.environment.config.consumer !== 'client') return;
@@ -585,7 +590,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         targets = metas();
       } else if (type === 'update' && isCatalogFile(file)) {
         targets = [...modules, ...metas()];
-      } else if (isCatalogFile(file) && watchedDirs().some((dir) => isInside(normalized, dir))) {
+      } else if (isCatalogFile(file) && scanned().some((dir) => isInside(normalized, dir))) {
         // created or deleted: the list is rebuilt when the module is loaded again, and Vite does not
         // invalidate the file's own module on add or unlink, so a re-created file would keep its old module;
         // the lookup map would still serve a deleted file
@@ -595,7 +600,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       } else if (
         type !== 'update' &&
         file.endsWith('.svelte') &&
-        watchedDirs().some((dir) => isInside(normalized, dir) && isComponentFile(dir, normalized.slice(dir.length + 1)))
+        scanned().some((dir) => isInside(normalized, dir) && isComponentFile(dir, normalized.slice(dir.length + 1)))
       ) {
         // a component created or deleted: the list of files without a catalog file changes, and so do the props of a
         // catalog file next to it; the app's own handling of the file goes on
@@ -604,12 +609,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         for (const mod of [list, ...metas()]) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
         this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
         return;
-      } else if (servedProps.has(normalizePath(file)) || propsDeps.has(normalizePath(file))) {
+      } else if (servedProps.has(normalized) || propsDeps.has(normalized)) {
         // the component's own HMR updates the previews; only a change to its props changes the detail page. A props
         // type file counts when it is created or deleted too: the component may import one that is not there yet
         if (this.environment.config.consumer !== 'client') return;
-        const changed = file.endsWith('.svelte') && servedProps.has(normalizePath(file)) ? [normalizePath(file)] : [];
-        const affected = new Set([...changed, ...(propsDeps.get(normalizePath(file)) ?? [])]);
+        const changed = file.endsWith('.svelte') && servedProps.has(normalized) ? [normalized] : [];
+        const affected = new Set([...changed, ...(propsDeps.get(normalized) ?? [])]);
         const before = [...affected].map((c) => servedProps.get(c));
         if ([...affected].every((c, i) => JSON.stringify(readProps(c)) === before[i])) return;
         for (const mod of metas()) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);

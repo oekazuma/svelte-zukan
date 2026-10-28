@@ -680,6 +680,26 @@ describe('hotUpdate of the catalog list', () => {
     expect(invalidated).toEqual([catalogMod, catalogMod]);
     expect(ctx.environment.hot.send).toHaveBeenCalledTimes(2);
   });
+
+  it('tells the components of a linked groups dir by the configured dir', async () => {
+    const { tmp, root } = await makeApp();
+    // the configured dir does not end in /src, so its routes/ holds components; the real one does
+    mkdirSync(`${tmp}/ui/src/routes`, { recursive: true });
+    mkdirSync(`${root}/node_modules`, { recursive: true });
+    symlinkSync(`${tmp}/ui/src`, `${root}/node_modules/ui`, 'junction');
+    const { p } = boot(root, { groups: { ui: 'node_modules/ui' } });
+    p.configureServer(fakeServer(root));
+    const list = { id: '\0virtual:svelte-zukan/catalog' };
+    const ctx = {
+      environment: {
+        config: { consumer: 'client' },
+        hot: { send: vi.fn() },
+        moduleGraph: { getModuleById: () => list, idToModuleMap: new Map(), invalidateModule: vi.fn() }
+      }
+    };
+    p.hotUpdate.call(ctx, { type: 'create', file: `${tmp}/ui/src/routes/Foo.svelte`, modules: [], timestamp: 1 });
+    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
+  });
 });
 
 describe('build', () => {
