@@ -160,6 +160,26 @@ it('a group outside the root is watched', { timeout: 20_000 }, async () => {
   expect(fullReloads()).toBe(0);
 });
 
+it('a component in a groups dir linked through node_modules updates its props', { timeout: 25_000 }, async () => {
+  await server.close();
+  await mkdir(join(tmp, 'ui/src'), { recursive: true });
+  const component = join(tmp, 'ui/src/B.svelte');
+  writeFileSync(join(tmp, 'ui/src/B.zukan.svelte'), '<Section title="B"><p>b</p></Section>');
+  writeFileSync(component, '<script lang="ts">\n  let { a }: { a: number } = $props();\n</script>\n<p>{a}</p>');
+  await mkdir(join(tmp, 'app/node_modules'), { recursive: true });
+  symlinkSync(join(tmp, 'ui'), join(tmp, 'app/node_modules/ui'), 'junction');
+  await start({ groups: { ui: 'node_modules/ui/src' } });
+  expect(await meta('ui/B')).toContain('"name":"a"');
+  send.mockClear();
+  writeFileSync(
+    component,
+    '<script lang="ts">\n  let { a, b }: { a: number; b?: string } = $props();\n</script>\n<p>{a}</p>'
+  );
+  await waitForReload();
+  expect(fullReloads()).toBe(0);
+  expect(await meta('ui/B')).toContain('"name":"b"');
+});
+
 it(
   'changing the props of the component updates the metadata; other edits leave it alone',
   { timeout: 25_000 },

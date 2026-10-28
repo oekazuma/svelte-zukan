@@ -70,6 +70,10 @@ export function discoverGroups(root: string, groups?: Record<string, string | st
   });
 }
 
+// a function, not the pattern '**/node_modules/**': patterns stop matching when the directory's own path holds glob
+// characters such as `[y]` or `{a,b}`
+const skipNodeModules = (name: string) => basename(name) === 'node_modules';
+
 const collator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
 const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -80,7 +84,7 @@ export function listCatalog(groups: CatalogGroup[], suffix: string): CatalogItem
 
   groups.forEach(({ name: group, dirs }, order) => {
     for (const dir of dirs) {
-      for (const found of globSync(`**/*${ext}`, { cwd: dir, exclude: ['**/node_modules/**'] })) {
+      for (const found of globSync(`**/*${ext}`, { cwd: dir, exclude: skipNodeModules })) {
         const file = normalizePath(join(dir, found));
         const segments = normalizePath(found).slice(0, -ext.length).split('/');
         const name = segments[segments.length - 1];
@@ -128,8 +132,7 @@ export function listUncataloged(
   const out: { group: string; file: string }[] = [];
   for (const { name: group, dirs } of groups) {
     for (const dir of dirs) {
-      const exclude = ['**/node_modules/**', ...(dir.endsWith('/src') ? ['routes/**'] : [])];
-      const found = globSync('**/*.svelte', { cwd: dir, exclude })
+      const found = globSync('**/*.svelte', { cwd: dir, exclude: skipNodeModules })
         .map((f) => normalizePath(f))
         .filter((f) => !f.endsWith(ext) && isComponentFile(dir, f))
         .sort((a, b) => collator.compare(a, b) || byCodePoint(a, b));

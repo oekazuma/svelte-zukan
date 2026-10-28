@@ -642,6 +642,64 @@ describe('hotUpdate of the catalog list', () => {
     expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();
     expect(ctx.environment.hot.send).not.toHaveBeenCalled();
   });
+
+  it('watches a groups dir reached through a node_modules link by its real path', async () => {
+    const { tmp, root } = await makeApp();
+    const real = `${tmp}/ui/src`;
+    mkdirSync(real, { recursive: true });
+    await writeFile(`${real}/B.zukan.svelte`, source);
+    mkdirSync(`${root}/node_modules/@acme`, { recursive: true });
+    symlinkSync(`${tmp}/ui`, `${root}/node_modules/@acme/ui`, 'junction');
+    const { p, config } = boot(root, { groups: { ui: 'node_modules/@acme/ui/src' } });
+    expect(config.server?.fs?.allow).toEqual([searchForWorkspaceRoot(root), libDir]);
+    const server = fakeServer(root);
+    p.configureServer(server);
+    // Vite's watcher ignores node_modules
+    expect(server.watcher.add).toHaveBeenCalledWith([real]);
+    const res = await request(server.middlewares.use.mock.calls[0][0], '/__zukan/catalog.json');
+    expect(JSON.parse(res.body!).components).toMatchObject([
+      { id: 'ui/B', file: 'node_modules/@acme/ui/src/B.zukan.svelte' }
+    ]);
+
+    const catalogMod = { id: '\0virtual:svelte-zukan/catalog' };
+    const ctx = {
+      environment: {
+        config: { consumer: 'client' },
+        hot: { send: vi.fn() },
+        moduleGraph: {
+          getModuleById: vi.fn((id: string) => (id === catalogMod.id ? catalogMod : undefined)),
+          idToModuleMap: new Map(),
+          invalidateModule: vi.fn()
+        }
+      }
+    };
+    const run = (type: string, file: string) => p.hotUpdate.call(ctx, { type, file, modules: [], timestamp: 1 });
+    expect(run('create', `${real}/New.zukan.svelte`)).toEqual([]);
+    expect(run('create', `${real}/New.svelte`)).toBeUndefined();
+    const invalidated = ctx.environment.moduleGraph.invalidateModule.mock.calls.map((c: unknown[]) => c[0]);
+    expect(invalidated).toEqual([catalogMod, catalogMod]);
+    expect(ctx.environment.hot.send).toHaveBeenCalledTimes(2);
+  });
+
+  it('tells the components of a linked groups dir by the configured dir', async () => {
+    const { tmp, root } = await makeApp();
+    // the configured dir does not end in /src, so its routes/ holds components; the real one does
+    mkdirSync(`${tmp}/ui/src/routes`, { recursive: true });
+    mkdirSync(`${root}/node_modules`, { recursive: true });
+    symlinkSync(`${tmp}/ui/src`, `${root}/node_modules/ui`, 'junction');
+    const { p } = boot(root, { groups: { ui: 'node_modules/ui' } });
+    p.configureServer(fakeServer(root));
+    const list = { id: '\0virtual:svelte-zukan/catalog' };
+    const ctx = {
+      environment: {
+        config: { consumer: 'client' },
+        hot: { send: vi.fn() },
+        moduleGraph: { getModuleById: () => list, idToModuleMap: new Map(), invalidateModule: vi.fn() }
+      }
+    };
+    p.hotUpdate.call(ctx, { type: 'create', file: `${tmp}/ui/src/routes/Foo.svelte`, modules: [], timestamp: 1 });
+    expect(ctx.environment.hot.send).toHaveBeenCalledWith({ type: 'custom', event: 'zukan:reload' });
+  });
 });
 
 describe('build', () => {
