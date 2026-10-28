@@ -72,6 +72,16 @@ function declaredNames(node: Node) {
   return names;
 }
 
+/** `let x = $state(0)`, `$derived.by(...)`, `$props()` */
+function isRuneDeclaration(node: Node) {
+  if (node.type !== 'VariableDeclaration') return false;
+  return (node.declarations as { init: Node | null }[]).every(({ init }) => {
+    let callee = init?.type === 'CallExpression' ? (init.callee as Node) : null;
+    if (callee?.type === 'MemberExpression') callee = callee.object as Node;
+    return callee?.type === 'Identifier' && (callee.name as string).startsWith('$');
+  });
+}
+
 // `import { Section as Example } from 'svelte-zukan'` names the tag `Example`
 function sectionName(ast: Ast) {
   for (const n of [...(ast.module?.content.body ?? []), ...(ast.instance?.content.body ?? [])] as unknown as Node[]) {
@@ -135,6 +145,8 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
       .map((node) => ({
         kind,
         names: declaredNames((node.type === 'ExportNamedDeclaration' ? node.declaration : node) as Node),
+        // as Svelte decides: `$state` is a store only when `state` is not itself declared with a rune
+        store: !isRuneDeclaration((node.type === 'ExportNamedDeclaration' ? node.declaration : node) as Node),
         uses: identifiersOf(node),
         text: textOf(node)
       }));
@@ -143,6 +155,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
     .map((node) => ({
       kind: 'snippet' as const,
       names: [(node.expression as { name: string }).name],
+      store: false,
       uses: identifiersOf(node),
       text: textOf(node)
     }));
@@ -191,7 +204,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
     for (let grew = true; grew;) {
       grew = false;
       for (const def of defs) {
-        if (used.has(def) || !def.names.some((n) => refs.has(n) || refs.has('$' + n))) continue;
+        if (used.has(def) || !def.names.some((n) => refs.has(n) || (def.store && refs.has('$' + n)))) continue;
         used.add(def);
         def.uses.forEach((n) => refs.add(n));
         grew = true;

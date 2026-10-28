@@ -60,7 +60,8 @@ export function catalogJson(opts: {
           preview: formatHash('preview', item.path, s.title)
         }));
       } catch (e) {
-        error = e instanceof Error ? e.message : String(e);
+        // a failed read names the file by the path it was opened with
+        error = (e instanceof Error ? e.message : String(e)).replaceAll(item.file, rel(item.file));
       }
       return {
         id: item.path,

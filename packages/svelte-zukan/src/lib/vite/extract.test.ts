@@ -95,6 +95,21 @@ describe('extractSections', () => {
     }
   });
 
+  it('does not take a rune for a store of the same name', () => {
+    const source = `<script>
+  const state = $state(init());
+  let count = $state(1);
+  function init() {
+    return {};
+  }
+</script>
+
+<Section title="a"><p>{count}</p></Section>`;
+    const { code } = extractSections(source, FILE)[0];
+    expect(code).not.toContain('init');
+    expect(code).toContain('let count = $state(1);');
+  });
+
   it('keeps the overload signatures of a function', () => {
     const source = `<script lang="ts">
   function f(a: string): string;
