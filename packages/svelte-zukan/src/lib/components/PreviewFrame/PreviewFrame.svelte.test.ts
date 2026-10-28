@@ -366,6 +366,13 @@ describe('PreviewFrame resizing', () => {
     await expect.poll(() => iframeWidth(screen.container)).toBe(375);
   });
 
+  it('full width from a shared link wins over the remembered width', async () => {
+    sessionStorage.setItem('svelte-zukan:width:about:blank', '500');
+    const screen = await render(PreviewFrame, { props: { ...props, requestedWidth: null } });
+    screen.container.style.width = '1000px';
+    await expect.poll(() => iframeWidth(screen.container)).toBe(1000 - 14);
+  });
+
   it('copies a link to the current width and opens the themed page in a new tab', async () => {
     const shareUrl = (width: number | null) => `https://example.com/#/ui/A?width=${width}`;
     const screen = await render(PreviewFrame, {
@@ -919,6 +926,28 @@ describe('PreviewFrame tools', () => {
     await userEvent.keyboard('{Escape}');
     await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
     await expect.element(screen.getByRole('button', { name: 'Expand' })).toHaveFocus();
+  });
+
+  it('keeps Tab inside the expanded preview, but not out of a dialog opened over it', async () => {
+    const outside = document.createElement('button');
+    const dialog = document.createElement('dialog');
+    document.body.prepend(outside, dialog);
+    try {
+      const screen = await render(PreviewFrame, { props });
+      const preview = screen.container.querySelector('.preview')!;
+      await screen.getByRole('button', { name: 'Expand' }).click();
+      for (let i = 0; i < 20; i++) {
+        await userEvent.keyboard('{Tab}');
+        expect(document.activeElement === document.body || preview.contains(document.activeElement)).toBe(true);
+      }
+      expect(outside.inert).toBe(true);
+      expect(dialog.inert).toBe(false);
+      await userEvent.keyboard('{Escape}');
+      await expect.poll(() => outside.inert).toBe(false);
+    } finally {
+      outside.remove();
+      dialog.remove();
+    }
   });
 
   it("passes the catalog's shortcuts on from inside the preview, but not while typing there", async () => {

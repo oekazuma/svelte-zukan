@@ -75,6 +75,13 @@ describe('shared view', () => {
     expect(parseHash(formatHash('preview', 'ui/Card', 'One', { theme: 'light' }))).toMatchObject({ theme: 'light' });
   });
 
+  it('round-trips full width, which is not the same as no width', () => {
+    const hash = formatHash('detail', 'ui/Card', 'One', { width: null });
+    expect(hash).toBe('#/ui/Card?section=One&width=full');
+    expect(parseHash(hash)).toMatchObject({ width: null });
+    expect(parseHash(formatHash('detail', 'ui/Card', 'One'))).toMatchObject({ width: undefined });
+  });
+
   it('ignores values it does not know', () => {
     const route = parseHash('#/ui/Card?width=-3&theme=blue');
     expect(route).toMatchObject({ width: undefined, theme: undefined });
