@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, globSync, readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { chromium } from 'playwright';
 import { normalizePath, preview } from 'vite';
 import { beforeAll, expect, test } from 'vitest';
@@ -35,6 +35,23 @@ const missing = (dir: string, ids: string[]) => {
   return ids.filter((id) => !['"', "'", '`'].some((q) => all.includes(q + id + q)));
 };
 
+/** files the catalog wrote besides index.html, catalog.json and `_zukan/` */
+const strays = (dir: string) =>
+  globSync('**/*', { cwd: join(dir, 'zukan-dist'), withFileTypes: true })
+    .filter((d) => d.isFile())
+    .map((d) => normalizePath(relative(join(dir, 'zukan-dist'), join(d.parentPath, d.name))))
+    .filter((f) => !f.startsWith('_zukan/') && f !== 'index.html' && f !== 'catalog.json');
+
+/** the Web Worker of the fixture: written under `_zukan/` and named by a relative URL (a leading `/` ignores the subpath) */
+const expectWorker = (dir: string) => {
+  expect(globSync('zukan-dist/_zukan/**/echo-*.js', { cwd: dir })).toHaveLength(1);
+  const all = catalogJs(dir)
+    .map(({ code }) => code)
+    .join('\n');
+  expect(all).toMatch(/echo-[\w-]+\.js/);
+  expect(all).not.toMatch(/[`'"]\/[^`'"]*echo-[\w-]+\.js/);
+};
+
 const catalogJs = (dir: string) =>
   globSync('zukan-dist/_zukan/*.js', { cwd: dir }).map((f) => ({ f, code: readFileSync(join(dir, f), 'utf8') }));
 
@@ -55,7 +72,9 @@ test('kit monorepo build', { timeout: 120_000 }, () => {
   expect(existsSync(join(dir, 'build/index.html'))).toBe(true);
   expect(existsSync(join(dir, 'zukan-dist/index.html'))).toBe(true);
   // the catalog's own files only, not SvelteKit's
-  expect(existsSync(join(dir, 'zukan-dist/_app'))).toBe(false);
+  expect(strays(dir)).toEqual([]);
+  expect(globSync('zukan-dist/**/version.json', { cwd: dir })).toEqual([]);
+  expectWorker(dir);
 
   const js = catalogJs(dir);
   expect(js.length).toBeGreaterThan(0);
@@ -101,12 +120,24 @@ test('kit monorepo build under paths.base', { timeout: 180_000 }, async () => {
   const browser = await chromium.launch();
   try {
     const origin = new URL(server.resolvedUrls!.local[0]).origin;
-    const page = await browser.newPage();
     const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto(`${origin}/app/__zukan/#/preview/@fixture/ui/lib/PageInfo?section=Runtime%20API`);
+    // a new page each: a preview ignores hash changes to other routes
+    const preview = async (id: string, section = 'Basic') => {
+      const page = await browser.newPage();
+      page.on('pageerror', (e) => errors.push(e.message));
+      await page.goto(`${origin}/app/__zukan/#/preview/@fixture/ui/lib/${id}?section=${encodeURIComponent(section)}`);
+      return page;
+    };
+    const page = await preview('PageInfo', 'Runtime API');
     await expect.poll(() => page.locator('dd').textContent(), { timeout: 30_000 }).toBe('""');
-    // a new page: a preview ignores hash changes to other routes
+    // no data for `$app/manifest` and no values for dynamic public env variables: the catalog has no server
+    const manifest = await preview('Manifest');
+    await expect.poll(() => manifest.locator('output').textContent(), { timeout: 30_000 }).toBe('[0,0,0,0]');
+    const env = await preview('Env');
+    await expect.poll(() => env.locator('output').textContent(), { timeout: 30_000 }).toBe('null');
+    const worker = await preview('Worker');
+    for (const id of ['via-url', 'via-import'])
+      await expect.poll(() => worker.locator(`#${id}`).textContent(), { timeout: 30_000 }).toBe('from worker');
     const detail = await browser.newPage();
     detail.on('pageerror', (e) => errors.push(e.message));
     await detail.goto(`${origin}/app/__zukan/#/@fixture/ui/lib/Card`);
@@ -134,6 +165,7 @@ test('kit monorepo build with bundleStrategy inline', { timeout: 120_000 }, () =
   build(dir, ['--config', 'vite.config.inline.ts']);
   expect(globSync('zukan-dist/_zukan/*.css', { cwd: dir }).length).toBeGreaterThan(0);
   expect(unloadedCss(dir)).toEqual([]);
+  expectWorker(dir);
 });
 
 test('plain vite build', { timeout: 120_000 }, async () => {
@@ -143,13 +175,18 @@ test('plain vite build', { timeout: 120_000 }, async () => {
   expect(existsSync(join(dir, 'zukan-dist/index.html'))).toBe(true);
   expect(missing(dir, ['vite-svelte/lib/Counter'])).toEqual([]);
   expect(withLocalPaths(dir)).toEqual([]);
+  expect(strays(dir)).toEqual([]);
+  expectWorker(dir);
   // the preview's theme switches `color-scheme`, which only an unlowered `light-dark()` follows
   const css = globSync('zukan-dist/_zukan/*.css', { cwd: dir }).map((f) => readFileSync(join(dir, f), 'utf8'));
   expect(css.join('\n')).toContain('light-dark(#000');
 
   // the catalog as data, for tools and agents
   const data = JSON.parse(readFileSync(join(dir, 'zukan-dist/catalog.json'), 'utf8'));
-  expect(data.components.map((c: { id: string }) => c.id)).toEqual(['vite-svelte/lib/Counter']);
+  expect(data.components.map((c: { id: string }) => c.id)).toEqual([
+    'vite-svelte/lib/Counter',
+    'vite-svelte/lib/Worker'
+  ]);
   expect(data.components[0].sections.map((s: { title: string }) => s.title)).toContain('Basic');
 
   // the Tailwind CSS tokens, read through @tailwindcss/vite's own @tailwindcss/node (pnpm does not hoist it)

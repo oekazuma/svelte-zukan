@@ -104,7 +104,10 @@ test('WebMCP tools list the catalog and run axe-core on a section', { timeout: 6
       [name, input] as const
     ) as Promise<{ content: { text: string }[]; isError?: boolean }>;
   const list = JSON.parse((await call('list_components', {})).content[0].text);
-  expect(list.components.map((c: { id: string }) => c.id)).toEqual(['vite-svelte/lib/Counter']);
+  expect(list.components.map((c: { id: string }) => c.id)).toEqual([
+    'vite-svelte/lib/Counter',
+    'vite-svelte/lib/Worker'
+  ]);
   const checked = await call('check_accessibility', { id: 'vite-svelte/lib/Counter', section: 'Basic' });
   expect(checked.isError).toBeUndefined();
   const result = JSON.parse(checked.content[0].text);

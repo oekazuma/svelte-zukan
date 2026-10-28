@@ -820,9 +820,13 @@ describe('build', () => {
     const kit = [Promise.resolve([{ name: 'vite-plugin-sveltekit-setup' }])];
     const { added } = await bootBuild(root, { build: true }, { plugins: kit });
     expect(added.environments.zukan.define).toEqual({
-      __SVELTEKIT_PAYLOAD__: 'undefined',
+      __SVELTEKIT_PAYLOAD__: '({ env: {} })',
       __SVELTEKIT_HAS_SERVER_LOAD__: 'false',
-      __SVELTEKIT_HAS_UNIVERSAL_LOAD__: 'false'
+      __SVELTEKIT_HAS_UNIVERSAL_LOAD__: 'false',
+      __SVELTEKIT_MANIFEST_ASSETS__: '[]',
+      __SVELTEKIT_MANIFEST_IMMUTABLE__: '[]',
+      __SVELTEKIT_MANIFEST_PRERENDERED__: '[]',
+      __SVELTEKIT_MANIFEST_ROUTES__: '[]'
     });
     const plain = await bootBuild(root, { build: true }, { plugins: [{ name: 'vite-plugin-svelte' }] });
     expect(plain.added.environments.zukan).not.toHaveProperty('define');
@@ -867,6 +871,13 @@ describe('build', () => {
     expect(own).not.toHaveBeenCalled();
     expect(render('assets/index-1.js', ctx)).toBe('https://cdn.example/x.js');
     expect(own).toHaveBeenCalledWith('assets/index-1.js', ctx);
+    // a worker named for the app, which generateBundle moves under _zukan/
+    const worker = { ...ctx, hostId: '_zukan/App-1.js' };
+    expect(render('_app/immutable/workers/w-1.js', worker)).toEqual({
+      runtime: 'new URL("./_app/immutable/workers/w-1.js", import.meta.url).href'
+    });
+    expect(render('assets/w-1.js', worker)).toEqual({ runtime: 'new URL("./assets/w-1.js", import.meta.url).href' });
+    expect(own).toHaveBeenCalledTimes(1);
     // without one, the app's files get Vite's default
     const plain = await bootBuild(root, { build: true });
     expect(plain.config.experimental.renderBuiltUrl('assets/index-1.js', ctx)).toBeUndefined();
@@ -909,8 +920,7 @@ describe('build', () => {
   it.each([false, true])('writes index.html with a relative script (array output: %s)', async (array) => {
     const { root } = await makeApp();
     const outDir = `${root}/zukan-dist`;
-    mkdirSync(`${outDir}/_app`, { recursive: true });
-    await writeFile(`${outDir}/_app/version.json`, '{}');
+    mkdirSync(outDir);
     const { p } = await bootBuild(root, { build: true, title: 'My UI', locale: 'ja' }, { plugins: kitPlugins() });
     const { builder, zukanEnv } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } }, { array });
     await p.buildApp.handler(builder);
@@ -920,31 +930,35 @@ describe('build', () => {
     expect(html).toContain('<script type="module" src="./_zukan/zukan-abc.js"></script>');
     expect(html).toContain('<html lang="ja">');
     expect(html).toContain('<title>My UI</title>');
-    expect(existsSync(`${outDir}/_app`)).toBe(false);
   });
 
-  it('removes only version.json from _app when other files are there', async () => {
+  const generate = async (env: string, kit?: object) => {
     const { root } = await makeApp();
-    const outDir = `${root}/zukan-dist`;
-    mkdirSync(`${outDir}/_app/immutable/workers`, { recursive: true });
-    await writeFile(`${outDir}/_app/version.json`, '{}');
-    await writeFile(`${outDir}/_app/immutable/workers/w.js`, '');
-    const { p } = await bootBuild(root, { build: true }, { plugins: kitPlugins() });
-    const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
-    await p.buildApp.handler(builder);
-    expect(existsSync(`${outDir}/_app/version.json`)).toBe(false);
-    expect(existsSync(`${outDir}/_app/immutable/workers/w.js`)).toBe(true);
-  });
+    const { p } = await bootBuild(root, { build: true }, kit && { plugins: kitPlugins(kit) });
+    const bundle: Record<string, object> = {
+      '_zukan/zukan-1.js': { type: 'chunk' },
+      '_zukan/a-1.png': { type: 'asset', source: 'png' },
+      'kit-app/immutable/workers/w-1.js': { type: 'asset', source: 'worker' },
+      'kit-app/version.json': { type: 'asset', source: '{}' }
+    };
+    const emitFile = vi.fn();
+    await p.generateBundle.handler.call({ environment: { name: env }, emitFile }, {}, bundle);
+    return { bundle, emitFile };
+  };
 
-  it("removes version.json from SvelteKit's custom appDir", async () => {
-    const { root } = await makeApp();
-    const outDir = `${root}/zukan-dist`;
-    mkdirSync(`${outDir}/kit-app`, { recursive: true });
-    await writeFile(`${outDir}/kit-app/version.json`, '{}');
-    const { p } = await bootBuild(root, { build: true }, { plugins: kitPlugins({ appDir: 'kit-app' }) });
-    const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
-    await p.buildApp.handler(builder);
-    expect(existsSync(`${outDir}/kit-app`)).toBe(false);
+  it("moves the catalog's files named for the app under _zukan/, and drops SvelteKit's version.json", async () => {
+    expect(plugin.generateBundle.order).toBe('post');
+    const { bundle, emitFile } = await generate('zukan', { appDir: 'kit-app' });
+    expect(Object.keys(bundle)).toEqual(['_zukan/zukan-1.js', '_zukan/a-1.png']);
+    expect(emitFile.mock.calls).toEqual([
+      [{ type: 'asset', fileName: '_zukan/kit-app/immutable/workers/w-1.js', source: 'worker' }]
+    ]);
+    // without SvelteKit, a version.json is just a file
+    expect((await generate('zukan')).emitFile).toHaveBeenCalledTimes(2);
+    // the app's own environments are left alone
+    const app = await generate('client', { appDir: 'kit-app' });
+    expect(Object.keys(app.bundle)).toHaveLength(4);
+    expect(app.emitFile).not.toHaveBeenCalled();
   });
 
   it('leaves _app/version.json alone without SvelteKit', async () => {
