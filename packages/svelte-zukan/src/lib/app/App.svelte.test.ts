@@ -876,6 +876,9 @@ describe('App', () => {
       const calls = spy.mock.calls.length;
       (screen.getByTitle('Two').element() as HTMLIFrameElement).contentWindow!.focus();
       await expect.poll(() => document.activeElement?.localName).toBe('iframe');
+      // focus may leave the preview before it grows
+      screen.getByRole('heading', { level: 2, name: 'One' }).element().closest('section')?.querySelector('a')?.focus();
+      window.focus();
       document.querySelector<HTMLElement>('.example')!.style.minHeight = '1200px';
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       document.querySelector<HTMLElement>('.example')!.style.minHeight = '1600px';

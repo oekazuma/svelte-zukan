@@ -71,10 +71,7 @@
   // the previews above a pinned heading grow as they load and push it down, and the page may only now be tall enough
   // to bring it to the top
   const follow = new ResizeObserver(([entry]) => {
-    if (!pinned || active === null || entry.borderBoxSize[0].blockSize === contentHeight) return;
-    // a click in a preview, which sends the catalog no pointer event, is the reader's like a scroll
-    if (document.activeElement?.localName === 'iframe') unpin();
-    else show(active);
+    if (pinned && active !== null && entry.borderBoxSize[0].blockSize !== contentHeight) show(active);
   });
   $effect(() => () => follow.disconnect());
   // marked on the scroll rather than here: a key or a click that does not scroll must not move the mark off the pin
@@ -82,6 +79,11 @@
     if (pinned) released = true;
     pinned = false;
     follow.disconnect();
+  }
+  // a click in a preview sends the catalog no pointer event, only the blur of its window, and is the reader's like a
+  // scroll; focus may leave the preview again before it grows
+  function onblur() {
+    if (document.activeElement?.localName === 'iframe') unpin();
   }
   function onscroll() {
     if (!released || pinned) return;
@@ -132,7 +134,15 @@
 </script>
 
 <!-- what the reader does to scroll; a scroll event alone would also come from `show` -->
-<svelte:window {onclick} {onscroll} onwheel={unpin} ontouchmove={unpin} onkeydown={unpin} onpointerdown={unpin} />
+<svelte:window
+  {onclick}
+  {onscroll}
+  {onblur}
+  onwheel={unpin}
+  ontouchmove={unpin}
+  onkeydown={unpin}
+  onpointerdown={unpin}
+/>
 
 {#snippet pagerLink(to: Entry, rel: 'prev' | 'next')}
   <!-- a hash route of this catalog, not a SvelteKit route -->
