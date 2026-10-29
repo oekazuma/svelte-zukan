@@ -651,7 +651,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         // undefined, never []
         return;
       }
-      if (isDocFile(file)) {
+      if (isDocFile(file) && inScanned) {
         targets = metas();
       } else if (type === 'update' && isCatalogFile(file) && inScanned) {
         targets = [...modules, ...metas()];

@@ -116,6 +116,13 @@ it('files outside the scanned dirs are ignored', { timeout: 15_000 }, async () =
   expect(reloaded()).toBe(false);
 });
 
+it('an .md file outside the scanned dirs is ignored', { timeout: 15_000 }, async () => {
+  send.mockClear();
+  writeFileSync(join(tmp, 'app/other.zukan.md'), '# O');
+  await new Promise((r) => setTimeout(r, 1000));
+  expect(reloaded()).toBe(false);
+});
+
 it('editing a section title updates the metadata', { timeout: 15_000 }, async () => {
   expect(await meta('app/A')).toContain('"title":"A"');
   send.mockClear();
