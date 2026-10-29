@@ -20,6 +20,11 @@ const importIds = (css: string, url = true) =>
     (m) => m[2]
   );
 const isTailwindId = (id: string) => id === 'tailwindcss' || id.startsWith('tailwindcss/');
+// like Tailwind's resolver, which tries the id as written, then with `.css`
+const resolveFallback = (base: string, id: string) => {
+  const file = path.resolve(base, id);
+  return !existsSync(file) && existsSync(`${file}.css`) ? `${file}.css` : file;
+};
 const importsTailwind = (css: string) => importIds(css).some(isTailwindId);
 export const isCandidate = (css: string) => importsTailwind(css) || /@theme\b/.test(stripComments(css));
 
@@ -70,7 +75,7 @@ export async function findTailwindEntries(dirs: string[], resolveCss: Resolver):
     // Tailwind inlines `@import "x"` only, never `@import url(x)`
     for (const id of importIds(css, false)) {
       if (isTailwindId(id)) continue;
-      const resolved = real((await resolveCss(id, base).catch(() => undefined)) || path.resolve(base, id));
+      const resolved = real((await resolveCss(id, base).catch(() => undefined)) || resolveFallback(base, id));
       const target = byReal.get(resolved);
       if (target) {
         if (target !== from) partials.add(target);
@@ -304,14 +309,16 @@ async function loadEntry(
   const source = readFileSync(entry, 'utf8');
   // Tailwind inlines every `@import` without deduplicating, so a second `tailwindcss` would double the preflight
   const tree = await inlined(source, base, resolveStylesheet);
-  const css = tree.some(importsTailwind) ? source : `@import "tailwindcss";\n${source}`;
+  const css = tree.some((text) => importIds(text, false).some(isTailwindId))
+    ? source
+    : `@import "tailwindcss";\n${source}`;
   // an entry that imports only some of Tailwind's files, such as `tailwindcss/theme.css`, has tokens but no utility
   // layer, so its sample would style nothing
   const hasUtilities =
     css !== source ||
     tree.some(
       (text) =>
-        importIds(text).some((id) => /^tailwindcss(\/(index|utilities)(\.css)?)?$/.test(id)) ||
+        importIds(text, false).some((id) => /^tailwindcss(\/(index|utilities)(\.css)?)?$/.test(id)) ||
         /@tailwind\s+utilities\b/.test(stripComments(text))
     );
   const sample = hasUtilities ? css : `${css}\n@import "tailwindcss/utilities.css" layer(utilities);`;
