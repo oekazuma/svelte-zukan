@@ -77,6 +77,13 @@ describe('generateEntryModule', () => {
     expect(code).toContain('app = mount(App, {');
   });
 
+  it('imports only the logo statically, so that its listener waits for no other module to load', () => {
+    const code = generateEntryModule({ ...base, logo: '/x/logo.svg', wrapper: null, tailwind: true });
+    expect(code.match(/^\s*import\s.*$/gm)).toEqual(['import logo from "/x/logo.svg?url";']);
+    expect(code).toContain("import('svelte')");
+    expect(generateEntryModule({ ...base, logo: null, wrapper: null })).not.toMatch(/^\s*import\s/m);
+  });
+
   it('reloads a preview that failed to render on the next HMR update', () => {
     const code = generateEntryModule({ ...base, logo: null, wrapper: null });
     expect(code).toContain(

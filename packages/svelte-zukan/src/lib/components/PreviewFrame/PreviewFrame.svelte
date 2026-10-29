@@ -298,10 +298,11 @@
     // on the window, after the page's own handlers on its elements and document, which may take the key
     const view = page.defaultView!;
     view.addEventListener('keydown', forward);
-    for (const type of POINTER_EVENTS) view.addEventListener(type, point, { passive: true });
+    // in the capture phase: a preview that stops one on its way up still had the reader act
+    for (const type of POINTER_EVENTS) view.addEventListener(type, point, { capture: true, passive: true });
     return () => {
       view.removeEventListener('keydown', forward);
-      for (const type of POINTER_EVENTS) view.removeEventListener(type, point);
+      for (const type of POINTER_EVENTS) view.removeEventListener(type, point, { capture: true });
     };
   });
 
@@ -331,8 +332,10 @@
     if (!inside) expandButton?.focus();
     return () => {
       others.forEach((el) => (el.inert = false));
-      // the page goes away on navigating with the preview expanded
-      if (!inside && from instanceof HTMLElement && from !== document.body && preview?.isConnected) from.focus();
+      // the page goes away on navigating with the preview expanded. A click on the backdrop, which takes no focus,
+      // leaves it on body, even when it was in the preview
+      const lost = !inside || document.activeElement === document.body;
+      if (lost && from instanceof HTMLElement && from !== document.body && preview?.isConnected) from.focus();
     };
   });
 
