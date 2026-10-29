@@ -440,6 +440,22 @@ describe('App', () => {
     await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(0);
   });
 
+  it('F moves the focus into the expanded preview, and leaving it brings the focus back', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = twoSections;
+    const screen = await render(App, { props });
+    const link = screen.getByRole('heading', { level: 2, name: 'One' }).getByRole('link');
+    await expect.element(link).toBeInTheDocument();
+    for (const leave of ['f', '{Escape}']) {
+      (link.element() as HTMLElement).focus();
+      await userEvent.keyboard('f');
+      await expect.element(screen.getByRole('button', { name: 'Exit expanded view (Esc)' })).toHaveFocus();
+      await userEvent.keyboard(leave);
+      await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(0);
+      await expect.element(link).toHaveFocus();
+    }
+  });
+
   // the doc keeps every heading below the top third until the test scrolls
   const withProps =
     (doc = '<div style="height: 1000px"></div>') =>
@@ -896,24 +912,59 @@ describe('App', () => {
     }
   });
 
+  /** the test page renders no preview, and the skeleton covers the frame until one is measured */
+  async function showPreview(screen: Awaited<ReturnType<typeof render>>, title: string) {
+    const frame = screen.getByTitle(title);
+    const doc = () => (frame.element() as HTMLIFrameElement).contentDocument;
+    // the initial about:blank document is complete too
+    await expect.poll(() => doc()?.readyState === 'complete' && doc()!.URL.includes('#/preview/')).toBe(true);
+    doc()!.body.innerHTML = '<div data-zukan-preview style="height: 100px"></div>';
+    await expect.poll(() => frame.element().closest('.preview')!.querySelector('.skeleton')).toBeNull();
+    return frame;
+  }
+
   it('a click in a preview releases a section from the URL, so its growth does not scroll the page', async () => {
     const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
     try {
       const { props } = setup('#/ui/Card?section=Two');
       props.catalog[0].meta = twoSections;
       const screen = await render(App, { props });
-      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      const frame = await showPreview(screen, 'Two');
       const calls = spy.mock.calls.length;
-      (screen.getByTitle('Two').element() as HTMLIFrameElement).contentWindow!.focus();
-      await expect.poll(() => document.activeElement?.localName).toBe('iframe');
+      await frame.click();
+      await expect.poll(() => document.activeElement).toBe(frame.element());
       // focus may leave the preview before it grows
-      screen.getByRole('heading', { level: 2, name: 'One' }).element().closest('section')?.querySelector('a')?.focus();
-      window.focus();
+      (screen.getByRole('heading', { level: 2, name: 'One' }).getByRole('link').element() as HTMLElement).focus();
       document.querySelector<HTMLElement>('.example')!.style.minHeight = '1200px';
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       document.querySelector<HTMLElement>('.example')!.style.minHeight = '1600px';
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       expect(spy.mock.calls.length).toBe(calls);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('a click in a preview that already has the focus releases a section from the URL', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      const frame = await showPreview(screen, 'Two');
+      await frame.click();
+      await expect.poll(() => document.activeElement).toBe(frame.element());
+      const view = (frame.element() as HTMLIFrameElement).contentWindow!;
+      const actions = [() => frame.click(), () => view.dispatchEvent(new WheelEvent('wheel'))];
+      for (const [i, act] of actions.entries()) {
+        // Back or Forward onto a section keeps the focus where it is
+        await setHash(`#/ui/Card?section=${i ? 'One' : 'Two'}`);
+        await expect.poll(() => spy.mock.calls.length).toBe(i + 1);
+        await act();
+        document.querySelector<HTMLElement>('.example')!.style.minHeight = `${1200 + i * 400}px`;
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        expect(spy.mock.calls.length).toBe(i + 1);
+      }
     } finally {
       spy.mockRestore();
     }

@@ -84,6 +84,27 @@ describe('the search dialog', () => {
     await expect.poll(isOpen).toBe(true);
   });
 
+  it('opens before a page-wide shortcut listener added later, as the Vite DevTools dock adds one for its palette', async () => {
+    const { props } = setup();
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    const dock = vi.fn();
+    const listener = (e: KeyboardEvent) => {
+      if (e.key !== 'k') return;
+      dock();
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    addEventListener('keydown', listener, { capture: true });
+    try {
+      await openSearch();
+      await expect.poll(isOpen).toBe(true);
+      expect(dock).not.toHaveBeenCalled();
+    } finally {
+      removeEventListener('keydown', listener, { capture: true });
+    }
+  });
+
   it('finds a section, a phrase in the description and a prop', async () => {
     const { props } = setup();
     const screen = await render(App, { props });

@@ -80,11 +80,6 @@
     pinned = false;
     follow.disconnect();
   }
-  // a click in a preview sends the catalog no pointer event, only the blur of its window, and is the reader's like a
-  // scroll; focus may leave the preview again before it grows
-  function onblur() {
-    if (document.activeElement?.localName === 'iframe') unpin();
-  }
   function onscroll() {
     if (!released || pinned) return;
     released = false;
@@ -133,16 +128,9 @@
   }
 </script>
 
-<!-- what the reader does to scroll; a scroll event alone would also come from `show` -->
-<svelte:window
-  {onclick}
-  {onscroll}
-  {onblur}
-  onwheel={unpin}
-  ontouchmove={unpin}
-  onkeydown={unpin}
-  onpointerdown={unpin}
-/>
+<!-- what the reader does to scroll, in a preview too, which forwards these to its iframe; a scroll event alone would
+  also come from `show` -->
+<svelte:window {onclick} {onscroll} onwheel={unpin} ontouchmove={unpin} onkeydown={unpin} onpointerdown={unpin} />
 
 {#snippet pagerLink(to: Entry, rel: 'prev' | 'next')}
   <!-- a hash route of this catalog, not a SvelteKit route -->

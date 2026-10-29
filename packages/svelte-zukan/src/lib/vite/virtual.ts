@@ -99,10 +99,16 @@ export function generateEntryModule(opts: {
     `if (import.meta.hot) import.meta.hot.on('vite:afterUpdate', () => {`,
     `  if (document.querySelector('[data-zukan-error]')) location.reload();`,
     `});`,
+    // registered here, ahead of the listeners that scripts injected into this page add once they load: the Vite
+    // DevTools dock takes ⌘K in the capture phase of the window too, and the app mounts only after its imports
+    `let app;`,
+    `addEventListener('keydown', (e) => {`,
+    `  if (app?.searchKey(e)) e.stopImmediatePropagation();`,
+    `}, { capture: true });`,
     opts.tailwind
       ? `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)}), import(${s(TAILWIND)})]).then(([{ default: App }, { catalog, uncataloged }, { tailwind }]) =>`
       : `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)})]).then(([{ default: App }, { catalog, uncataloged }]) =>`,
-    `  mount(App, {`,
+    `  app = mount(App, {`,
     `    target: document.body,`,
     `    props: {`,
     `      catalog,`,
