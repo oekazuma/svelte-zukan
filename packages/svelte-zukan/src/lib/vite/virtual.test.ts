@@ -67,6 +67,23 @@ describe('generateEntryModule', () => {
     expect(code).not.toMatch(/^import .* from "(virtual:svelte-zukan\/catalog|\/lib\/app\/App\.svelte)"/m);
   });
 
+  it("adds the search shortcut's capture listener before loading the app, and hands it the mounted app", () => {
+    const code = generateEntryModule({ ...base, logo: null, wrapper: null });
+    const listen = code.indexOf("addEventListener('keydown'");
+    expect(listen).toBeGreaterThan(-1);
+    expect(code).toContain('app?.searchKey(e)');
+    expect(code).toContain('}, { capture: true });');
+    expect(listen).toBeLessThan(code.indexOf('import("/lib/app/App.svelte")'));
+    expect(code).toContain('app = mount(App, {');
+  });
+
+  it('imports only the logo statically, so that its listener waits for no other module to load', () => {
+    const code = generateEntryModule({ ...base, logo: '/x/logo.svg', wrapper: null, tailwind: true });
+    expect(code.match(/^\s*import\s.*$/gm)).toEqual(['import logo from "/x/logo.svg?url";']);
+    expect(code).toContain("import('svelte')");
+    expect(generateEntryModule({ ...base, logo: null, wrapper: null })).not.toMatch(/^\s*import\s/m);
+  });
+
   it('reloads a preview that failed to render on the next HMR update', () => {
     const code = generateEntryModule({ ...base, logo: null, wrapper: null });
     expect(code).toContain(

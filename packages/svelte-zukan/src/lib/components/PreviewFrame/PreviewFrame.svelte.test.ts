@@ -343,6 +343,26 @@ describe('PreviewFrame resizing', () => {
     expect(iframe.style.height).toBe(before);
   });
 
+  it('gives the focus back to the expand button when the backdrop collapses the preview', async () => {
+    const screen = await render(PreviewFrame, { props });
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    const backdrop = screen.container.querySelector<HTMLElement>('.backdrop')!;
+    await userEvent.click(backdrop, { position: { x: 4, y: 4 } });
+    await expect.element(screen.getByRole('button', { name: 'Expand' })).toHaveFocus();
+  });
+
+  it('forwards a pointer action in the preview that the preview stops', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.addEventListener('pointerdown', (e) => e.stopPropagation());
+    const seen = vi.fn();
+    iframe.addEventListener('pointerdown', seen);
+    doc.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(seen).toHaveBeenCalledOnce();
+  });
+
   it('shows no width before the stage is measured', async () => {
     const hidden = document.body.appendChild(document.createElement('div'));
     try {

@@ -75,10 +75,18 @@ export function generateEntryModule(opts: {
   kitGlobal?: string;
 }): string {
   const s = JSON.stringify;
-  // the listener comes first and the app and the list are imported lazily,
-  // so that the tab recovers from an error in the list (e.g. a duplicate ID) on the next reload event
+  const imports = [
+    [`import('svelte')`, '{ mount }'],
+    [`import(${s(opts.appFile)})`, '{ default: App }'],
+    [`import(${s(CATALOG)})`, '{ catalog, uncataloged }'],
+    ...(opts.tailwind ? [[`import(${s(TAILWIND)})`, '{ tailwind }']] : [])
+  ];
+  // the module runs only once its static imports have loaded, and the key listener must be registered before the ones
+  // that scripts injected into this page add (the Vite DevTools dock takes ⌘K in the capture phase of the window too),
+  // so even `svelte` comes lazily. The logo stays static: Vite serves a public file's `?url` module only once it has
+  // seen the import, and a dynamic one is requested before that. The app and the list come lazily, so that the tab
+  // also recovers from an error in the list (e.g. a duplicate ID) on the next reload event
   return [
-    `import { mount } from 'svelte';`,
     // in the module, not an inline script, so that a `script-src 'self'` policy still allows it
     ...(opts.kitGlobal ? [`globalThis[${opts.kitGlobal}] = { env: {} };`] : []),
     ...(opts.logo
@@ -89,6 +97,10 @@ export function generateEntryModule(opts: {
           `if (import.meta.hot) import.meta.hot.accept(${s(opts.logo + '?url')}, () => {});`
         ]
       : []),
+    `let app;`,
+    `addEventListener('keydown', (e) => {`,
+    `  if (app?.searchKey(e)) e.stopImmediatePropagation();`,
+    `}, { capture: true });`,
     RELOAD_ON_PRELOAD_ERROR,
     // a preview iframe is recreated when its catalog page reloads; any other page (a tab, an editor's iframe) reloads itself
     `if (import.meta.hot) import.meta.hot.on('zukan:reload', () => {`,
@@ -99,10 +111,8 @@ export function generateEntryModule(opts: {
     `if (import.meta.hot) import.meta.hot.on('vite:afterUpdate', () => {`,
     `  if (document.querySelector('[data-zukan-error]')) location.reload();`,
     `});`,
-    opts.tailwind
-      ? `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)}), import(${s(TAILWIND)})]).then(([{ default: App }, { catalog, uncataloged }, { tailwind }]) =>`
-      : `Promise.all([import(${s(opts.appFile)}), import(${s(CATALOG)})]).then(([{ default: App }, { catalog, uncataloged }]) =>`,
-    `  mount(App, {`,
+    `Promise.all([${imports.map(([i]) => i).join(', ')}]).then(([${imports.map(([, b]) => b).join(', ')}]) =>`,
+    `  app = mount(App, {`,
     `    target: document.body,`,
     `    props: {`,
     `      catalog,`,

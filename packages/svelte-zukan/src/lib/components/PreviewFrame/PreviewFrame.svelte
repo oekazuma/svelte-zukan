@@ -84,6 +84,8 @@
   /** the resize grip sits beside the iframe, so the iframe is exactly the chosen width */
   const HANDLE = 14;
   const KEY_STEP = 10;
+  /** what the detail page takes as the reader's own scroll or click, which ends a heading's pin */
+  const POINTER_EVENTS = ['pointerdown', 'wheel', 'touchmove'];
 
   let {
     src,
@@ -274,8 +276,8 @@
     if (doc && measuring) return startMeasure(doc);
   });
 
-  // keys pressed in the preview never reach the catalog's window, so its shortcuts would stop once the preview has the
-  // focus; the copy goes to the iframe, so the catalog's handlers get an element as the target, as for a key on the page
+  // keys and pointers in the preview never reach the catalog's window, so its shortcuts would stop once the preview has
+  // the focus; the copy goes to the iframe, so the catalog's handlers get an element as the target, as on the page
   $effect(() => {
     const frame = iframe;
     const page = doc;
@@ -291,25 +293,32 @@
       // a shortcut the catalog handled (⌘K) must not also do what the browser does with it
       if (!frame.dispatchEvent(new KeyboardEvent('keydown', copy))) e.preventDefault();
     };
+    // the catalog's handlers only need to know the reader acted, as on its own page
+    const point = (e: Event) => frame.dispatchEvent(new Event(e.type, { bubbles: true }));
     // on the window, after the page's own handlers on its elements and document, which may take the key
     const view = page.defaultView!;
     view.addEventListener('keydown', forward);
-    return () => view.removeEventListener('keydown', forward);
+    // in the capture phase: a preview that stops one on its way up still had the reader act
+    for (const type of POINTER_EVENTS) view.addEventListener(type, point, { capture: true, passive: true });
+    return () => {
+      view.removeEventListener('keydown', forward);
+      for (const type of POINTER_EVENTS) view.removeEventListener(type, point, { capture: true });
+    };
   });
 
   function toggleExpanded() {
     expanded = !expanded;
-    // the button moves with the toolbar; keep the focus on it
-    queueMicrotask(() => expandButton?.focus());
   }
 
   let preview: HTMLDivElement | undefined = $state();
   let backdrop: HTMLDivElement | undefined = $state();
   // the rest of the page is inert while expanded, so Tab and screen readers stay in the preview; a <dialog> would trap
   // too, but this element can not become one without moving the iframe, which reloads it. Dialogs (search, shortcuts)
-  // still open over it, and the backdrop still takes the click that leaves
+  // still open over it, and the backdrop still takes the click that leaves. The focus moves in, as into a dialog, since
+  // an inert element loses it (an F pressed elsewhere on the page), and goes back where it was on leaving
   $effect(() => {
     if (!expanded || !preview) return;
+    const from = document.activeElement;
     const others: HTMLElement[] = [];
     for (let el: Element = preview; el.parentElement && el !== document.body; el = el.parentElement) {
       for (const sibling of el.parentElement.children) {
@@ -319,7 +328,15 @@
         others.push(sibling);
       }
     }
-    return () => others.forEach((el) => (el.inert = false));
+    const inside = preview.contains(from);
+    if (!inside) expandButton?.focus();
+    return () => {
+      others.forEach((el) => (el.inert = false));
+      // the page goes away on navigating with the preview expanded. A click on the backdrop, which takes no focus,
+      // leaves it on body, even when it was in the preview
+      const lost = !inside || document.activeElement === document.body;
+      if (lost && from instanceof HTMLElement && from !== document.body && preview?.isConnected) from.focus();
+    };
   });
 
   $effect(() => {

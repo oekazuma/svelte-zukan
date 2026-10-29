@@ -116,15 +116,21 @@
   let main: HTMLElement | undefined = $state();
   let detail: ReturnType<typeof Detail> | undefined = $state();
 
+  /**
+   * Opens the search on ⌘K (Ctrl K), while typing too, the sidebar's search box included; true when it took the key.
+   * The entry module calls it from a listener it adds before anything else can, and stops the event there
+   */
+  export function searchKey(e: KeyboardEvent) {
+    if (route.view === 'preview') return false;
+    const mod = modifier === '⌘' ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+    if (!mod || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'k') return false;
+    e.preventDefault();
+    searchDialog?.open();
+    return true;
+  }
+
   function onkeydown(e: KeyboardEvent) {
     if (route.view === 'preview') return;
-    // works while typing too, the sidebar's search box included
-    const mod = modifier === '⌘' ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
-    if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
-      e.preventDefault();
-      searchDialog?.open();
-      return;
-    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const target = e.target as HTMLElement;
     if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
@@ -188,7 +194,8 @@
   }
 </script>
 
-<svelte:window {onhashchange} {onkeydown} />
+<!-- the entry's listener stops ⌘K before this one; this one is for an App mounted without the entry -->
+<svelte:window {onhashchange} onkeydowncapture={(e) => searchKey(e) && e.stopImmediatePropagation()} {onkeydown} />
 
 <svelte:head>
   <title
