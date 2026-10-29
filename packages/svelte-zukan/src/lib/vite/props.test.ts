@@ -549,6 +549,105 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
     expect(read(file)!.props.map((p) => p.name)).toEqual(['right']);
   });
 
+  it('reads @types/<name> for a package without types of its own, installed or not', () => {
+    write('node_modules/untyped/package.json', JSON.stringify({ main: './index.js' }));
+    write('node_modules/@types/untyped/package.json', JSON.stringify({ types: './index.d.ts' }));
+    write('node_modules/@types/untyped/index.d.ts', 'export type UProps = { u?: number };\n');
+    write('node_modules/@types/scope__lib/package.json', '{}');
+    write('node_modules/@types/scope__lib/index.d.ts', 'export type SProps = { s?: string };\n');
+    const file = component(
+      "  import type { UProps } from 'untyped';\n  import type { SProps } from '@scope/lib';\n  let { u, s }: UProps & SProps = $props();"
+    );
+    const found = read(file)!;
+    expect(found.typeName).toBe('UProps, SProps');
+    expect(found.props.map((p) => [p.name, p.type])).toEqual([
+      ['u', 'number'],
+      ['s', 'string']
+    ]);
+    expect(found.files).toEqual([]);
+  });
+
+  it('reads the .d.ts next to main, and a folder subpath of a package without exports', () => {
+    write('node_modules/mainonly/package.json', JSON.stringify({ main: 'lib/index.js' }));
+    write('node_modules/mainonly/lib/index.d.ts', 'export type MProps = { m?: number };\n');
+    write('node_modules/folders/package.json', '{}');
+    write('node_modules/folders/sub/index.d.ts', 'export type FProps = { f?: boolean };\n');
+    const file = component(
+      "  import type { MProps } from 'mainonly';\n  import type { FProps } from 'folders/sub';\n  let { m, f }: MProps & FProps = $props();"
+    );
+    expect(read(file)!.props.map((p) => [p.name, p.type])).toEqual([
+      ['m', 'number'],
+      ['f', 'boolean']
+    ]);
+  });
+
+  it('reads an interface exported as the default', () => {
+    write('lib/props.ts', 'export default interface Props {\n  /** d */\n  d: string;\n}\n');
+    const file = component("  import type Props from './props';\n  let { d }: Props = $props();");
+    const found = read(file)!;
+    expect(found.typeName).toBeNull();
+    expect(found.props.map((p) => [p.name, p.type, p.description])).toEqual([['d', 'string', 'd']]);
+  });
+
+  it('reads a type through a namespace import', () => {
+    write('lib/types.ts', 'export type Props = { n: number };\n');
+    write('node_modules/ns/package.json', JSON.stringify({ types: './index.d.ts' }));
+    write('node_modules/ns/index.d.ts', 'export type Attrs = { title?: string };\n');
+    const file = component(
+      "  import type * as T from './types';\n  import type * as E from 'ns';\n  interface Props extends T.Props { k: string }\n  let { k, n, title }: Props & E.Attrs = $props();"
+    );
+    const found = read(file)!;
+    expect(found.typeName).toBe('E.Attrs');
+    expect(found.props.map((p) => [p.name, p.type])).toEqual([
+      ['k', 'string'],
+      ['n', 'number'],
+      ['title', 'string']
+    ]);
+  });
+
+  it('expands Omit and Pick over a type it reads, and names them over a package type', () => {
+    write('lib/types.ts', 'export type Base = { a: string; b?: number; c: boolean };\n');
+    const file = component(
+      "  import type { Base } from './types';\n  interface Props extends Omit<Base, 'a' | 'c'> {}\n  let { a, b, c, x }: Props & Omit<Base, 'a'> & Pick<{ x: 1; y: 2 }, 'x'> = $props();"
+    );
+    const found = read(file)!;
+    expect(found.typeName).toBeNull();
+    expect(found.props.map((p) => [p.name, p.type, p.required])).toEqual([
+      ['b', 'number', false],
+      ['c', 'boolean', true],
+      ['x', '1', true],
+      ['a', null, false]
+    ]);
+    write('node_modules/ui/package.json', JSON.stringify({ types: './index.d.ts' }));
+    write('node_modules/ui/index.d.ts', 'export interface Attrs { title?: string; type?: string }\n');
+    const pkg = component(
+      "  import type { Attrs } from 'ui';\n  let { title, label }: Omit<Attrs, 'type'> & { label: string } = $props();"
+    );
+    const named = read(pkg)!;
+    expect(named.typeName).toBe("Omit<Attrs, 'type'>");
+    expect(named.props.map((p) => [p.name, p.type])).toEqual([
+      ['label', 'string'],
+      ['title', null]
+    ]);
+  });
+
+  it('reads ComponentProps<typeof X> of a source component', () => {
+    const field = write(
+      'lib/Field.svelte',
+      ts("  let { label, size = 'md' }: { /** l */ label: string; size?: 'sm' | 'md' } = $props();")
+    );
+    const file = component(
+      "  import type { ComponentProps } from 'svelte';\n  import Field from './Field.svelte';\n  let { label, size }: ComponentProps<typeof Field> = $props();"
+    );
+    const found = read(file)!;
+    expect(found.typeName).toBeNull();
+    expect(found.props.map((p) => [p.name, p.type, p.description])).toEqual([
+      ['label', 'string', 'l'],
+      ['size', "'sm' | 'md'", null]
+    ]);
+    expect(found.files).toContain(field);
+  });
+
   it('stops at types that refer to each other', () => {
     write('lib/a.ts', "import type { B } from './b';\nexport type A = B & { a: number };\n");
     write('lib/b.ts', "import type { A } from './a';\nexport type B = A & { b: number };\n");
