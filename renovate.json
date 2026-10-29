@@ -70,6 +70,11 @@
       "allowedVersions": "<0.8.0"
     },
     {
+      "description": "@types/node follows devEngines.runtime (Node 24): newer types would let svelte-check accept APIs that the dev runtime and the engines.node floor (Node 22.17) do not have. Raise it together with devEngines.runtime.",
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "<25.0.0"
+    },
+    {
       "description": "engines.node of the published package is the documented support floor (Node 22.17, fs.globSync), not a version to keep current; raising it drops users.",
       "matchFileNames": ["packages/svelte-zukan/package.json"],
       "matchDepTypes": ["engines"],
