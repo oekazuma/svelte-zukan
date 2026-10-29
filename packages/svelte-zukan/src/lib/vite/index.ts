@@ -312,7 +312,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
               // replacements SvelteKit makes only in its client build, used by `$app/*`
               ...(kit && {
                 define: {
-                  // the page SvelteKit renders sets the payload; `$app/env/public` reads `env` from it on import
+                  // the page SvelteKit renders sets the payload; `$app/env/public` reads `env` from it on import.
+                  // In dev it reads the global directly, which configureServer's HTML sets
                   __SVELTEKIT_PAYLOAD__: '({ env: {} })',
                   __SVELTEKIT_HAS_SERVER_LOAD__: 'false',
                   __SVELTEKIT_HAS_UNIVERSAL_LOAD__: 'false',
@@ -530,6 +531,9 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       const realRoot = normalizePath(realpathSync(root));
       const outside = realDirs.map(([real]) => real).filter((dir) => !isInside(dir, realRoot));
       if (outside.length) server.watcher.add(outside);
+      // SvelteKit's dev env module destructures `env` from this global on import, and only the page Kit renders sets
+      // it; the build's `__SVELTEKIT_PAYLOAD__` define is the same payload. A JSON string, so it is a JS expression
+      const kitGlobal = server.config.define?.__SVELTEKIT_GLOBAL_NAME__ as string | undefined;
 
       // called directly (not in a returned hook) to run before SvelteKit's middleware
       server.middlewares.use((req, res, next) => {
@@ -556,7 +560,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           locale: resolved.locale,
           theme: resolved.theme,
           entrySrc: ENTRY_SRC,
-          icon
+          icon,
+          script: kitGlobal && `globalThis[${kitGlobal}] = { env: {} };`
         });
         server
           .transformIndexHtml(path, html)
