@@ -231,6 +231,30 @@ export async function loadTailwind(
   return { sources, watch: [...watch] };
 }
 
+/** `css` and every stylesheet Tailwind inlines into it, except its own; one it cannot resolve fails the compile later */
+async function inlined(
+  css: string,
+  base: string,
+  resolve: (id: string, base: string) => Promise<string | false>,
+  seen = new Set<string>()
+): Promise<string[]> {
+  const out = [css];
+  for (const id of importIds(css, false)) {
+    if (isTailwindId(id)) continue;
+    const file = await resolve(id, base);
+    if (!file || seen.has(file)) continue;
+    seen.add(file);
+    let text: string;
+    try {
+      text = await readFile(file, 'utf8');
+    } catch {
+      continue;
+    }
+    out.push(...(await inlined(text, path.dirname(file), resolve, seen)));
+  }
+  return out;
+}
+
 async function loadEntry(
   entry: string,
   found: { node: string; tailwind: string; version: string },
@@ -261,30 +285,39 @@ async function loadEntry(
     throw new Error(unsupported);
   }
 
+  let resolveFile: ((base: string, id: string) => string | false) | undefined;
+  const resolveStylesheet = async (id: string, from: string) => {
+    const file = await resolvers.css?.(id, from);
+    if (file) return file;
+    // loaded here, from the project's copy: it is not a dependency of svelte-zukan
+    resolveFile ??= (
+      createRequire(found.node)('enhanced-resolve') as { create: { sync(options: object): typeof resolveFile } }
+    ).create.sync({ extensions: ['.css'], mainFields: ['style'], conditionNames: ['style'] });
+    try {
+      return resolveFile!(from, id);
+    } catch {
+      return false;
+    }
+  };
+
   const base = path.dirname(entry);
   const source = readFileSync(entry, 'utf8');
-  const css = importsTailwind(source) ? source : `@import "tailwindcss";\n${source}`;
+  // Tailwind inlines every `@import` without deduplicating, so a second `tailwindcss` would double the preflight
+  const tree = await inlined(source, base, resolveStylesheet);
+  const css = tree.some(importsTailwind) ? source : `@import "tailwindcss";\n${source}`;
   // an entry that imports only some of Tailwind's files, such as `tailwindcss/theme.css`, has tokens but no utility
   // layer, so its sample would style nothing
   const hasUtilities =
-    importIds(css).some((id) => /^tailwindcss(\/(index|utilities)(\.css)?)?$/.test(id)) ||
-    /@tailwind\s+utilities\b/.test(stripComments(css));
+    css !== source ||
+    tree.some(
+      (text) =>
+        importIds(text).some((id) => /^tailwindcss(\/(index|utilities)(\.css)?)?$/.test(id)) ||
+        /@tailwind\s+utilities\b/.test(stripComments(text))
+    );
   const sample = hasUtilities ? css : `${css}\n@import "tailwindcss/utilities.css" layer(utilities);`;
 
-  let resolveFile: ((base: string, id: string) => string | false) | undefined;
   const loadStylesheet = async (id: string, from: string) => {
-    let file = await resolvers.css?.(id, from);
-    if (!file) {
-      // loaded here, from the project's copy: it is not a dependency of svelte-zukan
-      resolveFile ??= (
-        createRequire(found.node)('enhanced-resolve') as { create: { sync(options: object): typeof resolveFile } }
-      ).create.sync({ extensions: ['.css'], mainFields: ['style'], conditionNames: ['style'] });
-      try {
-        file = resolveFile!(from, id);
-      } catch {
-        file = false;
-      }
-    }
+    const file = await resolveStylesheet(id, from);
     if (!file) throw new Error(`Could not resolve '${id}' from '${from}'`);
     onDependency(file);
     return { path: file, base: path.dirname(file), content: await readFile(file, 'utf8') };
