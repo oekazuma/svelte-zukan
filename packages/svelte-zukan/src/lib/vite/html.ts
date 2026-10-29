@@ -7,19 +7,16 @@ export function renderHtml(opts: {
   entrySrc: string;
   icon: string;
   theme?: 'light' | 'dark' | null;
-  /** a classic script, run before the module entry */
-  script?: string;
 }): string {
   // a fixed theme is known before the app mounts, so the page never paints the other one first
   const scheme = opts.theme ? `\n    <meta name="color-scheme" content="${opts.theme}">` : '';
-  const script = opts.script ? `\n    <script>${opts.script}</script>` : '';
   return `<!doctype html>
 <html lang="${opts.locale}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">${scheme}
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${encodeURIComponent(opts.icon)}">
-    <title>${escapeHtml(opts.title)}</title>${script}
+    <title>${escapeHtml(opts.title)}</title>
     <script type="module" src="${escapeHtml(opts.entrySrc)}"></script>
   </head>
   <body></body>

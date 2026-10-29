@@ -50,6 +50,13 @@ describe('generateEntryModule', () => {
     expect(code).toContain('wrapper: () => import("/x/Wrapper.svelte")');
   });
 
+  it("sets SvelteKit's dev global before loading the app, only when given its name", () => {
+    const code = generateEntryModule({ ...base, logo: null, wrapper: null, kitGlobal: '"__sveltekit_dev"' });
+    expect(code.indexOf('globalThis["__sveltekit_dev"] = { env: {} };')).toBeGreaterThan(-1);
+    expect(code.indexOf('globalThis["__sveltekit_dev"]')).toBeLessThan(code.indexOf('import("/lib/app/App.svelte")'));
+    expect(generateEntryModule({ ...base, logo: null, wrapper: null })).not.toContain('globalThis[');
+  });
+
   it('listens for zukan:reload before loading the app and the catalog', () => {
     const code = generateEntryModule({ ...base, logo: null, wrapper: null });
     const listen = code.indexOf("import.meta.hot.on('zukan:reload'");

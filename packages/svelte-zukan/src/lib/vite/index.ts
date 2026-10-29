@@ -167,6 +167,9 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   let watcher: FSWatcher | null = null;
   /** the dev server's publicDir, '' without one or in the build */
   let publicDir = '';
+  // SvelteKit's dev env module destructures `env` from this global on import, and only the page Kit renders sets
+  // it; the build's `__SVELTEKIT_PAYLOAD__` define is the same payload. A JSON string, so it is a JS expression
+  let kitGlobal: string | undefined;
   const generateTailwind = async (env: () => Environment) => {
     const css = viteResolver(
       env,
@@ -313,7 +316,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
               ...(kit && {
                 define: {
                   // the page SvelteKit renders sets the payload; `$app/env/public` reads `env` from it on import.
-                  // In dev it reads the global directly, which configureServer's HTML sets
+                  // In dev it reads the global directly, which the entry module sets
                   __SVELTEKIT_PAYLOAD__: '({ env: {} })',
                   __SVELTEKIT_HAS_SERVER_LOAD__: 'false',
                   __SVELTEKIT_HAS_UNIVERSAL_LOAD__: 'false',
@@ -520,7 +523,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           ...resolved,
           logo: inPublic ? '/' + normalizePath(relative(publicDir, logo)) : logo,
           searched,
-          tailwind: hasTailwind(cssDirs(), root)
+          tailwind: hasTailwind(cssDirs(), root),
+          kitGlobal
         });
       }
     },
@@ -531,9 +535,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       const realRoot = normalizePath(realpathSync(root));
       const outside = realDirs.map(([real]) => real).filter((dir) => !isInside(dir, realRoot));
       if (outside.length) server.watcher.add(outside);
-      // SvelteKit's dev env module destructures `env` from this global on import, and only the page Kit renders sets
-      // it; the build's `__SVELTEKIT_PAYLOAD__` define is the same payload. A JSON string, so it is a JS expression
-      const kitGlobal = server.config.define?.__SVELTEKIT_GLOBAL_NAME__ as string | undefined;
+      kitGlobal = server.config.define?.__SVELTEKIT_GLOBAL_NAME__ as string | undefined;
 
       // called directly (not in a returned hook) to run before SvelteKit's middleware
       server.middlewares.use((req, res, next) => {
@@ -560,8 +562,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           locale: resolved.locale,
           theme: resolved.theme,
           entrySrc: ENTRY_SRC,
-          icon,
-          script: kitGlobal && `globalThis[${kitGlobal}] = { env: {} };`
+          icon
         });
         server
           .transformIndexHtml(path, html)

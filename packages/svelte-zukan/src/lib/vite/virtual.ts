@@ -71,12 +71,16 @@ export function generateEntryModule(opts: {
   tailwind?: boolean;
   /** dirs relative to the Vite root, shown when the catalog is empty */
   searched: { group: string; dirs: string[] }[];
+  /** the name of SvelteKit's dev global, as a JS string literal; set before the app's modules load */
+  kitGlobal?: string;
 }): string {
   const s = JSON.stringify;
   // the listener comes first and the app and the list are imported lazily,
   // so that the tab recovers from an error in the list (e.g. a duplicate ID) on the next reload event
   return [
     `import { mount } from 'svelte';`,
+    // in the module, not an inline script, so that a `script-src 'self'` policy still allows it
+    ...(opts.kitGlobal ? [`globalThis[${opts.kitGlobal}] = { env: {} };`] : []),
     ...(opts.logo
       ? [
           `import logo from ${s(opts.logo + '?url')};`,
