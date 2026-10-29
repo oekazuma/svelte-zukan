@@ -233,6 +233,28 @@ describe('loadTailwind', () => {
     expect(classes).toContain('bg-red-500');
   });
 
+  it.each(['./base.css', './base'])('adds nothing to an entry whose import %s imports tailwindcss', async (id) => {
+    const theme = '@theme { --color-brand-500: #ff3e00; }';
+    const single = fixture(`@import "tailwindcss";\n${theme}`);
+    const split = fixture(`@import "${id}";\n${theme}`);
+    write(join(split.src, 'base.css'), '@import "tailwindcss";');
+    const [expected] = (await loadTailwind(single.root, [single.src])).sources;
+    const { sources } = await loadTailwind(split.root, [split.src]);
+    expect(sources).toHaveLength(1);
+    const [s] = sources;
+    expect(s.error).toBeUndefined();
+    expect(s.css).toBe(expected.css);
+    expect(s.categories).toEqual(expected.categories);
+  });
+
+  it('still adds tailwindcss to an entry whose import imports it only with url()', async () => {
+    const { root, src } = fixture('@import "./base.css";\n@theme { --color-brand-500: #ff3e00; }');
+    write(join(src, 'base.css'), '@import url("tailwindcss");');
+    const [s] = (await loadTailwind(root, [src])).sources;
+    expect(s.error).toBeUndefined();
+    expect(s.css).toContain('.bg-brand-500');
+  });
+
   it('adds the utilities to the sample of an entry that imports only part of Tailwind', async () => {
     const { root, src } = fixture('@import "tailwindcss/theme.css";\n@theme { --color-brand-500: #ff3e00; }');
     const [s] = (await loadTailwind(root, [src])).sources;
