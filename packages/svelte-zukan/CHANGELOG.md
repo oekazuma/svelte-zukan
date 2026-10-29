@@ -1,5 +1,24 @@
 # svelte-zukan
 
+## 0.16.2
+
+### Patch Changes
+
+- 25416e7: fix: in the static catalog, write a component's Web Worker under `_zukan/` with a relative URL, and define `$app/manifest` and the dynamic public env of `$app/env/public` for SvelteKit, which failed in a preview.
+- a08a256: fix: hot-reload the catalog for a `groups` directory reached through a `node_modules` link (new or deleted catalog files, `.md` edits), and skip `node_modules` in a scanned directory whose path contains glob characters such as `[` or `{`.
+- 6337ea9: fix: show a store read as `$store`, a `style:` shorthand directive's variable and a function's overload signatures in a section's code, keep absolute paths out of `catalog.json`'s `error` for a catalog file outside the Vite root, and preview a multi-line section title in a file with CRLF line endings.
+- 38383f9: fix: editing the `logo` reloads only the catalog tab, a catalog file that does not compile shows its error on its detail page instead of an error overlay in every tab, an app page that imports a catalog file keeps its HMR, a catalog file outside the scanned directories no longer reloads the catalog, a logo in `publicDir` no longer makes Vite warn on every load, and the dev server answers `/__zukan/` only for GET and HEAD.
+- 58b2862: fix: read a component's props type from the `.svelte.d.ts` that svelte-package writes (also through `ComponentProps<typeof Button>`) and from a `.svelte.ts` module, name every props type the table can not list, keep the spaces in the strings of a prop's type and default, merge an interface declared twice, read a `.ts` file with `</script>` in it, resolve a `.js` subpath of a package without `exports` to its `.d.ts`, and skip a computed key in the props destructuring.
+- 097dde5: fix: treat a `@theme` file reached through plain CSS imports as a partial, add Tailwind's utilities to the samples of an entry that imports only `tailwindcss/theme.css`, report a section whose component throws while rendering as an error in the accessibility check instead of "no issues", and let `check_accessibility` run as soon as a section without elements has rendered.
+- dee9587: fix: move the focus into a preview expanded with `F` and back to where it was on leaving, keep `⌘K` (`Ctrl+K`) for the catalog's search when the Vite DevTools dock is on the page, and let a click or a scroll in a preview release a section opened from a link.
+- 3d01abb: fix: keep a section opened from a link at the top while the previews above it load, keep the keyboard inside an expanded preview, and make a link copied at full width open at full width.
+- 23f19e1: fix: a component that reads `$app/env/public`, `$env/dynamic/public` or `$env/static/public` no longer fails to load in a dev preview of a SvelteKit app.
+- 087dfdb: fix: editing a `logo` that the app also imports with `?url` no longer full-reloads the app's tabs.
+- 926a101: fix: ignore a `.zukan.md` file outside the scanned directories, which reloaded the catalog.
+- 4d6c110: fix: show HTML in a prop's JSDoc as text, render `{@link}` tags as code or links, and wrap a prop's type only between the members of its top-level union.
+- 55aa649: fix: read more props types: `@types/<name>` for a package without its own types, the `.d.ts` next to `main`, a folder subpath of a package without `exports`, a default-exported interface, a namespace import (`T.Props`), `Omit` and `Pick` over a type the table can list, and `ComponentProps<typeof X>` of a source component.
+- 6bb06a0: fix: no longer import Tailwind CSS a second time into the sample of a Tailwind CSS entry that imports it through another stylesheet, which doubled the preflight.
+
 ## 0.16.1
 
 ### Patch Changes
