@@ -46,6 +46,7 @@ describe('generateEntryModule', () => {
     expect(code).toContain('import("/lib/app/App.svelte")');
     expect(code).toContain('import("virtual:svelte-zukan/catalog")');
     expect(code).toContain('import logo from "/x/logo.svg?url"');
+    expect(code).toContain('import.meta.hot.accept("/x/logo.svg?url"');
     expect(code).toContain('wrapper: () => import("/x/Wrapper.svelte")');
   });
 

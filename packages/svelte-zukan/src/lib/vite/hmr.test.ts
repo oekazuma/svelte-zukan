@@ -116,6 +116,13 @@ it('files outside the scanned dirs are ignored', { timeout: 15_000 }, async () =
   expect(reloaded()).toBe(false);
 });
 
+it('an .md file outside the scanned dirs is ignored', { timeout: 15_000 }, async () => {
+  send.mockClear();
+  writeFileSync(join(tmp, 'app/other.zukan.md'), '# O');
+  await new Promise((r) => setTimeout(r, 1000));
+  expect(reloaded()).toBe(false);
+});
+
 it('editing a section title updates the metadata', { timeout: 15_000 }, async () => {
   expect(await meta('app/A')).toContain('"title":"A"');
   send.mockClear();
@@ -278,6 +285,25 @@ describe('modules shared with the app', () => {
     send.mockClear();
     writeFileSync(join(tmp, 'app/logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="1"/>');
     await waitForReload();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(fullReloads()).toBe(0);
+  });
+
+  it('a logo the app imports too keeps its own HMR and reloads only the catalog', { timeout: 25_000 }, async () => {
+    await server.close();
+    link('svelte');
+    writeFileSync(join(tmp, 'app/src/logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    writeFileSync(
+      join(tmp, 'app/src/Logo.svelte'),
+      '<script>\n  import logo from \'./logo.svg?url\';\n</script>\n<img src={logo} alt="" />'
+    );
+    await start({ logo: 'src/logo.svg' }, { plugins: [svelte()] });
+    const env = server.environments.client;
+    for (const id of [ENTRY, '/src/Logo.svelte']) await env.transformRequest(id);
+    send.mockClear();
+    writeFileSync(join(tmp, 'app/src/logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="1"/>');
+    await waitForReload();
+    await expect.poll(() => updated('/src/Logo.svelte'), { timeout: 10_000 }).toBe(true);
     await new Promise((r) => setTimeout(r, 300));
     expect(fullReloads()).toBe(0);
   });

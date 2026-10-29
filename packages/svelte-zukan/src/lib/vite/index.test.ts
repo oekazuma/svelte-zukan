@@ -31,12 +31,13 @@ let tmpRoot: string;
 
 beforeAll(async () => {
   tmpRoot = realpathSync(await mkdtemp(path.join(tmpdir(), 'zukan-')));
-  dir = tmpRoot;
+  dir = path.join(tmpRoot, 'src');
+  mkdirSync(dir);
   zukanFile = path.join(dir, 'Foo.zukan.svelte');
   docFile = path.join(dir, 'Foo.zukan.md');
   await writeFile(zukanFile, source);
   await writeFile(docFile, '# Foo');
-  await plugin.config.handler({ root: dir }, { command: 'serve', mode: 'development' });
+  await plugin.config.handler({ root: tmpRoot }, { command: 'serve', mode: 'development' });
 });
 
 afterAll(() => rmSync(tmpRoot, { recursive: true, force: true }));
@@ -81,8 +82,9 @@ describe('hotUpdate', () => {
     expect(ctx.environment.hot.send).not.toHaveBeenCalled();
   });
 
-  it('ignores unrelated files, including the old Document.md', () => {
+  it('ignores unrelated files, including the old Document.md and an .md outside the scanned dirs', () => {
     const { ctx, run } = setup('client');
+    expect(run('update', path.join(tmpRoot, 'Foo.zukan.md'))).toBeUndefined();
     expect(run('update', path.join(dir, 'Button.svelte'))).toBeUndefined();
     expect(run('update', path.join(dir, 'zukan', 'Document.md'))).toBeUndefined();
     expect(ctx.environment.moduleGraph.invalidateModule).not.toHaveBeenCalled();

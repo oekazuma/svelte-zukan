@@ -77,7 +77,14 @@ export function generateEntryModule(opts: {
   // so that the tab recovers from an error in the list (e.g. a duplicate ID) on the next reload event
   return [
     `import { mount } from 'svelte';`,
-    ...(opts.logo ? [`import logo from ${s(opts.logo + '?url')};`] : []),
+    ...(opts.logo
+      ? [
+          `import logo from ${s(opts.logo + '?url')};`,
+          // the app may import the same module: an edit would then also propagate through this entry, and without an
+          // accepting boundary here Vite would full-reload the app's tabs; zukan:reload reloads the catalog
+          `if (import.meta.hot) import.meta.hot.accept(${s(opts.logo + '?url')}, () => {});`
+        ]
+      : []),
     RELOAD_ON_PRELOAD_ERROR,
     // a preview iframe is recreated when its catalog page reloads; any other page (a tab, an editor's iframe) reloads itself
     `if (import.meta.hot) import.meta.hot.on('zukan:reload', () => {`,
