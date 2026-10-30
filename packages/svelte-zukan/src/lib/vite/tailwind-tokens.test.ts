@@ -46,6 +46,32 @@ describe('extractTokens', () => {
     });
   });
 
+  it('resolves @theme inline tokens through a rule that also matches other elements', async () => {
+    const { token } = await load(
+      '@import "tailwindcss";\n:root, [data-theme="light"] { --primary: oklch(0.6 0.2 30); }\n' +
+        '@theme inline { --color-primary: var(--primary); }'
+    );
+    expect(token('background-color', 'bg-primary')?.value).toBe('oklch(0.6 0.2 30)');
+  });
+
+  it('reads the same tokens with important', async () => {
+    const plain = await load('@import "tailwindcss";');
+    const important = await load('@import "tailwindcss" important;');
+    expect(important.result.categories).toEqual(plain.result.categories);
+  });
+
+  it('names an @theme inline token after its own variable when another one shares its value and suffix', async () => {
+    const { token } = await load('@import "tailwindcss";\n@theme inline { --spacing-xs: 0.75rem; }');
+    expect(token('padding', 'p-xs')?.cssVariable).toBe('--spacing-xs');
+  });
+
+  it('resolves a theme variable with an escaped dot', async () => {
+    const { result, token } = await load('@import "tailwindcss";\n@theme { --spacing-2\\.5: 10px; }');
+    expect(token('padding', 'p-2.5')).toEqual({ class: 'p-2.5', cssVariable: '--spacing-2.5', value: '10px' });
+    const padding = result.categories.find((c) => c.id === 'padding')?.tokens.map((t) => t.class) ?? [];
+    expect(padding.indexOf('p-2.5')).toBe(padding.indexOf('p-2') + 1);
+  });
+
   it('names an @theme inline alias of another theme variable after the token, and orders it as the project', async () => {
     const { result, token } = await load(
       '@import "tailwindcss";\n@theme inline { --color-primary: var(--color-blue-500); --radius-card: var(--radius-lg);' +
@@ -219,6 +245,17 @@ describe('extractTokens', () => {
       expect(width.indexOf('w-auto')).toBeGreaterThan(width.indexOf('w-7xl'));
       expect(width.indexOf('w-px')).toBe(width.indexOf('w-0') + 1);
     });
+
+    it('orders a unitless project opacity among the percentages', async () => {
+      const { result } = await load('@import "tailwindcss"; @theme { --opacity-disabled: 0.4; }');
+      const opacity = classes(result, 'opacity');
+      expect(opacity[0]).toBe('opacity-0');
+      expect(opacity.slice(opacity.indexOf('opacity-40'), opacity.indexOf('opacity-40') + 3)).toEqual([
+        'opacity-40',
+        'opacity-disabled',
+        'opacity-45'
+      ]);
+    });
   });
 
   it('drops empty categories', async () => {
@@ -319,6 +356,16 @@ describe('rootVariables', () => {
         ':root{--a:1}\n@layer base{:root,:host{--b:2}}\n@media (x){:root{--c:3}}\n.dark{--d:4}\nhtml{--e:5}'
       )
     ).toEqual({ '--a': '1', '--b': '2', '--e': '5' });
+  });
+
+  it('reads variables from a rule whose selector list includes the root', () => {
+    expect(rootVariables(':root,[data-theme="light"]{--a:1}\n.x,.y{--c:3}')).toEqual({ '--a': '1' });
+    // names are unescaped, as `theme.entries()` gives them
+    expect(rootVariables(':root{--d\\.e:4;--f\\2d g:5;--h\\2e 5:6}')).toEqual({
+      '--d.e': '4',
+      '--f-g': '5',
+      '--h.5': '6'
+    });
   });
 });
 
