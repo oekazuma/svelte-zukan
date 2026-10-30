@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { TailwindSource } from '../types.js';
+import { render } from 'vitest-browser-svelte';
+import type { TailwindSource, ZukanMeta } from '../types.js';
+import App from './App.svelte';
+import Catalog from './Catalog.test.svelte';
 import { buildTools, fetchCatalog, registerTools, type WebMcpTool } from './webmcp.js';
 
 const catalog = {
@@ -67,6 +70,14 @@ describe('WebMCP tools', () => {
     });
     expect(body(await tool(failing, 'get_component').execute({ id: 'ui/A' }))).toBe('Internal Server Error');
     respond.mockRestore();
+  });
+
+  it('refuses a section the component does not have, leaving the URL as it is', async () => {
+    location.hash = '#/ui/Button';
+    const result = await tool(tools, 'open_component').execute({ id: 'ui/Button', section: 'Nope' });
+    expect(result.isError).toBe(true);
+    expect(body(result)).toContain('Nope');
+    expect(location.hash).toBe('#/ui/Button');
   });
 
   it('has no accessibility tool without axe-core, and marks what only reads', () => {
@@ -252,6 +263,66 @@ describe('list_tailwind_tokens', () => {
     const result = await run({ category: 'nope' });
     expect(result.isError).toBe(true);
     expect(body(result)).toContain('nope');
+  });
+});
+
+describe('the tools on the catalog page', () => {
+  it('opening the section the page already shows scrolls to it again', async () => {
+    const provideContext = vi.fn();
+    Object.defineProperty(navigator, 'modelContext', { value: { provideContext }, configurable: true });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(
+        Response.json({
+          components: [
+            { id: 'ui/Card', name: 'Card', group: 'ui', doc: null, sections: [{ title: 'One' }, { title: 'Two' }] }
+          ],
+          uncataloged: []
+        })
+      )
+    );
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      location.hash = '#/ui/Card?section=Two';
+      const meta: ZukanMeta = {
+        sections: [
+          { title: 'One', code: '' },
+          { title: 'Two', code: '' }
+        ],
+        doc: null
+      };
+      const screen = await render(App, {
+        props: {
+          catalog: [
+            {
+              group: 'ui',
+              name: 'Card',
+              dir: '',
+              path: 'ui/Card',
+              load: () => Promise.resolve({ default: Catalog }),
+              meta: () => Promise.resolve({ default: meta })
+            }
+          ],
+          logo: null,
+          wrapper: null,
+          title: 'zukan',
+          locale: 'en',
+          searched: []
+        }
+      });
+      const two = screen.getByRole('heading', { level: 2, name: 'Two' });
+      await expect.element(two).toBeInTheDocument();
+      await expect.poll(() => provideContext.mock.calls.length).toBe(1);
+      const tools: WebMcpTool[] = provideContext.mock.calls[0][0].tools;
+      const before = spy.mock.calls.length;
+      const result = await tool(tools, 'open_component').execute({ id: 'ui/Card', section: 'Two' });
+      expect(result.isError).toBeUndefined();
+      expect(spy.mock.calls.length).toBe(before + 1);
+      expect(spy.mock.contexts.at(-1)).toBe(two.element());
+    } finally {
+      spy.mockRestore();
+      fetch.mockRestore();
+      delete (navigator as { modelContext?: unknown }).modelContext;
+    }
   });
 });
 

@@ -1023,6 +1023,47 @@ describe('App', () => {
     }
   });
 
+  it('after an in-page anchor of a doc, a link to the section on the page still scrolls to it', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card?section=Two');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      const two = screen.getByRole('heading', { level: 2, name: 'Two' });
+      await expect.element(two).toBeInTheDocument();
+      await setHash('#usage');
+      await screen.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Two' }).click();
+      await expect.poll(() => spy.mock.calls.length).toBe(2);
+      expect(spy.mock.contexts[1]).toBe(two.element());
+      expect(location.hash).toBe('#/ui/Card?section=Two');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('leaving the section in the URL releases it, so a preview growing above does not scroll back to it', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    document.body.style.paddingBottom = '2000px';
+    try {
+      const { props } = setup('#/ui/Card');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      await screen.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Two' }).click();
+      await expect.poll(() => spy.mock.calls.length).toBe(1);
+      const back = new Promise((r) => addEventListener('hashchange', r, { once: true }));
+      history.back();
+      await back;
+      await tick();
+      expect(location.hash).toBe('#/ui/Card');
+      document.querySelector<HTMLElement>('.example')!.style.minHeight = '700px';
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      expect(spy).toHaveBeenCalledOnce();
+    } finally {
+      spy.mockRestore();
+      document.body.style.paddingBottom = '';
+    }
+  });
+
   it('picking the section already in the URL in the search scrolls to it again', async () => {
     const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
     try {

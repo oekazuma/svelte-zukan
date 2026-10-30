@@ -948,6 +948,18 @@ describe('PreviewFrame tools', () => {
     await expect.element(screen.getByRole('button', { name: 'Expand' })).toHaveFocus();
   });
 
+  it('Escape in the width field cancels the edit and stays in the expanded view', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const preview = screen.container.querySelector('.preview')!;
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    const input = screen.getByRole('spinbutton', { name: 'Width in pixels' });
+    const shown = (input.element() as HTMLInputElement).value;
+    await userEvent.fill(input, '300');
+    await userEvent.keyboard('{Escape}');
+    await expect.element(input).toHaveValue(Number(shown));
+    expect(preview.classList.contains('expanded')).toBe(true);
+  });
+
   it('keeps Tab inside the expanded preview, but not out of a dialog opened over it', async () => {
     const outside = document.createElement('button');
     const dialog = document.createElement('dialog');

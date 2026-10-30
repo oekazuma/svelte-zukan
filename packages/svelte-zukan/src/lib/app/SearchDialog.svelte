@@ -14,12 +14,14 @@
     entries,
     tailwind,
     locale,
+    go,
     t
   }: {
     entries: Entry[];
     /** the entries without an error */
     tailwind: TailwindListItem[];
     locale: 'en' | 'ja';
+    go: (hash: string) => void;
     t: Messages;
   } = $props();
 
@@ -131,17 +133,13 @@
     load();
   }
 
-  function go(hit: SearchHit) {
+  function pick(hit: SearchHit) {
     dialog.close();
     const next =
       hit.kind === 'tailwind'
         ? formatTailwindHash(hit.item.source, hit.item.category, hit.label)
         : formatHash('detail', hit.item.path, hit.kind === 'section' ? hit.label : undefined);
-    // the URL already shown navigates without a hashchange: bring the section's heading into view as its link would
-    if (next === location.hash) {
-      const link = [...document.querySelectorAll<HTMLAnchorElement>('h2 a')].find((a) => a.hash === next);
-      link?.closest('h2')?.scrollIntoView();
-    } else location.hash = next;
+    go(next);
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -153,7 +151,7 @@
       document.getElementById(`${id}-${active}`)?.scrollIntoView({ block: 'nearest' });
     } else if (e.key === 'Enter' && hits[active]) {
       e.preventDefault();
-      go(hits[active]);
+      pick(hits[active]);
     }
   }
 </script>
@@ -213,7 +211,7 @@
                   aria-selected={i === active}
                   onmousedown={(e) => e.preventDefault()}
                   onmousemove={() => (active = i)}
-                  onclick={() => go(hit)}
+                  onclick={() => pick(hit)}
                 >
                   {#if hit.kind === 'tailwind'}
                     <span class="line">

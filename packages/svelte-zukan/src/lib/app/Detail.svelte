@@ -4,7 +4,7 @@
   import PreviewFrame from '../components/PreviewFrame/PreviewFrame.svelte';
   import type { Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
-  import { formatHash } from './hash.js';
+  import { formatHash, parseHash } from './hash.js';
   import type { Messages } from './i18n.js';
   import { unionMembers } from './union.js';
 
@@ -80,6 +80,10 @@
     pinned = false;
     follow.disconnect();
   }
+  // a route with no section names no heading to keep in view; the headings' actions see only their own title
+  $effect(() => {
+    if (section === null) unpin();
+  });
   function onscroll() {
     if (!released || pinned) return;
     released = false;
@@ -110,10 +114,18 @@
     if (title === PROPS) heading.focus({ preventScroll: true });
   }
 
-  // a link to the URL already shown navigates without a hashchange, so `reveal` does not run
+  /**
+   * Brings the section into view when `hash` goes to the one shown. The route does not change then, so `reveal` does
+   * not run: the URL is that route already (no hashchange), or an anchor in the doc left it behind
+   */
+  export function revealRoute(hash: string) {
+    const to = parseHash(hash);
+    if (section !== null && to.view === 'detail' && to.path === entry.path && to.section === section) show(section);
+  }
+
   function onclick(e: MouseEvent) {
     const link = e.target instanceof Element ? e.target.closest('a') : null;
-    if (section !== null && link?.hash === location.hash) show(section);
+    if (link) revealRoute(link.hash);
   }
 
   /** Vite's own endpoint, the one its error overlay uses; it is under the app's `base` like the catalog */
