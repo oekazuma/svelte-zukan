@@ -74,6 +74,12 @@ export function discoverGroups(root: string, groups?: Record<string, string | st
 // characters such as `[y]` or `{a,b}`
 const skipNodeModules = (name: string) => basename(name) === 'node_modules';
 
+/** `globSync` also returns directories whose names match, such as `x.zukan.svelte/` */
+const filesIn = (dir: string, pattern: string) =>
+  globSync(pattern, { cwd: dir, exclude: skipNodeModules }).filter((f) =>
+    statSync(join(dir, f), { throwIfNoEntry: false })?.isFile()
+  );
+
 const collator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
 const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -84,7 +90,7 @@ export function listCatalog(groups: CatalogGroup[], suffix: string): CatalogItem
 
   groups.forEach(({ name: group, dirs }, order) => {
     for (const dir of dirs) {
-      for (const found of globSync(`**/*${ext}`, { cwd: dir, exclude: skipNodeModules })) {
+      for (const found of filesIn(dir, `**/*${ext}`)) {
         const file = normalizePath(join(dir, found));
         const segments = normalizePath(found).slice(0, -ext.length).split('/');
         const name = segments[segments.length - 1];
@@ -132,7 +138,7 @@ export function listUncataloged(
   const out: { group: string; file: string }[] = [];
   for (const { name: group, dirs } of groups) {
     for (const dir of dirs) {
-      const found = globSync('**/*.svelte', { cwd: dir, exclude: skipNodeModules })
+      const found = filesIn(dir, '**/*.svelte')
         .map((f) => normalizePath(f))
         .filter((f) => !f.endsWith(ext) && isComponentFile(dir, f))
         .sort((a, b) => collator.compare(a, b) || byCodePoint(a, b));

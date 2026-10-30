@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { Marked } from 'marked';
 import { normalizePath } from 'vite';
 import type { ZukanProp } from '../types.js';
-import { parseSvelte } from './extract.js';
+import { normalizeSource, parseSvelte } from './extract.js';
 import { findPackage } from './tailwind-load.js';
 
 type Node = { type: string; start: number; end: number } & Record<string, unknown>;
@@ -58,7 +58,8 @@ function jsdocOf(node: Node) {
   const lines = comment.value
     .slice(1)
     .split('\n')
-    .map((l) => l.replace(/^\s*\* ?/, '').trimEnd());
+    // the first line follows `/**` directly, so a `*` there is text (`/** **bold** */`)
+    .map((l, i) => (i ? l.replace(/^\s*\* ?/, '') : l).trimEnd());
   const tag = lines.findIndex((l) => l.trimStart().startsWith('@'));
   const text = (tag === -1 ? lines : lines.slice(0, tag)).join('\n').trim();
   return text ? jsdoc.parseInline(resolveLinks(text), { async: false }) : null;
@@ -210,7 +211,7 @@ const candidatesOf = (from: string, spec: string) =>
 
 /** a `.ts` file parses as the module script of a component, which allows its exports */
 function readScope(file: string, pkg: boolean): Scope | null {
-  const source = readFileSync(file, 'utf-8').replace(/\r\n?/g, '\n');
+  const source = normalizeSource(readFileSync(file, 'utf-8'));
   const wrap = (s: string) => `<script module lang="ts">\n${s}\n</script>`;
   const lf = file.endsWith('.svelte') ? source : wrap(source);
   try {
@@ -251,7 +252,7 @@ export function extractProps(
   source: string,
   filename: string
 ): { props: ZukanProp[]; typeName: string | null; files: string[] } | null {
-  const lf = source.replace(/\r\n?/g, '\n');
+  const lf = normalizeSource(source);
   let ast;
   try {
     ast = parseSvelte(lf, filename);

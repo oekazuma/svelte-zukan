@@ -220,19 +220,32 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
 }
 
 /**
- * Runs before vite-plugin-svelte preprocesses the file, so the contents of `<style>` (e.g. SCSS) are blanked out first.
- * Same length, newlines kept: offsets and line numbers still point into `source`. Comments and `<script>` are matched
- * in the same pass and left alone, so a `<style>` written inside them does not start a style block.
+ * `parse` drops a leading byte order mark, so the source it reports offsets into has none. Windows checkouts are often
+ * CRLF; the code view joins its parts with \n.
  */
-export const parseSvelte = (source: string, filename: string): Ast =>
-  parse(
-    source.replace(
-      /<!--[\s\S]*?-->|<script(?=[\s/>])[^>]*>[\s\S]*?<\/script\s*>|(<style(?=[\s/>])[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
-      (match, open?: string, css?: string, close?: string) =>
-        open === undefined ? match : open + css!.replace(/[^\r\n]/g, ' ') + close
-    ),
-    { modern: true, filename }
-  );
+export const normalizeSource = (source: string) => source.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+
+/**
+ * Runs before vite-plugin-svelte preprocesses the file, so a `<style>` that does not parse as CSS (e.g. SCSS) is
+ * retried with its contents blanked out. Same length, newlines kept: offsets and line numbers still point into
+ * `source`. Comments and `<script>` are matched in the same pass and left alone, so a `<style>` written inside them
+ * does not start a style block. Only a retry, because the regex would also pair a `<style>` in an attribute or an
+ * expression with the file's real `</style>`.
+ */
+export function parseSvelte(source: string, filename: string): Ast {
+  try {
+    return parse(source, { modern: true, filename });
+  } catch {
+    return parse(
+      source.replace(
+        /<!--[\s\S]*?-->|<script(?=[\s/>])[^>]*>[\s\S]*?<\/script\s*>|(<style(?=[\s/>])[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
+        (match, open?: string, css?: string, close?: string) =>
+          open === undefined ? match : open + css!.replace(/[^\r\n]/g, ' ') + close
+      ),
+      { modern: true, filename }
+    );
+  }
+}
 
 function parseZukan(source: string, filename: string): Ast {
   try {
@@ -246,7 +259,6 @@ function parseZukan(source: string, filename: string): Ast {
 }
 
 export function extractSections(source: string, filename: string): ZukanSection[] {
-  // Windows checkouts are often CRLF; the code view joins its parts with \n
-  const lf = source.replace(/\r\n?/g, '\n');
+  const lf = normalizeSource(source);
   return sectionsFrom(parseZukan(lf, filename), lf, filename);
 }

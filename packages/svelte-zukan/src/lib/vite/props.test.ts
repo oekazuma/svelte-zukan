@@ -84,6 +84,8 @@ describe('extractProps', () => {
     expect(description('{@link javascript://%0aalert(1) click} {@link file:///etc/passwd}')).toBe(
       'click <code>file:///etc/passwd</code>'
     );
+    expect(description('**Deprecated**: use b')).toBe('<strong>Deprecated</strong>: use b');
+    expect(description('*Optional* label')).toBe('<em>Optional</em> label');
   });
 
   it('follows a type alias, an interface and what it extends, declared in the component', () => {
@@ -246,6 +248,16 @@ describe('extractProps', () => {
       description: 'one\ntwo'
     });
   });
+
+  it('handles a byte order mark', () => {
+    const found = extractProps('\uFEFF' + ts("  let { label = 'hi' }: { label?: string } = $props();"), 'BOM.svelte');
+    expect(found?.props.map((p) => [p.type, p.default])).toEqual([['string', "'hi'"]]);
+  });
+
+  it('does not take a <style> in an attribute for a style block', () => {
+    const source = ts('  let { a }: { a: number } = $props();', '<p data-x="<style>">x</p>\n<style>p{}</style>');
+    expect(extractProps(source, 'Y.svelte')?.props[0].type).toBe('number');
+  });
 });
 
 describe('extractProps with imported types', () => {
@@ -278,6 +290,17 @@ describe('extractProps with imported types', () => {
     ]);
     expect(found.typeName).toBeNull();
     expect(found.files.sort()).toEqual([base, types].sort());
+  });
+
+  it("reads another component's <script module> with a byte order mark", () => {
+    write(
+      'lib/Field.svelte',
+      "\uFEFF<script module lang=\"ts\">\n  export type FieldProps = { size: 'a' | 'b' };\n</script>\n"
+    );
+    const file = component(
+      "  import type { FieldProps } from './Field.svelte';\n  let { size }: FieldProps = $props();"
+    );
+    expect(read(file)!.props[0].type).toBe("'a' | 'b'");
   });
 
   it("reads another component's <script module> and an index.ts", () => {
