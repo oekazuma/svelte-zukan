@@ -58,8 +58,9 @@ function jsdocOf(node: Node) {
   const lines = comment.value
     .slice(1)
     .split('\n')
-    // the first line follows `/**` directly, so a `*` there is text (`/** **bold** */`)
-    .map((l, i) => (i ? l.replace(/^\s*\* ?/, '') : l).trimEnd());
+    // the first line follows `/**` directly, so a `*` there is a star only before a space (`/** * text */`), and
+    // otherwise text (`/** **bold** */`)
+    .map((l, i) => l.replace(i ? /^\s*\* ?/ : /^\s*\*(\s|$)/, '').trimEnd());
   const tag = lines.findIndex((l) => l.trimStart().startsWith('@'));
   const text = (tag === -1 ? lines : lines.slice(0, tag)).join('\n').trim();
   return text ? jsdoc.parseInline(resolveLinks(text), { async: false }) : null;

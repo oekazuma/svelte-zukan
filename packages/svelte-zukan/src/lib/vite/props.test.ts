@@ -85,6 +85,8 @@ describe('extractProps', () => {
       'click <code>file:///etc/passwd</code>'
     );
     expect(description('**Deprecated**: use b')).toBe('<strong>Deprecated</strong>: use b');
+    expect(description('* text @deprecated')).toBe('text @deprecated');
+    expect(description('* @deprecated')).toBe(null);
     expect(description('*Optional* label')).toBe('<em>Optional</em> label');
   });
 
