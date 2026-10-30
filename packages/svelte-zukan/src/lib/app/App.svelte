@@ -99,10 +99,10 @@
       (navigator as { modelContext?: object }).modelContext ?? (document as { modelContext?: object }).modelContext;
     if (route.view === 'preview' || !context) return;
     const catalogUrl = new URL('catalog.json', location.href.split('#')[0]);
-    import('./webmcp.js').then(({ buildTools, registerTools }) =>
+    import('./webmcp.js').then(({ buildTools, fetchCatalog, registerTools }) =>
       registerTools(
         buildTools({
-          fetchCatalog: () => fetch(catalogUrl).then((r) => r.json()),
+          fetchCatalog: () => fetchCatalog(catalogUrl),
           axe,
           page: location.pathname,
           themes: !fixedTheme,
