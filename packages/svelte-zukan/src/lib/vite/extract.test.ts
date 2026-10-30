@@ -228,6 +228,11 @@ describe('extractSections', () => {
     expect(extractSections(source, FILE).map((s) => s.title)).toEqual(['a']);
   });
 
+  it('does not take a <style> in an attribute for a style block', () => {
+    const source = '<Section title="a"><Code code="<style>" /></Section>\n\n<style>p{}</style>\n';
+    expect(extractSections(source, FILE)).toEqual([{ title: 'a', code: '<Code code="<style>" />' }]);
+  });
+
   it('names the file and the cause when the markup does not parse', () => {
     expect(() => extractSections('<Section title="a">\n<A />', FILE)).toThrow(
       /^svelte-zukan: could not parse Button\.zukan\.svelte \(catalog files must be plain Svelte markup; preprocessor languages are only supported inside <style>\): .+/
@@ -299,6 +304,12 @@ describe('extractSections', () => {
 
   it('reports the line of an error in a CRLF file', () => {
     expect(() => extractSections('<p></p>\r\n<Section><A /></Section>', FILE)).toThrow(/Button\.zukan\.svelte:2 /);
+  });
+
+  it('gives the same code and error lines for a file with a byte order mark', () => {
+    const source = '<script>\n  const a = 1;\n</script>\n\n<Section title="A">\n  <b>{a}</b>\n</Section>';
+    expect(extractSections('\uFEFF' + source, FILE)).toEqual(extractSections(source, FILE));
+    expect(() => extractSections('\uFEFF<p></p>\n<Section><A /></Section>', FILE)).toThrow(/Button\.zukan\.svelte:2 /);
   });
 
   it('includes TypeScript types the section uses', () => {

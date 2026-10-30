@@ -273,6 +273,12 @@ describe('listCatalog IDs', () => {
     expect(items.map((i) => i.path)).toEqual(['ui/Foo']);
   });
 
+  it('skips a directory named like a catalog file', () => {
+    write('app/src/x.zukan.svelte/inner.txt');
+    write('app/src/Real.zukan.svelte');
+    expect(listCatalog(discoverGroups(join(tmp, 'app'), { g: 'src' }), 'zukan').map((i) => i.path)).toEqual(['g/Real']);
+  });
+
   it('rel may contain preview', () => {
     write('app/ui/preview/Foo.zukan.svelte');
     const items = listCatalog(discoverGroups(join(tmp, 'app'), { ui: 'ui' }), 'zukan');
@@ -350,6 +356,14 @@ describe('listUncataloged', () => {
     expect(listUncataloged(groups, 'zukan', cataloged)).toEqual([
       { group: 'app', file: p(`${app}/src/lib/Card.svelte`) },
       { group: 'app', file: p(`${app}/src/lib/forms/Input.svelte`) }
+    ]);
+  });
+
+  it('skips a directory named like a .svelte file', () => {
+    write('app/src/lib/dir.svelte/inner.txt');
+    write('app/src/lib/Card.svelte');
+    expect(listUncataloged(discoverGroups(join(tmp, 'app'), { g: 'src/lib' }), 'zukan', new Set())).toEqual([
+      { group: 'g', file: p('app/src/lib/Card.svelte') }
     ]);
   });
 
