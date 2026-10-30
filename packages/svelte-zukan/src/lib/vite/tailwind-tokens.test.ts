@@ -359,12 +359,13 @@ describe('rootVariables', () => {
   });
 
   it('reads variables from a rule whose selector list includes the root', () => {
-    expect(rootVariables(':root,[data-theme="light"]{--a:1}\n:where(:root){--b:2}\n.x,.y{--c:3}')).toEqual({
-      '--a': '1',
-      '--b': '2'
-    });
+    expect(rootVariables(':root,[data-theme="light"]{--a:1}\n.x,.y{--c:3}')).toEqual({ '--a': '1' });
     // names are unescaped, as `theme.entries()` gives them
-    expect(rootVariables(':root{--d\\.e:4}')).toEqual({ '--d.e': '4' });
+    expect(rootVariables(':root{--d\\.e:4;--f\\2d g:5;--h\\2e 5:6}')).toEqual({
+      '--d.e': '4',
+      '--f-g': '5',
+      '--h.5': '6'
+    });
   });
 });
 

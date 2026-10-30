@@ -13,8 +13,13 @@ export type CssRule = { selector: string; atRules: string[]; declarations: [prop
 // Tailwind serializes multi-line values (font stacks, shadows) with line breaks and indentation.
 const collapse = (value: string) => value.replace(/\s+/g, ' ').trim();
 
-// `theme.entries()` names `--spacing-2\.5` as `--spacing-2.5`
-const unescape = (name: string) => name.replace(/\\(.)/g, '$1');
+// `theme.entries()` names `--spacing-2\.5` as `--spacing-2.5`; a hex escape ends at an optional whitespace
+const unescape = (name: string) =>
+  name.replace(/\\([0-9a-f]{1,6})\s?|\\(.)/gi, (_, hex?: string, char?: string) => {
+    if (hex === undefined) return char!;
+    const code = parseInt(hex, 16);
+    return code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff) ? '\ufffd' : String.fromCodePoint(code);
+  });
 
 function stringEnd(css: string, start: number): number {
   for (let i = start + 1; i < css.length; i++) {
@@ -94,7 +99,7 @@ export function rootVariables(css: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const rule of scanCss(css)) {
     const selectors = rule.selector.split(',').map((s) => s.trim());
-    if (!selectors.some((s) => /^(:root|:host|html|:where\(:root\))$/.test(s))) continue;
+    if (!selectors.some((s) => s === ':root' || s === ':host' || s === 'html')) continue;
     if (!rule.atRules.every((a) => /^@layer(\s|$)/.test(a))) continue;
     for (const [property, value] of rule.declarations) if (property.startsWith('--')) out[unescape(property)] = value;
   }
