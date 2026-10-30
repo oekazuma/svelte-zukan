@@ -117,6 +117,11 @@ function viteResolver(
   };
 }
 
+const assertApart = (out: string, what: string, dir: string) => {
+  if (isInside(out, dir) || isInside(dir, out))
+    throw new Error(`svelte-zukan: build.outDir of the catalog (${out}) must not overlap ${what} (${dir})`);
+};
+
 const printCatalogUrl = (server: ViteDevServer | PreviewServer) => {
   const printUrls = server.printUrls;
   server.printUrls = () => {
@@ -314,8 +319,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
             .map(([name, env]) => [`the build.outDir of the ${name} environment`, dirOf(env.build!.outDir!)]),
           ...(kit ? [["SvelteKit's kit.outDir", dirOf(kit.api?.options?.outDir ?? '.svelte-kit')]] : [])
         ])
-          if (overlaps(dir))
-            throw new Error(`svelte-zukan: build.outDir of the catalog (${out}) must not overlap ${what} (${dir})`);
+          assertApart(out, what, dir);
         // the app copies publicDir (SvelteKit's kit.files.assets) before the catalog is written
         const publicDir = config.publicDir === false ? null : dirOf(config.publicDir ?? 'public');
         if (publicDir && isInside(out, publicDir))
@@ -433,6 +437,14 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       async handler(builder) {
         const env = builder.environments.zukan;
         if (!env || !resolved.build) return;
+        // again as resolved: a `configEnvironment` hook can set an outDir the config hook did not see
+        for (const [name, e] of Object.entries(builder.environments))
+          if (e !== env)
+            assertApart(
+              resolved.build,
+              `the build.outDir of the ${name} environment`,
+              normalizePath(resolve(root, e.config.build.outDir))
+            );
         if (warning) builder.config.logger.warn(warning);
         // Vite builds the app only when no hook built an environment, and this hook is about to build one
         const others = Object.values(builder.environments).filter((e) => e !== env);

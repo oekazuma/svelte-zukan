@@ -271,6 +271,9 @@
             {t}
           />
         {/key}
+      {:else if listError}
+        <!-- the entry may be missing only because the catalog could not be listed -->
+        <List entries={catalog} {searched} {uncataloged} {listError} {tailwind} {theme} {t} />
       {:else}
         <h1>{t.notFound}</h1>
         <p class="missing">{t.notFoundHint}</p>

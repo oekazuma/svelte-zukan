@@ -915,7 +915,7 @@ describe('build', () => {
     expect((await bootBuild(root, { build: { outDir: '.svelte-kit/zukan' } })).added).toBeDefined();
   });
 
-  type Env = { isBuilt: boolean };
+  type Env = { isBuilt: boolean; config?: { build: { outDir: string } } };
 
   it('runs the config hook after the other plugins', () => {
     // so that a `builder` or a `renderBuiltUrl` set by another plugin is seen
@@ -1031,7 +1031,8 @@ describe('build', () => {
   });
 
   const fakeBuilder = (fileName: string, others: Record<string, Env>, { array = false, watch = false } = {}) => {
-    const zukanEnv = { isBuilt: false };
+    const zukanEnv: Env = { isBuilt: false, config: { build: { outDir: 'zukan-dist' } } };
+    for (const e of Object.values(others)) e.config ??= { build: { outDir: 'dist' } };
     const output = {
       output: [
         // an entry of the app's own input that leaked in would also be an entry
@@ -1124,6 +1125,18 @@ describe('build', () => {
     const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
     await p.buildApp.handler(builder);
     expect(existsSync(`${outDir}/_app/version.json`)).toBe(true);
+  });
+
+  it('rejects an environment outDir set after the config hook before building anything', async () => {
+    const { root } = await makeApp();
+    const { p } = await bootBuild(root, { build: true });
+    // as a later `configEnvironment` hook would leave it
+    const client = { isBuilt: false, config: { build: { outDir: 'zukan-dist/app' } } };
+    const { builder } = fakeBuilder('_zukan/zukan-abc.js', { client });
+    await expect(p.buildApp.handler(builder)).rejects.toThrow(
+      `svelte-zukan: build.outDir of the catalog (${root}/zukan-dist) must not overlap the build.outDir of the client environment (${root}/zukan-dist/app)`
+    );
+    expect(builder.build).not.toHaveBeenCalled();
   });
 
   it('removes only the files of the previous catalog', async () => {
@@ -1264,7 +1277,7 @@ describe('Tailwind CSS', () => {
     const { p } = await bootBuild(root, { build: true });
     const builder = {
       config: { build: { watch: null }, logger: { warn: vi.fn() } },
-      environments: { client: { isBuilt: true }, zukan: { isBuilt: false } },
+      environments: { client: { isBuilt: true, config: { build: { outDir: 'dist' } } }, zukan: { isBuilt: false } },
       build: vi.fn(async () => ({ output: [{ type: 'chunk', name: 'zukan', fileName: '_zukan/zukan-1.js' }] }))
     };
     await p.buildApp.handler(builder);
@@ -1290,7 +1303,7 @@ describe('Tailwind CSS', () => {
     const zukanEnv = new BuildEnvironment('zukan', config);
     const builder = {
       config: { build: { watch: null }, logger: { warn: vi.fn() } },
-      environments: { client: { isBuilt: true }, zukan: zukanEnv },
+      environments: { client: { isBuilt: true, config: { build: { outDir: 'dist' } } }, zukan: zukanEnv },
       build: vi.fn(async () => ({ output: [{ type: 'chunk', name: 'zukan', fileName: '_zukan/zukan-1.js' }] }))
     };
     await p.buildApp.handler(builder);
