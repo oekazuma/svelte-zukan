@@ -18,7 +18,9 @@ export function generateCatalogModule(
   items: CatalogItem[],
   uncataloged: { group: string; file: string }[] = [],
   /** the files to open in an editor, by absolute path: on the dev server only */
-  edit?: (file: string) => { file: string; component: string | null }
+  edit?: (file: string) => { file: string; component: string | null },
+  /** why the catalog could not be listed, shown in place of the list */
+  error: string | null = null
 ): string {
   // `file` is left out so that absolute paths do not end up in the static build
   const entries = items.map(
@@ -27,7 +29,8 @@ export function generateCatalogModule(
   );
   return (
     `export const catalog = [\n${entries.join(',\n')}\n];\n` +
-    `export const uncataloged = ${JSON.stringify(uncataloged)};\n`
+    `export const uncataloged = ${JSON.stringify(uncataloged)};\n` +
+    `export const error = ${JSON.stringify(error)};\n`
   );
 }
 
@@ -78,7 +81,7 @@ export function generateEntryModule(opts: {
   const imports = [
     [`import('svelte')`, '{ mount }'],
     [`import(${s(opts.appFile)})`, '{ default: App }'],
-    [`import(${s(CATALOG)})`, '{ catalog, uncataloged }'],
+    [`import(${s(CATALOG)})`, '{ catalog, uncataloged, error }'],
     ...(opts.tailwind ? [[`import(${s(TAILWIND)})`, '{ tailwind }']] : [])
   ];
   // the module runs only once its static imports have loaded, and the key listener must be registered before the ones
@@ -117,6 +120,7 @@ export function generateEntryModule(opts: {
     `    props: {`,
     `      catalog,`,
     `      uncataloged,`,
+    `      listError: error,`,
     opts.tailwind ? `      tailwind,` : `      tailwind: [],`,
     `      logo: ${opts.logo ? 'logo' : 'null'},`,
     `      wrapper: ${opts.wrapper ? `() => import(${s(opts.wrapper)})` : 'null'},`,

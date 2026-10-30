@@ -466,6 +466,44 @@ describe('configureServer', () => {
     expect(built).not.toContain('"edit"');
   });
 
+  // a throw would reach Vite's error middleware, which puts an overlay on every tab, the app's too, and the fix reloads
+  // only the catalog
+  it('on the dev server, gives a duplicate ID to the catalog page and catalog.json instead of failing', async () => {
+    const { tmp, root } = await makeApp();
+    mkdirSync(path.join(root, 'src/A'));
+    await writeFile(path.join(root, 'src/A/A.zukan.svelte'), source);
+    await writeFile(path.join(root, 'src/Lone.svelte'), '<p>lone</p>');
+    const { p } = boot(root);
+    const server = fakeServer(root);
+    p.configureServer(server);
+    const list: string = p.load('\0virtual:svelte-zukan/catalog');
+    expect(list).toContain('export const catalog = [\n\n];');
+    expect(list).toContain('export const uncataloged = [];');
+    expect(list).toMatch(
+      /^export const error = "svelte-zukan: duplicate catalog ID \\"app\/A\\":.*src\/A\.zukan\.svelte/m
+    );
+    expect(list).not.toContain(tmp);
+    const meta = p.load.call({ addWatchFile: vi.fn() }, '\0' + metaId('app/A'));
+    expect(meta).toContain('"error":"svelte-zukan: duplicate catalog ID');
+    const res = await request(server.middlewares.use.mock.calls[0][0], '/__zukan/catalog.json');
+    expect(res).toMatchObject({ status: 500, type: 'application/json' });
+    expect(res.body).not.toContain(tmp);
+    expect(JSON.parse(res.body!).error).toMatch(/^svelte-zukan: duplicate catalog ID "app\/A"/);
+
+    rmSync(path.join(root, 'src/A'), { recursive: true });
+    expect(p.load('\0virtual:svelte-zukan/catalog')).toContain('export const error = null;');
+    const fixed = await request(server.middlewares.use.mock.calls[0][0], '/__zukan/catalog.json');
+    expect(JSON.parse(fixed.body!).components).toHaveLength(1);
+  });
+
+  it('fails the build on a duplicate ID', async () => {
+    const { root } = await makeApp();
+    mkdirSync(path.join(root, 'src/A'));
+    await writeFile(path.join(root, 'src/A/A.zukan.svelte'), source);
+    const { p } = await bootBuild(root, { build: true });
+    expect(() => p.load('\0virtual:svelte-zukan/catalog')).toThrow(/duplicate catalog ID "app\/A"/);
+  });
+
   it('serves the catalog HTML at /__zukan/', async () => {
     const { root } = await makeApp();
     const { p } = boot(root, { title: 'My UI', locale: 'ja' });
@@ -578,7 +616,19 @@ describe('configurePreviewServer', () => {
   it.each([
     ['photo.jpeg', 'image/jpeg'],
     ['module.wasm', 'application/wasm'],
-    ['font.woff', 'font/woff']
+    ['font.woff', 'font/woff'],
+    ['doc.pdf', 'application/pdf'],
+    ['notes.txt', 'text/plain; charset=utf-8'],
+    ['captions.vtt', 'text/vtt; charset=utf-8'],
+    ['sound.mp3', 'audio/mpeg'],
+    ['sound.ogg', 'audio/ogg'],
+    ['sound.wav', 'audio/wav'],
+    ['sound.flac', 'audio/flac'],
+    ['sound.aac', 'audio/aac'],
+    ['sound.opus', 'audio/ogg'],
+    ['sound.m4a', 'audio/mp4'],
+    ['clip.mov', 'video/quicktime'],
+    ['app.webmanifest', 'application/manifest+json']
   ])('serves %s as %s', async (name, type) => {
     const { root, mw } = await setup();
     await writeFile(path.join(root, 'zukan-dist/_zukan', name), '');
@@ -813,6 +863,13 @@ describe('build', () => {
     await reject('out/zukan', { build: { outDir: 'out' } });
     // SvelteKit sets an absolute outDir
     await reject('.svelte-kit/output/zukan', { build: { outDir: `${root}/.svelte-kit/output` } });
+    // an environment's own outDir replaces the top-level one
+    await reject('site', { environments: { client: { build: { outDir: 'site' } } } });
+    await reject('site/zukan', { environments: { ssr: { build: { outDir: `${root}/site` } } } });
+    expect(
+      (await bootBuild(root, { build: { outDir: 'out' } }, { environments: { client: { build: { outDir: 'site' } } } }))
+        .added
+    ).toBeDefined();
     expect((await bootBuild(root, { build: { outDir: 'out' } }, { build: { outDir: 'output' } })).added).toBeDefined();
   });
 
@@ -927,7 +984,11 @@ describe('build', () => {
         lib: { entry: 'src/index.ts' },
         cssCodeSplit: false,
         cssTarget: 'chrome107',
-        rolldownOptions: { input: { main: 'index.html', nested: 'nested/index.html', zukan: ENTRY } }
+        // library mode: the app's bundle leaves svelte to its users, the catalog has none
+        rolldownOptions: {
+          input: { main: 'index.html', nested: 'nested/index.html', zukan: ENTRY },
+          external: ['svelte', /^svelte\//]
+        }
       }
     });
     const env = inherited();

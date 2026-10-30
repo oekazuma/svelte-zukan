@@ -303,6 +303,14 @@ describe('App', () => {
     await expect.element(screen.getByRole('heading', { level: 1, name: /Button/ })).toBeInTheDocument();
   });
 
+  it('the top page shows why the catalog could not be listed, in place of the empty list', async () => {
+    const { props } = setup('');
+    const listError = 'svelte-zukan: duplicate catalog ID "ui/A":\n  src/A.zukan.svelte\n  src/A/A.zukan.svelte';
+    const screen = await render(App, { props: { ...props, catalog: [], listError } });
+    await expect.element(screen.getByText(/^Failed to load: svelte-zukan: duplicate catalog ID "ui\/A"/)).toBeVisible();
+    await expect.element(screen.getByText('No catalog files found. Searched:')).not.toBeInTheDocument();
+  });
+
   it('the top page lists the components without a catalog file, folded, even with no catalog files yet', async () => {
     const { props } = setup('');
     const screen = await render(App, {

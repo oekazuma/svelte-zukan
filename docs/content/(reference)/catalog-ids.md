@@ -29,6 +29,6 @@ An ID does not change unless you move the file. With automatic discovery, `lib/`
 ## Errors
 
 - A group name that is `preview` or starts with `preview/` is an error, because it is reserved in URLs
-- Duplicate IDs are an error, and both file paths are reported. IDs collide, for example, in these cases:
+- Duplicate IDs are an error, and both file paths are reported. On the dev server, the catalog's top page shows the error instead of the list, and the app's tabs are left alone. IDs collide, for example, in these cases:
   - `lib/Button.zukan.svelte` and `lib/Button/Button.zukan.svelte`. After merging, both become `my-app/lib/Button`
   - `ui/Card.zukan.svelte` in the group `@acme` and `Card.zukan.svelte` in the group `@acme/ui`. Both become `@acme/ui/Card`

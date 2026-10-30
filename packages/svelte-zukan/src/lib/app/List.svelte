@@ -9,6 +9,7 @@
     entries,
     searched,
     uncataloged = [],
+    listError = null,
     tailwind = [],
     theme,
     t
@@ -16,6 +17,7 @@
     entries: Entry[];
     searched: { group: string; dirs: string[] }[];
     uncataloged?: { group: string; file: string }[];
+    listError?: string | null;
     tailwind?: TailwindListItem[];
     theme: Theme;
     t: Messages;
@@ -39,7 +41,9 @@
     </ul>
   </section>
 {/if}
-{#if entries.length}
+{#if listError}
+  <p class="list-error">{t.loadFailed} {listError}</p>
+{:else if entries.length}
   {#each groups as [group, items], i (group)}
     <section aria-labelledby="{id}-{i}">
       <h2 id="{id}-{i}">{group} <span class="count">{items.length}</span></h2>
@@ -151,5 +155,10 @@
     display: block;
     padding-left: 20px;
     list-style: disc;
+  }
+
+  /* the message lists the colliding files on lines of their own */
+  .list-error {
+    white-space: pre-wrap;
   }
 </style>

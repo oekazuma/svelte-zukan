@@ -17,7 +17,7 @@ svelte-zukan ships two agent skills: `svelte-zukan`, to set svelte-zukan up and 
 
 ## The catalog as data
 
-The dev server serves `/__zukan/catalog.json`, and `vite build` with `build: true` writes the same data to `catalog.json` next to `index.html`. Paths in it are relative to Vite's root.
+The dev server serves `/__zukan/catalog.json`, and `vite build` with `build: true` writes the same data to `catalog.json` next to `index.html`. Paths in it are relative to Vite's root. When the catalog can not be listed (a duplicate ID), the dev server answers with status 500 and `{ "error": "<message>" }`.
 
 | Field                     | What it holds                                                                                                                                                                     |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
