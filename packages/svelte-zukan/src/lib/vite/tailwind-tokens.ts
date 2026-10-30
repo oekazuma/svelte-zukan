@@ -13,6 +13,9 @@ export type CssRule = { selector: string; atRules: string[]; declarations: [prop
 // Tailwind serializes multi-line values (font stacks, shadows) with line breaks and indentation.
 const collapse = (value: string) => value.replace(/\s+/g, ' ').trim();
 
+// `theme.entries()` names `--spacing-2\.5` as `--spacing-2.5`
+const unescape = (name: string) => name.replace(/\\(.)/g, '$1');
+
 function stringEnd(css: string, start: number): number {
   for (let i = start + 1; i < css.length; i++) {
     if (css[i] === '\\') i++;
@@ -36,7 +39,10 @@ export function scanCss(css: string): CssRule[] {
     buf = '';
     const colon = text.indexOf(':');
     const rule = stack.at(-1)?.rule;
-    if (rule && colon > 0) rule.declarations.push([text.slice(0, colon).trim(), collapse(text.slice(colon + 1))]);
+    if (!rule || colon <= 0) return;
+    // `@import "tailwindcss" important` marks every declaration
+    const value = collapse(text.slice(colon + 1)).replace(/\s*!\s*important$/i, '');
+    rule.declarations.push([text.slice(0, colon).trim(), value]);
   };
 
   for (let i = 0; i < css.length; i++) {
@@ -80,14 +86,17 @@ export function scanCss(css: string): CssRule[] {
   return rules;
 }
 
-/** custom properties declared unconditionally: on `:root`, `:host` or `html`, at the top level or inside `@layer` */
+/**
+ * custom properties declared unconditionally on the root: by a rule whose selector list includes `:root`, `:host` or
+ * `html`, at the top level or inside `@layer`
+ */
 export function rootVariables(css: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const rule of scanCss(css)) {
     const selectors = rule.selector.split(',').map((s) => s.trim());
-    if (!selectors.every((s) => s === ':root' || s === ':host' || s === 'html')) continue;
+    if (!selectors.some((s) => /^(:root|:host|html|:where\(:root\))$/.test(s))) continue;
     if (!rule.atRules.every((a) => /^@layer(\s|$)/.test(a))) continue;
-    for (const [property, value] of rule.declarations) if (property.startsWith('--')) out[property] = value;
+    for (const [property, value] of rule.declarations) if (property.startsWith('--')) out[unescape(property)] = value;
   }
   return out;
 }
@@ -104,7 +113,7 @@ function closeParen(value: string, open: number): number {
 
 function varName(inner: string): string {
   const comma = inner.indexOf(',');
-  return (comma < 0 ? inner : inner.slice(0, comma)).trim();
+  return unescape((comma < 0 ? inner : inner.slice(0, comma)).trim());
 }
 
 /**
@@ -261,6 +270,8 @@ export function sizeOf(value: string, property: string): number | null {
   // `none` and `shadow-none`'s `0 0 #0000`
   if (/^(none|0(px)?( 0(px)?)* #0000)$/.test(value)) return 0;
   if (property === 'line-height' && /^[+-]?[\d.]+$/.test(value)) return Number(value) * 16;
+  // the default scale is in percent, a project's opacity often a plain number
+  if (property === 'opacity' && /^[+-]?[\d.]+%$/.test(value)) return parseFloat(value) / 100;
   const calc = /^calc\((.+)\)$/.exec(value);
   const parts = (calc?.[1] ?? value).trim().split(/\s+/);
   if (!calc && parts.length > 1) return null;
@@ -325,6 +336,8 @@ export function extractTokens(
     // (`--color-primary: var(--color-blue-500)` gives `bg-primary` the value `var(--color-blue-500)`): name its own
     const suffix = name.slice(stem.length + 1);
     if (variable && own && variable !== own && Object.hasOwn(variables, own)) cssVariable = own;
+    // another namespace can hold the same value under the same suffix (`--text-xs` and `--spacing-xs`)
+    if (!cssVariable && own && variables[own] === value) cssVariable = own;
     if (!cssVariable && suffix) {
       cssVariable =
         Object.keys(variables).find((key) => variables[key] === value && key.endsWith(`-${suffix}`)) ?? null;
