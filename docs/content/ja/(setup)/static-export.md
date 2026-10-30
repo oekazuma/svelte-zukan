@@ -19,7 +19,7 @@ zukan({ build: true });
 - `vite preview` でも、書き出したカタログを `/__zukan/`（`base` を設定していればその下）で開けるので、公開する前に確かめられます
 - 再デプロイの前から開いたままのカタログのタブは、前のビルドのファイルを読みにいきます。そのファイルがもう無いときは、カタログを 1 回だけ読み込み直して新しいビルドに切り替えます（10 秒に 1 回まで。それ以上はプレビューにエラーを表示します）
 - `vite build --watch` ではカタログを書き出しません。警告を出して飛ばします
-- 出力先は Vite の root そのものや root を含むディレクトリにできません。アプリの `build.outDir`（既定は `dist`）や SvelteKit の `outDir`（`.svelte-kit`）と重なってもいけません。アプリの `publicDir`（`public`、SvelteKit では `static`）の中にも置けません。アプリはカタログを書き出す前に `publicDir` をコピーするからです。どれもビルドエラーになります
+- 出力先は Vite の root そのものや root を含むディレクトリにできません。アプリの `build.outDir`（既定は `dist`）、カタログ以外の各環境の `build.outDir`、SvelteKit の `outDir`（`.svelte-kit`）と重なってもいけません。アプリの `publicDir`（`public`、SvelteKit では `static`）の中にも置けません。アプリはカタログを書き出す前に `publicDir` をコピーするからです。どれもビルドエラーになります
 - カタログを書き出すのは `vite build`（Vite の JavaScript API なら `createBuilder().buildApp()`）です。`vite build --ssr` と Vite の `build()` 関数は 1 つの環境だけをビルドするので、カタログは書き出しません
 - `index.html` の隣に `catalog.json` も書き出します。全コンポーネントのセクション、コード、props、`.md` と、カタログファイルのない `.svelte` ファイルをまとめたもので、ツールや AI エージェント向けです。dev サーバーでは同じ内容を `/__zukan/catalog.json` で返します
 - 書き出しの前に、前回のカタログ（出力先の `_zukan/`、`index.html`、`catalog.json`）だけを消します。SvelteKit では、adapter が `build/` を空にすることが多いので、出力先が `build/` と重なると警告を出します

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TailwindSource } from '../types.js';
-import { buildTools, registerTools, type WebMcpTool } from './webmcp.js';
+import { buildTools, fetchCatalog, registerTools, type WebMcpTool } from './webmcp.js';
 
 const catalog = {
   components: [
@@ -52,6 +52,21 @@ describe('WebMCP tools', () => {
     // values outside the schema are dropped rather than written into the URL
     await tool(tools, 'open_component').execute({ id: 'ui/Button', width: -1, theme: 'blue' });
     expect(location.hash).toBe('#/ui/Button');
+  });
+
+  it("reports the dev server's error when the catalog can not be listed", async () => {
+    const error = 'svelte-zukan: duplicate catalog ID "ui/A":\n  src/A.zukan.svelte\n  src/A/A.zukan.svelte';
+    const respond = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ error }, { status: 500 }))
+      .mockResolvedValueOnce(new Response('oops', { status: 500, statusText: 'Internal Server Error' }));
+    const failing = buildTools({ fetchCatalog: () => fetchCatalog(new URL('/x', location.href)), page: '/__zukan/' });
+    expect(await tool(failing, 'list_components').execute({})).toEqual({
+      content: [{ type: 'text', text: error }],
+      isError: true
+    });
+    expect(body(await tool(failing, 'get_component').execute({ id: 'ui/A' }))).toBe('Internal Server Error');
+    respond.mockRestore();
   });
 
   it('has no accessibility tool without axe-core, and marks what only reads', () => {

@@ -118,7 +118,7 @@ describe('generateEntryModule', () => {
     expect(without).toContain('tailwind: []');
     const code = generateEntryModule({ ...base, logo: null, wrapper: null, tailwind: true });
     expect(code).toContain(`import("${TAILWIND}")`);
-    expect(code).toContain('{ catalog, uncataloged }, { tailwind }');
+    expect(code).toContain('{ catalog, uncataloged, error }, { tailwind }');
     expect(code).toMatch(/^ {6}tailwind,$/m);
   });
 

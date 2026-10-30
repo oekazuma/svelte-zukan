@@ -29,6 +29,6 @@ ID はファイルを動かさない限り変わりません。自動探索で I
 ## エラー
 
 - グループ名が `preview` そのものか `preview/` で始まる名前だと、URL で予約しているためエラーになります
-- ID が重複するとエラーになり、両方のファイルパスが出ます。重複するのは、たとえば次の場合です
+- ID が重複するとエラーになり、両方のファイルパスが出ます。dev サーバーでは、代わりにカタログのトップページに一覧ではなくこのエラーが出て、アプリのタブには何も出ません。重複するのは、たとえば次の場合です
   - `lib/Button.zukan.svelte` と `lib/Button/Button.zukan.svelte`。まとめた結果、どちらも `my-app/lib/Button` になります
   - グループ `@acme` の `ui/Card.zukan.svelte` と、グループ `@acme/ui` の `Card.zukan.svelte`。どちらも `@acme/ui/Card` になります

@@ -20,6 +20,7 @@
     fixedTheme = null,
     searched,
     uncataloged = [],
+    listError = null,
     tailwind = [],
     axe
   }: {
@@ -33,6 +34,8 @@
     searched: { group: string; dirs: string[] }[];
     /** `.svelte` files with no catalog file next to them, relative to the Vite root */
     uncataloged?: { group: string; file: string }[];
+    /** why the catalog could not be listed (a duplicate ID); the catalog is then empty */
+    listError?: string | null;
     /** the Tailwind CSS entries; empty without Tailwind */
     tailwind?: TailwindListItem[];
     /** the source of axe-core, loaded on the first accessibility check */
@@ -96,10 +99,10 @@
       (navigator as { modelContext?: object }).modelContext ?? (document as { modelContext?: object }).modelContext;
     if (route.view === 'preview' || !context) return;
     const catalogUrl = new URL('catalog.json', location.href.split('#')[0]);
-    import('./webmcp.js').then(({ buildTools, registerTools }) =>
+    import('./webmcp.js').then(({ buildTools, fetchCatalog, registerTools }) =>
       registerTools(
         buildTools({
-          fetchCatalog: () => fetch(catalogUrl).then((r) => r.json()),
+          fetchCatalog: () => fetchCatalog(catalogUrl),
           axe,
           page: location.pathname,
           themes: !fixedTheme,
@@ -241,7 +244,7 @@
     />
     <main id="zukan-main" tabindex="-1" bind:this={main}>
       {#if route.view === 'list'}
-        <List entries={catalog} {searched} {uncataloged} {tailwind} {theme} {t} />
+        <List entries={catalog} {searched} {uncataloged} {listError} {tailwind} {theme} {t} />
       {:else if route.view === 'tailwind' && tailwind.length}
         <Tailwind
           sources={tailwind}
@@ -268,6 +271,9 @@
             {t}
           />
         {/key}
+      {:else if listError}
+        <!-- the entry may be missing only because the catalog could not be listed -->
+        <List entries={catalog} {searched} {uncataloged} {listError} {tailwind} {theme} {t} />
       {:else}
         <h1>{t.notFound}</h1>
         <p class="missing">{t.notFoundHint}</p>

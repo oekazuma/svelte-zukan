@@ -48,6 +48,14 @@ const SECTION = { type: 'string', description: 'A section title of that componen
 const WIDTH = { type: 'integer', description: 'The preview width in CSS pixels' };
 const THEME = { type: 'string', enum: ['light', 'dark'] };
 
+/** `catalog.json`, or the error the dev server answers with when the catalog can not be listed (a duplicate ID) */
+export async function fetchCatalog(url: URL): Promise<CatalogJson> {
+  const res = await fetch(url);
+  if (res.ok) return res.json();
+  const data: { error?: unknown } | null = await res.json().catch(() => null);
+  throw new Error(typeof data?.error === 'string' ? data.error : res.statusText);
+}
+
 export function buildTools(opts: {
   /** `catalog.json` next to the catalog page */
   fetchCatalog: () => Promise<CatalogJson>;
@@ -210,7 +218,11 @@ export function buildTools(opts: {
       }
     });
   }
-  return tools;
+  // a rejection would reach the agent as whatever the browser makes of it, without the message
+  return tools.map((tool) => ({
+    ...tool,
+    execute: (input) => tool.execute(input).catch((e: unknown) => text(messageOf(e), true))
+  }));
 }
 
 /** Whether the browser took the tools: false wherever WebMCP is not implemented, which is the usual case. */

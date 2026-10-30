@@ -303,6 +303,22 @@ describe('App', () => {
     await expect.element(screen.getByRole('heading', { level: 1, name: /Button/ })).toBeInTheDocument();
   });
 
+  it('the top page shows why the catalog could not be listed, in place of the empty list', async () => {
+    const { props } = setup('');
+    const listError = 'svelte-zukan: duplicate catalog ID "ui/A":\n  src/A.zukan.svelte\n  src/A/A.zukan.svelte';
+    const screen = await render(App, { props: { ...props, catalog: [], listError } });
+    await expect.element(screen.getByText(/^Failed to load: svelte-zukan: duplicate catalog ID "ui\/A"/)).toBeVisible();
+    await expect.element(screen.getByText('No catalog files found. Searched:')).not.toBeInTheDocument();
+  });
+
+  it('a detail page left without its entry by a listing error shows that error, not Not found', async () => {
+    const { props } = setup('#/ui/Button');
+    const listError = 'svelte-zukan: duplicate catalog ID "ui/Button"';
+    const screen = await render(App, { props: { ...props, catalog: [], listError } });
+    await expect.element(screen.getByText(`Failed to load: ${listError}`)).toBeVisible();
+    await expect.element(screen.getByRole('heading', { name: 'Not found' })).not.toBeInTheDocument();
+  });
+
   it('the top page lists the components without a catalog file, folded, even with no catalog files yet', async () => {
     const { props } = setup('');
     const screen = await render(App, {

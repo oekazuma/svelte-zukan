@@ -62,8 +62,28 @@ const CONTENT_TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
   '.ttf': 'font/ttf',
   '.otf': 'font/otf',
+  '.apng': 'image/apng',
+  '.bmp': 'image/bmp',
+  '.jfif': 'image/jpeg',
+  '.pjpeg': 'image/jpeg',
+  '.pjp': 'image/jpeg',
+  '.cur': 'image/x-icon',
+  '.jxl': 'image/jxl',
+  '.eot': 'application/vnd.ms-fontobject',
   '.mp4': 'video/mp4',
   '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg',
+  '.ogg': 'audio/ogg',
+  '.opus': 'audio/ogg',
+  '.wav': 'audio/wav',
+  '.flac': 'audio/flac',
+  '.aac': 'audio/aac',
+  '.m4a': 'audio/mp4',
+  '.vtt': 'text/vtt; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.pdf': 'application/pdf',
+  '.webmanifest': 'application/manifest+json',
   '.wasm': 'application/wasm',
   '.json': 'application/json',
   '.map': 'application/json'
@@ -96,6 +116,11 @@ function viteResolver(
     }
   };
 }
+
+const assertApart = (out: string, what: string, dir: string) => {
+  if (isInside(out, dir) || isInside(dir, out))
+    throw new Error(`svelte-zukan: build.outDir of the catalog (${out}) must not overlap ${what} (${dir})`);
+};
 
 const printCatalogUrl = (server: ViteDevServer | PreviewServer) => {
   const printUrls = server.printUrls;
@@ -145,6 +170,9 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   let warning: string | null = null;
   /** path → item, from the last listing; dropped when a catalog file is created or deleted */
   let items: Map<string, CatalogItem> | null = null;
+  /** why the last listing failed (a duplicate ID), on the dev server only */
+  let listError: string | null = null;
+  const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e)).replaceAll(root + '/', '');
   const scanned = () => groups.flatMap((g) => g.dirs);
   // the watcher reports a file of a dir reached through a symlink (a `groups` dir under a `node_modules` link) by its
   // real path, and Vite's watcher ignores node_modules
@@ -212,6 +240,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     listUncataloged(groups, resolved.suffix, new Set(all.map((i) => normalizePath(componentFileOf(i.file)))));
   const catalogData = async (env: () => Environment) => {
     const items = relist();
+    if (listError) throw new Error(listError);
     const { sources } = await tailwindData(env);
     return catalogJson({
       root,
@@ -224,7 +253,16 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     });
   };
   const relist = () => {
-    const all = listCatalog(groups, resolved.suffix);
+    let all: CatalogItem[] = [];
+    listError = null;
+    try {
+      all = listCatalog(groups, resolved.suffix);
+    } catch (e) {
+      // on the dev server a throw reaches Vite's error middleware, which puts an overlay on every tab, the app's too,
+      // and the fix reloads only the catalog, so the overlay would stay
+      if (!serving) throw e;
+      listError = messageOf(e);
+    }
     items = new Map(all.map((i) => [i.path, i]));
     return all;
   };
@@ -276,10 +314,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           );
         for (const [what, dir] of [
           ["the app's build.outDir", dirOf(config.build?.outDir ?? 'dist')],
+          ...Object.entries(config.environments ?? {})
+            .filter(([name, env]) => name !== 'zukan' && env?.build?.outDir)
+            .map(([name, env]) => [`the build.outDir of the ${name} environment`, dirOf(env.build!.outDir!)]),
           ...(kit ? [["SvelteKit's kit.outDir", dirOf(kit.api?.options?.outDir ?? '.svelte-kit')]] : [])
         ])
-          if (overlaps(dir))
-            throw new Error(`svelte-zukan: build.outDir of the catalog (${out}) must not overlap ${what} (${dir})`);
+          assertApart(out, what, dir);
         // the app copies publicDir (SvelteKit's kit.files.assets) before the catalog is written
         const publicDir = config.publicDir === false ? null : dirOf(config.publicDir ?? 'public');
         if (publicDir && isInside(out, publicDir))
@@ -360,7 +400,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
         chunkSizeWarningLimit: 1000
       });
-      config.build.rolldownOptions = { ...config.build.rolldownOptions, input: { zukan: ENTRY } };
+      // `external`: the catalog is loaded as it is, with nothing to provide an externalized import (library mode)
+      config.build.rolldownOptions = { ...config.build.rolldownOptions, input: { zukan: ENTRY }, external: undefined };
     },
     generateBundle: {
       // after Vite's worker plugin and SvelteKit, which emit files named for the app: workers are moved where
@@ -396,6 +437,14 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       async handler(builder) {
         const env = builder.environments.zukan;
         if (!env || !resolved.build) return;
+        // again as resolved: a `configEnvironment` hook can set an outDir the config hook did not see
+        for (const [name, e] of Object.entries(builder.environments))
+          if (e !== env)
+            assertApart(
+              resolved.build,
+              `the build.outDir of the ${name} environment`,
+              normalizePath(resolve(root, e.config.build.outDir))
+            );
         if (warning) builder.config.logger.warn(warning);
         // Vite builds the app only when no hook built an environment, and this hook is about to build one
         const others = Object.values(builder.environments).filter((e) => e !== env);
@@ -444,6 +493,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         const path = pathOfMeta(raw);
         // a miss lists again, so that files added after the last listing are found
         const item = path === null ? undefined : (items?.get(path) ?? (relist(), items!.get(path)));
+        if (!item && listError)
+          return `export default ${JSON.stringify({ sections: [], doc: null, props: null, propsType: null, error: listError })};\n`;
         if (!item) throw new Error(`svelte-zukan: no catalog file for ID "${path ?? raw}"`);
         this.addWatchFile(item.file);
         const docPath = docFileOf(item.file);
@@ -460,7 +511,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           // on the dev server a throw is a transform error, which Vite shows in an overlay on every tab, the app's too,
           // and which stays there after the fix, since that reloads only the catalog
           if (!serving) throw e;
-          error = (e instanceof Error ? e.message : String(e)).replaceAll(root + '/', '');
+          error = messageOf(e);
         }
         const component = componentFileOf(item.file);
         let found = null;
@@ -478,15 +529,17 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       }
       if (id === '\0' + CATALOG) {
         const items = relist();
-        // relative, like the rest of the static build
-        const rel = uncataloged(items).map((u) => ({ group: u.group, file: normalizePath(relative(root, u.file)) }));
+        // relative, like the rest of the static build; with no list, every component would count as uncataloged
+        const rel = listError
+          ? []
+          : uncataloged(items).map((u) => ({ group: u.group, file: normalizePath(relative(root, u.file)) }));
         const edit = serving
           ? (file: string) => {
               const component = componentFileOf(file);
               return { file, component: existsSync(component) ? normalizePath(component) : null };
             }
           : undefined;
-        return generateCatalogModule(items, rel, edit);
+        return generateCatalogModule(items, rel, edit, listError);
       }
       if (id === '\0' + TAILWIND || id.startsWith('\0' + TAILWIND_SOURCE)) {
         return tailwindData(() => this.environment).then(({ sources }) => {
@@ -552,7 +605,11 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           res.setHeader('content-type', CONTENT_TYPES['.json']);
           catalogData(() => server.environments.client)
             .then((data) => res.end(JSON.stringify(data, null, 2)))
-            .catch(next);
+            // not `next(e)`: Vite's error middleware would put an overlay on every tab, the app's too
+            .catch((e) => {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: messageOf(e) }));
+            });
           return;
         }
         if (path !== `${base}__zukan/`) return next();
