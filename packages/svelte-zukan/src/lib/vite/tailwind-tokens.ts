@@ -30,14 +30,18 @@ function stringEnd(css: string, start: number): number {
   return css.length;
 }
 
+type Layer = { name: string; places: number[] };
+
 /**
  * Brace matching over serialized CSS, enough for Tailwind's own output. Declarations directly inside an at-rule
- * (`@property`, `@font-face`) belong to no rule. `layers` gets the full name of each layer a `@layer` statement or block
- * declares (`a.b`), in source order, so a layer's place is its first index.
+ * (`@property`, `@font-face`) belong to no rule. `ranks` gets each rule's cascade layer rank: per layer level, the place
+ * where that layer first appears, ending in Infinity for the layer's own rules.
  */
-export function scanCss(css: string, layers: string[] = []): CssRule[] {
+export function scanCss(css: string, ranks?: Map<CssRule, number[]>): CssRule[] {
   const rules: CssRule[] = [];
-  const stack: { prelude: string; rule: CssRule | null }[] = [];
+  const stack: { prelude: string; rule: CssRule | null; layer?: Layer }[] = [];
+  const order: string[] = [];
+  let anonymous = 0;
   let buf = '';
   let parens = 0;
 
@@ -52,16 +56,20 @@ export function scanCss(css: string, layers: string[] = []): CssRule[] {
     rule.declarations.push([text.slice(0, colon).trim(), value]);
   };
 
-  const declareLayers = (prelude: string) => {
-    const parent = stack.flatMap((f) => (/^@layer(\s|$)/.test(f.prelude) ? [f.prelude.slice(6).trim()] : []));
-    for (const name of prelude.slice(6).split(',')) {
-      const path = [...parent];
-      for (const part of name.trim().split('.')) {
-        path.push(part);
-        layers.push(path.join('.'));
-      }
+  // a layer first declared under `@media` or `@supports` takes no place in the base order, which ignores conditions
+  const declareLayer = (name: string): Layer => {
+    const conditional = stack.some((f) => f.prelude.startsWith('@') && !f.layer);
+    let path = stack.findLast((f) => f.layer)?.layer?.name;
+    const places: number[] = [];
+    // an anonymous layer is a new one every time
+    for (const part of name ? name.split('.') : [`\0${anonymous++}`]) {
+      path = path === undefined ? part.trim() : `${path}.${part.trim()}`;
+      if (!conditional && !order.includes(path)) order.push(path);
+      places.push(order.indexOf(path));
     }
+    return { name: path!, places };
   };
+  const layerName = (prelude: string) => prelude.slice(6).trim();
 
   for (let i = 0; i < css.length; i++) {
     const c = css[i];
@@ -81,14 +89,18 @@ export function scanCss(css: string, layers: string[] = []): CssRule[] {
     } else if (parens > 0 || (c !== '{' && c !== '}' && c !== ';')) {
       buf += c;
     } else if (c === ';') {
-      if (/^@layer\s/.test(buf.trim())) declareLayers(buf.trim());
+      const statement = buf.trim().replace(/\s+/g, ' ');
+      if (/^@layer\s/.test(statement)) for (const name of layerName(statement).split(',')) declareLayer(name.trim());
+      // the stylesheet an unconditional `@import … layer(x)` loads is not here, but it declares the layer
+      const imported = /^@import (?:url\([^)]*\)|"[^"]*"|'[^']*') layer(?:\(([^)]*)\))?$/.exec(statement);
+      if (imported) declareLayer(imported[1]?.trim() ?? '');
       declaration();
     } else if (c === '{') {
       const prelude = buf.trim().replace(/\s+/g, ' ');
       buf = '';
       if (prelude.startsWith('@')) {
-        if (/^@layer(\s|$)/.test(prelude)) declareLayers(prelude);
-        stack.push({ prelude, rule: null });
+        const layer = /^@layer(\s|$)/.test(prelude) ? declareLayer(layerName(prelude)) : undefined;
+        stack.push({ prelude, rule: null, layer });
       } else {
         const rule: CssRule = {
           selector: prelude,
@@ -96,6 +108,7 @@ export function scanCss(css: string, layers: string[] = []): CssRule[] {
           declarations: []
         };
         rules.push(rule);
+        ranks?.set(rule, [...stack.flatMap((f) => f.layer?.places ?? []), Infinity]);
         stack.push({ prelude, rule });
       }
     } else {
@@ -140,25 +153,23 @@ const unwrapped = (list: string): string[] =>
  */
 export function rootVariables(css: string): Record<string, string> {
   const out: Record<string, string> = {};
-  const layers: string[] = [];
-  // per layer level, the place of the rule's layer, ending in Infinity for its own rules: a later layer wins, and a
-  // layer's own rules beat its sublayers as unlayered rules beat every layer
-  const ranks: Record<string, number[]> = {};
+  const ranks = new Map<CssRule, number[]>();
+  const stored: Record<string, number[]> = {};
+  // a later layer wins, and a layer's own rules beat its sublayers as unlayered rules beat every layer
   const outranks = (a: number[], b: number[]) => {
     const i = a.findIndex((n, j) => n !== b[j]);
     return i < 0 || a[i] > b[i];
   };
-  for (const rule of scanCss(css, layers)) {
+  for (const rule of scanCss(css, ranks)) {
     if (!unwrapped(rule.selector).some((s) => s === ':root' || s === ':host' || s === 'html')) continue;
     if (!rule.atRules.every((a) => /^@layer(\s|$)/.test(a))) continue;
-    const names = rule.atRules.flatMap((a) => a.slice(6).trim().split('.'));
-    const rank = [...names.map((_, i) => layers.indexOf(names.slice(0, i + 1).join('.'))), Infinity];
+    const rank = ranks.get(rule)!;
     for (const [property, value] of rule.declarations) {
       if (!property.startsWith('--')) continue;
       const name = unescape(property);
-      if (Object.hasOwn(ranks, name) && !outranks(rank, ranks[name])) continue;
+      if (Object.hasOwn(stored, name) && !outranks(rank, stored[name])) continue;
       out[name] = value;
-      ranks[name] = rank;
+      stored[name] = rank;
     }
   }
   return out;

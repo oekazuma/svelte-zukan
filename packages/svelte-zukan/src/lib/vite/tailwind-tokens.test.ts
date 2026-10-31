@@ -536,6 +536,26 @@ describe('rootVariables', () => {
     expect(rootVariables('@layer a{@layer y, z;}\n@layer a.z{:root{--x:1}}\n@layer a.y{:root{--x:2}}')).toEqual({
       '--x': '1'
     });
+    // each anonymous layer is a layer of its own, after those before it
+    expect(rootVariables('@layer{:root{--x:1}}\n@layer a{:root{--x:2}}\n@layer{:root{--x:3}}')).toEqual({ '--x': '3' });
+    expect(rootVariables('@layer a{@layer{:root{--x:1}}@layer b{:root{--x:2}}@layer{:root{--x:3}}}')).toEqual({
+      '--x': '3'
+    });
+    // a layer declared in a condition takes no place in the base order
+    expect(
+      rootVariables('@media print{@layer b;}\n@layer a, b;\n@layer b{:root{--x:1}}\n@layer a{:root{--x:2}}')
+    ).toEqual({ '--x': '1' });
+    // an `@import` with a layer declares it where it stands (Tailwind keeps an `@import url()` as written)
+    expect(
+      rootVariables(
+        '@import url(x.css) layer(foo);\n@layer bar, foo;\n@layer foo{:root{--x:1}}\n@layer bar{:root{--x:2}}'
+      )
+    ).toEqual({ '--x': '2' });
+    expect(
+      rootVariables(
+        '@import url(x.css) layer(foo) print;\n@layer bar, foo;\n@layer foo{:root{--x:1}}\n@layer bar{:root{--x:2}}'
+      )
+    ).toEqual({ '--x': '1' });
   });
 
   it('reads variables from a root selector inside :where() or :is()', () => {
