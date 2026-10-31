@@ -1,5 +1,18 @@
 # svelte-zukan
 
+## 0.16.5
+
+### Patch Changes
+
+- b12ad27: fix: on the dev server, fixing or creating a stylesheet that only the catalog imports now reloads the catalog's previews, without reloading the app's tabs, and creating a file that both a catalog file and an app entry failed to import reloads the app as Vite does.
+- 385b91b: fix: serve `.mjs` and `.cjs` catalog files as JavaScript under `vite preview`, so module workers load; refresh the props when a props type file outside a `groups` directory linked through `node_modules` changes; and show a duplicate catalog ID outside the Vite root by paths relative to it in the dev server's catalog and `catalog.json`.
+- 9d735b2: fix: a generic props type (`WithElementRef<HTMLButtonAttributes, HTMLButtonElement>`, `ListProps<string>`) is read with its type arguments or defaults in place of its type parameters, instead of naming `T` as the props type and showing `T[]` or `U | null` as member types.
+
+  fix: a section's code no longer includes a script variable that the section only shadows with a name it declares itself (an `{#each}` item or index, a snippet or function parameter, an `{:then}` or `{:catch}` value, `{@const}`, `let:`).
+
+- 2fab08a: fix: read Tailwind CSS root variables declared in `:where(:root)` (daisyUI 5), watch a `@plugin` or `@config` file that throws, show the variable of Drop Shadow tokens, and leave Tailwind's reference-only compatibility variables (`--radius`, `--shadow`, `--blur`, …) out of the full config and `catalog.json`.
+- 630bbc9: fix: Back and Forward return to the scroll position of a page taller than the one left, and of a filtered Tailwind CSS page; the accessibility panel checks again after a theme switch or a width change; `check_accessibility` reports a preview that did not finish rendering instead of an empty result; a section link that names no heading opens the page at the top; an empty catalog no longer says "No matches" before anything is typed; J, K, T and F work with Shift or Caps Lock; a name starting with an emoji shows the whole emoji as its initial.
+
 ## 0.16.4
 
 ### Patch Changes
