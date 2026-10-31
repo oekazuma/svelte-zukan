@@ -1,4 +1,8 @@
 import { __unstable__loadDesignSystem, compile } from '@tailwindcss/node';
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { normalizePath } from 'vite';
 import { describe, expect, it } from 'vitest';
 import type { TailwindCategoryId } from '../types.js';
 import {
@@ -177,6 +181,17 @@ describe('extractTokens', () => {
       expect(result.variables).not.toHaveProperty(key);
     }
     expect(result.variables['--color-mine']).toBe('red');
+    // Tailwind never declares a reference variable, so there is no variable to copy
+    expect(token('background-color', 'bg-mine')).toEqual({ class: 'bg-mine', cssVariable: null, value: 'red' });
+    // unless the project declares it on the root itself
+    const declared = await load(
+      '@import "tailwindcss";\n@theme reference { --color-mine: red; }\n:root { --color-mine: blue; }'
+    );
+    expect(declared.token('background-color', 'bg-mine')).toEqual({
+      class: 'bg-mine',
+      cssVariable: '--color-mine',
+      value: 'blue'
+    });
     expect(token('border-radius', 'rounded-lg')).toEqual({
       class: 'rounded-lg',
       cssVariable: '--radius-lg',
@@ -185,6 +200,62 @@ describe('extractTokens', () => {
     const shadows = result.categories.find((c) => c.id === 'box-shadow')?.tokens.map((t) => t.class);
     const plain = (await load('@import "tailwindcss";')).result.categories.find((c) => c.id === 'box-shadow');
     expect(shadows).toEqual(plain?.tokens.map((t) => t.class));
+  });
+
+  it('gives no variable for the values that @config and @plugin load', async () => {
+    const dir = normalizePath(realpathSync(mkdtempSync(join(tmpdir(), 'zukan-tailwind-tokens-'))));
+    writeFileSync(
+      join(dir, 'tw.config.mjs'),
+      "export default { theme: { extend: { colors: { brand: '#123456' } } } };"
+    );
+    writeFileSync(
+      join(dir, 'plug.mjs'),
+      "export default { handler() {}, config: { theme: { extend: { colors: { plug: '#0a0b0c' } } } } };"
+    );
+    const { result, token } = await load(
+      `@import "tailwindcss";\n@config "${dir}/tw.config.mjs";\n@plugin "${dir}/plug.mjs";`
+    );
+    expect(token('background-color', 'bg-brand')).toEqual({ class: 'bg-brand', cssVariable: null, value: '#123456' });
+    expect(token('background-color', 'bg-plug')).toEqual({ class: 'bg-plug', cssVariable: null, value: '#0a0b0c' });
+    expect(result.variables).toMatchObject({ '--color-brand': '#123456', '--color-plug': '#0a0b0c' });
+    // the class carries the literal value, so a root declaration of the same name is not what it reads
+    const declared = await load(
+      `@import "tailwindcss";\n@config "${dir}/tw.config.mjs";\n:root { --color-brand: #abcdef; }`
+    );
+    expect(declared.token('background-color', 'bg-brand')).toEqual({
+      class: 'bg-brand',
+      cssVariable: null,
+      value: '#123456'
+    });
+  });
+
+  it('reads the last declaration of the property', async () => {
+    const { token } = await load(
+      '@import "tailwindcss";\n@theme { --color-brand: #123; }\n@utility bg-brand { background-color: hotpink; }'
+    );
+    expect(token('background-color', 'bg-brand')).toEqual({
+      class: 'bg-brand',
+      cssVariable: '--color-brand',
+      value: '#123'
+    });
+  });
+
+  it('resolves @theme inline tokens through the :root variables that win the cascade layers', async () => {
+    const { token } = await load(
+      '@import "tailwindcss";\n:root { --brand: red; }\n@layer base { :root { --brand: blue; --accent: green; } }\n' +
+        '@layer components { :root { --accent: purple; } }\n@layer base { :root { --accent: orange; } }\n' +
+        '@theme inline { --color-brand: var(--brand); --color-accent: var(--accent); }'
+    );
+    expect(token('background-color', 'bg-brand')).toEqual({
+      class: 'bg-brand',
+      cssVariable: '--color-brand',
+      value: 'red'
+    });
+    expect(token('background-color', 'bg-accent')).toEqual({
+      class: 'bg-accent',
+      cssVariable: '--color-accent',
+      value: 'purple'
+    });
   });
 
   it('shows fallbacks instead of unknown variables', async () => {
@@ -448,6 +519,23 @@ describe('rootVariables', () => {
         ':root{--a:1}\n@layer base{:root,:host{--b:2}}\n@media (x){:root{--c:3}}\n.dark{--d:4}\nhtml{--e:5}'
       )
     ).toEqual({ '--a': '1', '--b': '2', '--e': '5' });
+  });
+
+  it('keeps the variable of the rule that wins the cascade layers', () => {
+    // the statement orders the layers, whatever order their blocks come in
+    expect(rootVariables('@layer a, b;\n@layer b{:root{--x:1}}\n@layer a{:root{--x:2}}')).toEqual({ '--x': '1' });
+    // a layer is ordered where it first appears
+    expect(rootVariables('@layer b{:root{--x:1}}\n@layer a, b;\n@layer a{:root{--x:2}}')).toEqual({ '--x': '2' });
+    expect(rootVariables(':root{--x:1}\n@layer a{:root{--x:2}}')).toEqual({ '--x': '1' });
+    expect(rootVariables('@layer a{:root{--x:1}}\n@layer a{:root{--x:2}}')).toEqual({ '--x': '2' });
+    // a layer's own rules beat its sublayers, and a sublayer is ordered with its parent
+    expect(rootVariables('@layer a{:root{--x:1}@layer y{:root{--x:2}}}')).toEqual({ '--x': '1' });
+    expect(rootVariables('@layer a.y{:root{--x:1}}\n@layer b{:root{--x:2}}\n@layer a{:root{--x:3}}')).toEqual({
+      '--x': '2'
+    });
+    expect(rootVariables('@layer a{@layer y, z;}\n@layer a.z{:root{--x:1}}\n@layer a.y{:root{--x:2}}')).toEqual({
+      '--x': '1'
+    });
   });
 
   it('reads variables from a root selector inside :where() or :is()', () => {
