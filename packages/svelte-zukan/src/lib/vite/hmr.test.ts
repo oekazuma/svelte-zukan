@@ -334,6 +334,24 @@ describe('modules shared with the app', () => {
     }
   );
 
+  it('creating the missing import of a catalog file reloads only the catalog', { timeout: 25_000 }, async () => {
+    await server.close();
+    link('svelte');
+    writeFileSync(
+      join(tmp, 'app/src/A.zukan.svelte'),
+      '<script>\n  import { n } from \'./helper.js\';\n</script>\n<Section title="A"><p>{n}</p></Section>'
+    );
+    await start({}, { plugins: [svelte()] });
+    await list();
+    send.mockClear();
+    expect(await get('/src/A.zukan.svelte')).toMatch(/^throw new Error\(.*helper\.js/);
+    expect(errors()).toHaveLength(0);
+    writeFileSync(join(tmp, 'app/src/helper.js'), 'export const n = 1;\n');
+    await waitForReload();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(fullReloads()).toBe(0);
+  });
+
   it('editing the logo reloads only the catalog', { timeout: 25_000 }, async () => {
     await server.close();
     link('svelte');

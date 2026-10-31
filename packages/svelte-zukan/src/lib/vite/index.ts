@@ -718,6 +718,11 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       // every tab
       const appModules = () =>
         modules.filter((m) => [...m.importers].some((i) => !i.id?.startsWith('\0virtual:svelte-zukan/')));
+      // Vite adds the modules whose imports failed to resolve to a creation: the new file may be one of them
+      const resolvedFailed =
+        type === 'create' && this.environment.config.consumer === 'client'
+          ? modules.filter((m) => m.file && failed.delete(m.file))
+          : [];
       const searchedCss = file.endsWith('.css') && cssDirs().some((dir) => isInside(normalized, dir));
       const watchedCss =
         tailwindWatch.has(normalized) || tailwindWatch.has(normalizePath(file)) || (searchedCss && type !== 'update');
@@ -782,8 +787,11 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         for (const mod of [list, ...metas()]) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
         this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
         return;
-      } else if (this.environment.config.consumer === 'client' && failed.delete(normalizePath(file))) {
-        targets = metas();
+      } else if (
+        this.environment.config.consumer === 'client' &&
+        (failed.delete(normalizePath(file)) || resolvedFailed.length)
+      ) {
+        targets = [...resolvedFailed, ...metas()];
       } else if (servedProps.has(normalized) || propsDeps.has(normalized)) {
         // the component's own HMR updates the previews; only a change to its props changes the detail page. A props
         // type file counts when it is created or deleted too: the component may import one that is not there yet
