@@ -92,7 +92,32 @@ export function scanCss(css: string): CssRule[] {
   return rules;
 }
 
-const unwrap = (selector: string) => /^:(?:where|is)\((.+)\)$/.exec(selector)?.[1].trim() ?? selector;
+/** the selectors of a list, split at its top-level commas only */
+function selectorList(list: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    if (c === '\\') i++;
+    else if (c === '"' || c === "'") i = stringEnd(list, i) - 1;
+    else if (c === '(' || c === '[') depth++;
+    else if (c === ')' || c === ']') depth--;
+    else if (c === ',' && depth === 0) {
+      out.push(list.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  out.push(list.slice(start).trim());
+  return out;
+}
+
+/** the selectors of a list, with a selector that is all `:where(…)` or `:is(…)` (daisyUI's `:where(:root)`) unwrapped */
+const unwrapped = (list: string): string[] =>
+  selectorList(list).flatMap((s) => {
+    const open = /^:(?:where|is)\(/.exec(s)?.[0].length;
+    return open && closeParen(s, open - 1) === s.length - 1 ? unwrapped(s.slice(open, -1)) : [s];
+  });
 
 /**
  * custom properties declared unconditionally on the root: by a rule whose selector list includes `:root`, `:host` or
@@ -101,8 +126,7 @@ const unwrap = (selector: string) => /^:(?:where|is)\((.+)\)$/.exec(selector)?.[
 export function rootVariables(css: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const rule of scanCss(css)) {
-    const selectors = rule.selector.split(',').map((s) => unwrap(s.trim()));
-    if (!selectors.some((s) => s === ':root' || s === ':host' || s === 'html')) continue;
+    if (!unwrapped(rule.selector).some((s) => s === ':root' || s === ':host' || s === 'html')) continue;
     if (!rule.atRules.every((a) => /^@layer(\s|$)/.test(a))) continue;
     for (const [property, value] of rule.declarations) if (property.startsWith('--')) out[unescape(property)] = value;
   }
@@ -369,9 +393,11 @@ const SHADOW_VALUE: Record<string, string> = { 'box-shadow': '--tw-shadow', filt
 
 const escapeClass = (name: string) => name.replace(/[^\w-]/g, '\\$&');
 
+/** `defaults` is the theme of a design system loaded from `@import "tailwindcss"` alone */
 export function extractTokens(
   system: DesignSystemLike,
-  known: Record<string, string>
+  known: Record<string, string>,
+  defaults: DesignSystemLike['theme']
 ): { prefix: string | null; categories: TailwindCategory[]; variables: Record<string, string>; classes: string[] } {
   const prefix = system.theme.prefix;
   // a prefixed design system accepts only `tw:p-4`, while its class list and the stems stay unprefixed
@@ -379,10 +405,20 @@ export function extractTokens(
   const variablePrefix = prefix ? `--${prefix}-` : '--';
   const entries = [...system.theme.entries()];
   // Tailwind's compatibility variables (`--radius`, `--shadow`) are `@theme default inline reference`: never emitted,
-  // so a project's own `:root { --radius: … }` is what the page shows
+  // so a project's own `:root { --radius: … }` is what the page shows. A `@config` file's values have the same options,
+  // so only the entries a bare Tailwind registers with them, with the same value, are left out.
   const compat = (options: unknown) => typeof options === 'number' && (options & 6) === 6;
+  const builtIn = new Set(
+    [...defaults.entries()].flatMap(([key, { value, options }]) =>
+      compat(options) ? [`${key}:${collapse(value)}`] : []
+    )
+  );
   const variables = Object.fromEntries(
-    entries.flatMap(([key, { value, options }]) => (compat(options) ? [] : [[key, collapse(value)]]))
+    entries.flatMap(([key, { value, options }]) =>
+      compat(options) && builtIn.has(`--${key.slice(variablePrefix.length)}:${collapse(value)}`)
+        ? []
+        : [[key, collapse(value)]]
+    )
   );
   // an `options` of another shape (the API is unstable) reads as not inline
   const inline = new Set(
@@ -417,7 +453,7 @@ export function extractTokens(
       !cssVariable &&
       own &&
       Object.hasOwn(variables, own) &&
-      [')', ','].some((end) => shown.includes(`var(${own}${end}`))
+      [...shown.matchAll(/var\(([^,)]+)/g)].some((m) => varName(m[1]) === own)
     )
       cssVariable = own;
     // only an inline variable of a namespace the utility reads can be the source of a literal value; elsewhere an equal
