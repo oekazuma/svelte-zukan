@@ -334,23 +334,33 @@ describe('modules shared with the app', () => {
     }
   );
 
-  it('creating the missing import of a catalog file reloads only the catalog', { timeout: 25_000 }, async () => {
-    await server.close();
-    link('svelte');
-    writeFileSync(
-      join(tmp, 'app/src/A.zukan.svelte'),
-      '<script>\n  import { n } from \'./helper.js\';\n</script>\n<Section title="A"><p>{n}</p></Section>'
-    );
-    await start({}, { plugins: [svelte()] });
-    await list();
-    send.mockClear();
-    expect(await get('/src/A.zukan.svelte')).toMatch(/^throw new Error\(.*helper\.js/);
-    expect(errors()).toHaveLength(0);
-    writeFileSync(join(tmp, 'app/src/helper.js'), 'export const n = 1;\n');
-    await waitForReload();
-    await new Promise((r) => setTimeout(r, 300));
-    expect(fullReloads()).toBe(0);
-  });
+  it.each([
+    ['helper.js', "import { n } from './helper.js';", '{n}', 'export const n = 1;\n'],
+    ['Inner.svelte', "import Inner from './Inner.svelte';", '<Inner />', '<p>inner</p>\n']
+  ])(
+    'creating the missing import %s of a catalog file reloads only the catalog',
+    { timeout: 25_000 },
+    async (name, imports, body, source) => {
+      await server.close();
+      link('svelte');
+      writeFileSync(
+        join(tmp, 'app/src/A.zukan.svelte'),
+        `<script>\n  ${imports}\n</script>\n<Section title="A"><p>${body}</p></Section>`
+      );
+      await start({}, { plugins: [svelte()] });
+      await list();
+      send.mockClear();
+      expect(await get('/src/A.zukan.svelte')).toMatch(new RegExp(`^throw new Error\\(.*${name.replace('.', '\\.')}`));
+      expect(errors()).toHaveLength(0);
+      writeFileSync(join(tmp, 'app/src', name), source);
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(fullReloads()).toBe(0);
+      // fixed: the failure is no longer tracked, so its next change goes through the app's own HMR
+      send.mockClear();
+      expect(await get('/src/A.zukan.svelte')).not.toMatch(/^throw /);
+    }
+  );
 
   it('editing the logo reloads only the catalog', { timeout: 25_000 }, async () => {
     await server.close();

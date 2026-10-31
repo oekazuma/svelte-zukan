@@ -784,9 +784,10 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         // catalog file next to it; the app's own handling of the file goes on
         const list = moduleGraph.getModuleById('\0' + CATALOG);
         if (!list || this.environment.config.consumer !== 'client') return;
-        for (const mod of [list, ...metas()]) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
+        for (const mod of [list, ...metas(), ...resolvedFailed])
+          moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
         this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
-        return;
+        return resolvedFailed.length ? appModules() : undefined;
       } else if (
         this.environment.config.consumer === 'client' &&
         (failed.delete(normalizePath(file)) || resolvedFailed.length)
