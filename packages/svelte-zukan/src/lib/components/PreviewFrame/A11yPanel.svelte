@@ -319,7 +319,7 @@
     <button type="button" class="action" disabled={result.status === 'running'} onclick={() => check()}>
       {@render icon(RERUN_ICON)}{labels.a11yRerun}
     </button>
-    <button type="button" class="close" aria-label={labels.close} title={labels.close} onclick={onclose}>
+    <button type="button" class="close" aria-label={labels.a11yClose} title={labels.a11yClose} onclick={onclose}>
       {@render icon(CLOSE_ICON)}
     </button>
   </div>

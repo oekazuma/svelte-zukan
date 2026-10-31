@@ -31,6 +31,18 @@ describe('EntryList', () => {
     expect(screen.container.querySelector('a[href="#/ui/lib/Alert"]')!.checkVisibility()).toBe(false);
   });
 
+  it('titles each group with a heading and names its list by the group alone', async () => {
+    const screen = await render(EntryList, {
+      props: { entries: [...entries, { group: 'examples', name: 'Demo', dir: '', path: 'examples/Demo', load, meta }] }
+    });
+    const headings = screen.getByRole('heading', { level: 2 }).elements();
+    expect(headings.map((h) => h.textContent)).toEqual(['ui3', 'examples1']);
+    await expect.element(screen.getByRole('list', { name: 'ui', exact: true })).toBeInTheDocument();
+    await expect.element(screen.getByRole('list', { name: 'examples', exact: true })).toHaveTextContent('Demo');
+    // folders stay disclosures, not headings
+    expect(screen.container.querySelector('summary')!.textContent).toBe('lib3');
+  });
+
   it('lists the sections that matched a search under their entry', async () => {
     const screen = await render(EntryList, {
       props: { entries, hits: new Map([['ui/lib/Alert', ['Dismissible']]]) }

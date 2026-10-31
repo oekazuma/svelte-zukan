@@ -84,6 +84,15 @@ describe('PreviewFrame', () => {
     expect(screen.container.querySelector('output')).toBeNull();
   });
 
+  it('the toolbar is a group named by the section, so the controls of several previews are told apart', async () => {
+    const screen = await render(PreviewFrame, { props: { ...props, title: 'Variants' } });
+    const toolbar = screen.getByRole('group', { name: 'Variants preview', exact: true });
+    await expect.element(toolbar.getByRole('group', { name: 'Preview width', exact: true })).toBeInTheDocument();
+    await expect.element(toolbar.getByRole('button', { name: 'Expand', exact: true })).toBeInTheDocument();
+    const ja = await render(PreviewFrame, { props: { ...props, title: 'Variants', labels: messages.ja } });
+    await expect.element(ja.getByRole('group', { name: 'Variants のプレビュー', exact: true })).toBeInTheDocument();
+  });
+
   it('full width preset', async () => {
     const screen = await render(PreviewFrame, { props });
     screen.container.style.width = '1000px';
@@ -434,7 +443,7 @@ describe('PreviewFrame resizing', () => {
     await screen.getByRole('button', { name: 'Check again' }).click();
     await expect.element(screen.getByText('Accessibility issues (1)')).toBeInTheDocument();
     expect(axe).toHaveBeenCalledTimes(1);
-    await screen.getByRole('button', { name: 'Close' }).click();
+    await screen.getByRole('button', { name: 'Close the accessibility check' }).click();
     await expect.element(screen.getByText('Accessibility issues (1)')).not.toBeInTheDocument();
   });
 
@@ -467,7 +476,7 @@ describe('PreviewFrame resizing', () => {
     await expect.element(vision.getByRole('radio', { name: 'Blurred' })).toBeChecked();
     expect(document.activeElement?.textContent?.trim()).toBe('Blurred');
     await expect.poll(head).toContain('blur(2px)');
-    await screen.getByRole('button', { name: 'Close' }).click();
+    await screen.getByRole('button', { name: 'Close the accessibility check' }).click();
     await expect.poll(head).not.toContain('filter');
     expect(frame.contentDocument!.querySelector('#zukan-vision')).toBeNull();
   });

@@ -476,7 +476,8 @@
 {/if}
 
 <div class={['preview', { expanded }]} bind:this={preview}>
-  <div class="toolbar" use:tooltips>
+  <!-- a group, not a toolbar: role="toolbar" promises arrow-key movement between the controls -->
+  <div class="toolbar" role="group" aria-label="{title} {labels.sectionPreview}" use:tooltips>
     <div class="group" role="group" aria-label={labels.previewWidth}>
       {#each PRESETS as preset (preset.width)}
         {@const name = `${labels[preset.label]} (${preset.width}px)`}

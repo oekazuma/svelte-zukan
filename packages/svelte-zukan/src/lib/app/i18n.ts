@@ -15,6 +15,8 @@ export type Messages = {
   copied: string;
   copyFailed: string;
   previewWidth: string;
+  /** follows a section title: the name of that section's preview toolbar */
+  sectionPreview: string;
   mobile: string;
   tablet: string;
   laptop: string;
@@ -66,6 +68,7 @@ export type Messages = {
   a11yFailed: string;
   a11yLearnMore: string;
   a11yRerun: string;
+  a11yClose: string;
   impactCritical: string;
   impactSerious: string;
   impactModerate: string;
@@ -145,6 +148,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     copied: 'Copied',
     copyFailed: 'Copy failed',
     previewWidth: 'Preview width',
+    sectionPreview: 'preview',
     mobile: 'Mobile',
     tablet: 'Tablet',
     laptop: 'Laptop',
@@ -197,6 +201,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     a11yFailed: 'Could not run the check:',
     a11yLearnMore: 'Learn more',
     a11yRerun: 'Check again',
+    a11yClose: 'Close the accessibility check',
     impactCritical: 'critical',
     impactSerious: 'serious',
     impactModerate: 'moderate',
@@ -276,6 +281,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     copied: 'コピーしました',
     copyFailed: 'コピーできませんでした',
     previewWidth: 'プレビューの幅',
+    sectionPreview: 'のプレビュー',
     mobile: 'スマートフォン',
     tablet: 'タブレット',
     laptop: 'ノート PC',
@@ -328,6 +334,7 @@ export const messages: Record<'en' | 'ja', Messages> = {
     a11yFailed: '検査を実行できませんでした:',
     a11yLearnMore: '詳しく',
     a11yRerun: 'もう一度検査',
+    a11yClose: 'アクセシビリティの検査を閉じる',
     impactCritical: '重大',
     impactSerious: '深刻',
     impactModerate: '中程度',
