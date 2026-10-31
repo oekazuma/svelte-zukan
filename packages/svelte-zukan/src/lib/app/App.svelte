@@ -106,6 +106,7 @@
           axe,
           page: location.pathname,
           themes: !fixedTheme,
+          open: go,
           currentTheme: () => theme,
           tailwind: tailwind.length > 0
         }),
@@ -158,6 +159,12 @@
     if (!to) return;
     e.preventDefault();
     location.hash = formatHash('detail', to.path);
+  }
+
+  /** goes to a catalog route as a link to it would, for the search and WebMCP */
+  function go(next: string) {
+    detail?.revealRoute(next);
+    location.hash = next;
   }
 
   // a replaced entry, not a new one per keystroke; replaceState fires no hashchange, so the route is set here too
@@ -312,7 +319,7 @@
       </dl>
       <form method="dialog"><button>{t.close}</button></form>
     </dialog>
-    <SearchDialog bind:this={searchDialog} entries={catalog} tailwind={searchedTailwind} {locale} {t} />
+    <SearchDialog bind:this={searchDialog} entries={catalog} {go} tailwind={searchedTailwind} {locale} {t} />
   </div>
 {/if}
 
