@@ -1,7 +1,18 @@
+<script module lang="ts">
+  /**
+   * The last height measured for each preview: a page that is shown again (Back) starts at it rather than at the
+   * minimum, so the position the browser restores is not cut short before the frames have loaded
+   */
+  // only read when a frame is created, so it needs no reactivity
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const heights = new Map<string, number>();
+</script>
+
 <script lang="ts">
   import { flushSync } from 'svelte';
   import type { Messages } from '../../app/i18n.js';
   import A11yPanel from './A11yPanel.svelte';
+  import { forwardEvents, typesText } from './forward.js';
   import { startMeasure } from './measure.js';
   import {
     BACKGROUND_MODES,
@@ -84,14 +95,6 @@
   /** the resize grip sits beside the iframe, so the iframe is exactly the chosen width */
   const HANDLE = 14;
   const KEY_STEP = 10;
-  /** what the detail page takes as the reader's own scroll or click, which ends a heading's pin */
-  const POINTER_EVENTS = ['pointerdown', 'wheel', 'touchmove'];
-  const NOT_TYPED = ['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file', 'image'];
-  /** a field where Escape cancels the edit; by tag name, as an element of the preview is of the iframe's realm */
-  const typesText = (el: HTMLElement) =>
-    el.isContentEditable ||
-    ['TEXTAREA', 'SELECT'].includes(el.tagName) ||
-    (el.tagName === 'INPUT' && !NOT_TYPED.includes((el as HTMLInputElement).type));
 
   let {
     src,
@@ -124,7 +127,8 @@
   let width = $state<number | null>(readWidth(src));
   // 0 until measured
   let stageWidth = $state(0);
-  let height = $state(MIN_HEIGHT);
+  // svelte-ignore state_referenced_locally
+  let height = $state(heights.get(src) ?? MIN_HEIGHT);
   let dragging = $state(false);
   let outlined = $state(false);
   let measuring = $state(false);
@@ -226,6 +230,8 @@
       requestAnimationFrame(() => {
         height = next;
         ready = true;
+        // an expanded frame takes the stage's height, not its own
+        if (!expanded) heights.set(src, next);
       });
     });
     observer.observe(doc.body);
@@ -282,38 +288,8 @@
     if (doc && measuring) return startMeasure(doc);
   });
 
-  // keys and pointers in the preview never reach the catalog's window, so its shortcuts would stop once the preview has
-  // the focus; the copy goes to the iframe, so the catalog's handlers get an element as the target, as on the page
   $effect(() => {
-    const frame = iframe;
-    const page = doc;
-    if (!page || !frame) return;
-    const forward = (e: KeyboardEvent) => {
-      const target = e.composedPath()[0] as HTMLElement;
-      // the catalog's own page takes no shortcut from a checkbox either, but Escape still leaves the expanded view
-      const typing =
-        e.key === 'Escape'
-          ? typesText(target)
-          : target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
-      // Escape closes a dialog or a popover open in the preview first, which must not leave the expanded view too
-      const closes = e.key === 'Escape' && page.querySelector('dialog[open], :popover-open');
-      if (e.defaultPrevented || e.isComposing || typing || closes) return;
-      const { key, code, location, repeat, ctrlKey, shiftKey, altKey, metaKey } = e;
-      const copy = { key, code, location, repeat, ctrlKey, shiftKey, altKey, metaKey, bubbles: true, cancelable: true };
-      // a shortcut the catalog handled (⌘K) must not also do what the browser does with it
-      if (!frame.dispatchEvent(new KeyboardEvent('keydown', copy))) e.preventDefault();
-    };
-    // the catalog's handlers only need to know the reader acted, as on its own page
-    const point = (e: Event) => frame.dispatchEvent(new Event(e.type, { bubbles: true }));
-    // on the window, after the page's own handlers on its elements and document, which may take the key
-    const view = page.defaultView!;
-    view.addEventListener('keydown', forward);
-    // in the capture phase: a preview that stops one on its way up still had the reader act
-    for (const type of POINTER_EVENTS) view.addEventListener(type, point, { capture: true, passive: true });
-    return () => {
-      view.removeEventListener('keydown', forward);
-      for (const type of POINTER_EVENTS) view.removeEventListener(type, point, { capture: true });
-    };
+    if (doc && iframe) return forwardEvents(doc.defaultView!, iframe);
   });
 
   function toggleExpanded() {

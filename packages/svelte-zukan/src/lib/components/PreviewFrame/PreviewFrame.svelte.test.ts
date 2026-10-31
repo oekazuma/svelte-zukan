@@ -230,6 +230,28 @@ describe('PreviewFrame resizing', () => {
     await expect.poll(() => iframe.style.height).toBe('300px');
   });
 
+  it('starts again at the height last measured for the same preview', async () => {
+    const shown = props;
+    const first = await render(PreviewFrame, { props: shown });
+    const iframe = first.container.querySelector('iframe')!;
+    // the page of a URL with a fragment may replace the first one the frame reports
+    await expect
+      .poll(() => {
+        const doc = iframe.contentDocument!;
+        if (doc.body && !doc.querySelector('[data-zukan-preview]')) {
+          doc.body.style.margin = '0';
+          doc.body.innerHTML = '<div data-zukan-preview style="height:300px"></div>';
+        }
+        return iframe.style.height;
+      })
+      .toBe('300px');
+    await first.unmount();
+    const again = await render(PreviewFrame, { props: shown });
+    expect(again.container.querySelector('iframe')!.style.height).toBe('300px');
+    const other = await render(PreviewFrame, { props: { ...props, src: 'about:blank#other' } });
+    expect(other.container.querySelector('iframe')!.style.height).toBe('80px');
+  });
+
   it('leaves nothing observed in the preview page once the frame is gone', async () => {
     const screen = await render(PreviewFrame, { props });
     const iframe = screen.container.querySelector('iframe')!;

@@ -74,3 +74,10 @@ export function formatTailwindHash(source?: string, category?: string, filter?: 
   const q = query(params);
   return `#/${TAILWIND}${q && `?${q}`}`;
 }
+
+/** a click that follows the link in this tab, not one that opens it in another or that a handler took over */
+export const followsHere = (e: MouseEvent, link: HTMLAnchorElement) =>
+  !e.defaultPrevented &&
+  e.button === 0 &&
+  !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) &&
+  ['', '_self'].includes(link.target);
