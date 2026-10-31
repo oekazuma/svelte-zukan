@@ -391,6 +391,25 @@ describe('extractSections', () => {
     expect(code.let).not.toContain('let option');
   });
 
+  it('does not take a loop variable for the script variable it shadows', () => {
+    const source = `<script>
+  import { Section } from 'svelte-zukan';
+  let item = 'x';
+  let i = 0;
+  let items = [1];
+</script>
+
+<Section title="of"><button onclick={() => { for (const item of items) console.log(item); }}>b</button></Section>
+<Section title="in"><button onclick={() => { for (const item in items) console.log(item); }}>b</button></Section>
+<Section title="for"><button onclick={() => { for (let i = 0; i < 3; i++) console.log(i); }}>b</button></Section>`;
+    const code = Object.fromEntries(extractSections(source, FILE).map((s) => [s.title, s.code]));
+    for (const title of ['of', 'in']) {
+      expect(code[title]).toContain('<script>\n  let items = [1];\n</script>');
+      expect(code[title]).not.toContain('let item ');
+    }
+    expect(code.for).not.toContain('<script>');
+  });
+
   it('keeps generics on the script tag', () => {
     const source = `<script lang="ts" generics="T">
   let items: T[] = [];
