@@ -134,10 +134,10 @@
           }}
         ></iframe>
       {:else}
-        <span class="mark" style:--hue={hue}>{entry.name[0]}</span>
+        <span class="mark" style:--hue={hue}>{[...entry.name][0]}</span>
       {/if}
     {:catch}
-      <span class="mark" style:--hue={hue}>{entry.name[0]}</span>
+      <span class="mark" style:--hue={hue}>{[...entry.name][0]}</span>
     {/await}
   </div>
   <div class="text">

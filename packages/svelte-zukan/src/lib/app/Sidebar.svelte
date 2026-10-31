@@ -206,7 +206,7 @@
         {#key !!query.trim()}
           <EntryList entries={matches.entries} hits={matches.hits} {current} />
         {/key}
-      {:else}
+      {:else if query.trim()}
         <p>{t.noMatches}</p>
       {/if}
       {#if tailwind.length}

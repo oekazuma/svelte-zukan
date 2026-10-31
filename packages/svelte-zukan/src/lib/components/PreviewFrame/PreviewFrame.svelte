@@ -645,7 +645,7 @@
   <div class="tip" popover="manual" aria-hidden="true" bind:this={tip}>{tipText}</div>
   {#if a11yOpen && axe && doc}
     {#key doc}
-      <A11yPanel {doc} {axe} {labels} onclose={() => (a11yOpen = false)} />
+      <A11yPanel {doc} {axe} {theme} width={current} {labels} onclose={() => (a11yOpen = false)} />
     {/key}
   {/if}
 </div>

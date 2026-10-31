@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { Messages } from '../../app/i18n.js';
+  import type { Theme } from './storage.js';
   import { findTarget, messageOf, runAxe, type AxeResult, type Impact, type Violation } from './run-axe.js';
   import { tabOrder } from './tab-order.js';
 
@@ -50,12 +51,17 @@
   let {
     doc,
     axe,
+    theme,
+    width,
     labels,
     onclose
   }: {
     /** the preview page; the panel is recreated when it reloads */
     doc: Document;
     axe: () => Promise<string>;
+    theme: Theme;
+    /** the width the preview is laid out at */
+    width: number;
     labels: Messages;
     onclose: () => void;
   } = $props();
@@ -106,6 +112,16 @@
 
   $effect(() => {
     untrack(() => check());
+  });
+
+  // the theme (`color-scheme` on <html>) and the width (media queries) change the page without a change the observer
+  // below sees; the debounce lets a resize settle
+  let first = true;
+  $effect(() => {
+    void [theme, width];
+    if (first) return void (first = false);
+    const timer = setTimeout(() => check(true), 300);
+    return () => clearTimeout(timer);
   });
 
   // an edit that keeps the component's props is applied in place by HMR, with no reload that would recreate the panel

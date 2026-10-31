@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick, type Component, type Snippet } from 'svelte';
+  import { flushSync, onMount, tick, type Component, type Snippet } from 'svelte';
   import { readTheme, writeTheme, type Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry, TailwindListItem } from '../types.js';
   import Detail from './Detail.svelte';
@@ -145,17 +145,19 @@
       shortcuts?.showModal();
       return;
     }
-    if (e.key === 't') {
+    // Shift or Caps Lock gives an upper-case key
+    const key = e.key.toLowerCase();
+    if (key === 't') {
       e.preventDefault();
       toggleTheme();
       return;
     }
-    if (e.key === 'f' && detail) {
+    if (key === 'f' && detail) {
       e.preventDefault();
       detail.toggleExpanded();
       return;
     }
-    const to = e.key === 'j' ? next : e.key === 'k' ? previous : undefined;
+    const to = key === 'j' ? next : key === 'k' ? previous : undefined;
     if (!to) return;
     e.preventDefault();
     location.hash = formatHash('detail', to.path);
@@ -202,10 +204,23 @@
     )
       tick().then(() => scrollTo(0, 0));
   }
+
+  // the browser restores the scroll position of Back and Forward right after popstate, before hashchange: the entry's
+  // page must be there by then, or a position past the end of the page it leaves is cut short
+  function onpopstate() {
+    if (remembered() === null) return;
+    onhashchange();
+    flushSync();
+  }
 </script>
 
 <!-- the entry's listener stops ⌘K before this one; this one is for an App mounted without the entry -->
-<svelte:window {onhashchange} onkeydowncapture={(e) => searchKey(e) && e.stopImmediatePropagation()} {onkeydown} />
+<svelte:window
+  {onhashchange}
+  {onpopstate}
+  onkeydowncapture={(e) => searchKey(e) && e.stopImmediatePropagation()}
+  {onkeydown}
+/>
 
 <svelte:head>
   <title
