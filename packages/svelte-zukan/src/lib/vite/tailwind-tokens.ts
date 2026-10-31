@@ -2,7 +2,7 @@ import type { TailwindCategory, TailwindCategoryId, TailwindToken } from '../typ
 
 /** the members of Tailwind's unstable design system that svelte-zukan uses */
 export type DesignSystemLike = {
-  /** `options & 1` marks an `@theme inline` variable */
+  /** `options & 1` marks an `@theme inline` variable, `options & 2` one that Tailwind never declares in the CSS */
   theme: { prefix: string | null; entries(): Iterable<[string, { value: string; options?: unknown }]> };
   getClassList(): [string, ...unknown[]][];
   candidatesToCss(classes: string[]): (string | null)[];
@@ -32,9 +32,10 @@ function stringEnd(css: string, start: number): number {
 
 /**
  * Brace matching over serialized CSS, enough for Tailwind's own output. Declarations directly inside an at-rule
- * (`@property`, `@font-face`) belong to no rule.
+ * (`@property`, `@font-face`) belong to no rule. `layers` gets the full name of each layer a `@layer` statement or block
+ * declares (`a.b`), in source order, so a layer's place is its first index.
  */
-export function scanCss(css: string): CssRule[] {
+export function scanCss(css: string, layers: string[] = []): CssRule[] {
   const rules: CssRule[] = [];
   const stack: { prelude: string; rule: CssRule | null }[] = [];
   let buf = '';
@@ -49,6 +50,17 @@ export function scanCss(css: string): CssRule[] {
     // `@import "tailwindcss" important` marks every declaration
     const value = collapse(text.slice(colon + 1)).replace(/\s*!\s*important$/i, '');
     rule.declarations.push([text.slice(0, colon).trim(), value]);
+  };
+
+  const declareLayers = (prelude: string) => {
+    const parent = stack.flatMap((f) => (/^@layer(\s|$)/.test(f.prelude) ? [f.prelude.slice(6).trim()] : []));
+    for (const name of prelude.slice(6).split(',')) {
+      const path = [...parent];
+      for (const part of name.trim().split('.')) {
+        path.push(part);
+        layers.push(path.join('.'));
+      }
+    }
   };
 
   for (let i = 0; i < css.length; i++) {
@@ -69,11 +81,13 @@ export function scanCss(css: string): CssRule[] {
     } else if (parens > 0 || (c !== '{' && c !== '}' && c !== ';')) {
       buf += c;
     } else if (c === ';') {
+      if (/^@layer\s/.test(buf.trim())) declareLayers(buf.trim());
       declaration();
     } else if (c === '{') {
       const prelude = buf.trim().replace(/\s+/g, ' ');
       buf = '';
       if (prelude.startsWith('@')) {
+        if (/^@layer(\s|$)/.test(prelude)) declareLayers(prelude);
         stack.push({ prelude, rule: null });
       } else {
         const rule: CssRule = {
@@ -121,14 +135,31 @@ const unwrapped = (list: string): string[] =>
 
 /**
  * custom properties declared unconditionally on the root: by a rule whose selector list includes `:root`, `:host` or
- * `html`, alone or in `:where()` / `:is()` (daisyUI's `:where(:root)`), at the top level or inside `@layer`
+ * `html`, alone or in `:where()` / `:is()` (daisyUI's `:where(:root)`), at the top level or inside `@layer`. Of several
+ * declarations, the one the cascade layers put last wins (`!important` aside).
  */
 export function rootVariables(css: string): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const rule of scanCss(css)) {
+  const layers: string[] = [];
+  // per layer level, the place of the rule's layer, ending in Infinity for its own rules: a later layer wins, and a
+  // layer's own rules beat its sublayers as unlayered rules beat every layer
+  const ranks: Record<string, number[]> = {};
+  const outranks = (a: number[], b: number[]) => {
+    const i = a.findIndex((n, j) => n !== b[j]);
+    return i < 0 || a[i] > b[i];
+  };
+  for (const rule of scanCss(css, layers)) {
     if (!unwrapped(rule.selector).some((s) => s === ':root' || s === ':host' || s === 'html')) continue;
     if (!rule.atRules.every((a) => /^@layer(\s|$)/.test(a))) continue;
-    for (const [property, value] of rule.declarations) if (property.startsWith('--')) out[unescape(property)] = value;
+    const names = rule.atRules.flatMap((a) => a.slice(6).trim().split('.'));
+    const rank = [...names.map((_, i) => layers.indexOf(names.slice(0, i + 1).join('.'))), Infinity];
+    for (const [property, value] of rule.declarations) {
+      if (!property.startsWith('--')) continue;
+      const name = unescape(property);
+      if (Object.hasOwn(ranks, name) && !outranks(rank, ranks[name])) continue;
+      out[name] = value;
+      ranks[name] = rank;
+    }
   }
   return out;
 }
@@ -424,6 +455,10 @@ export function extractTokens(
   const inline = new Set(
     entries.flatMap(([key, { options }]) => (typeof options === 'number' && options & 1 ? [key] : []))
   );
+  // `@theme reference` and what `@config` and `@plugin` load: listed with the theme, but no CSS declares them
+  const reference = new Set(
+    entries.flatMap(([key, { options }]) => (typeof options === 'number' && options & 2 ? [key] : []))
+  );
   const values = { ...variables, ...known };
   const matches = (name: string, stem: string) => name === stem || name.startsWith(`${stem}-`);
 
@@ -459,6 +494,7 @@ export function extractTokens(
     // only an inline variable of a namespace the utility reads can be the source of a literal value; elsewhere an equal
     // value is a coincidence (`border-2` is `2px` like `--radius-2`)
     cssVariable ??= others.find((key) => inline.has(key) && variables[key] === value) ?? null;
+    if (cssVariable && reference.has(cssVariable)) cssVariable = null;
     // `drop-shadow-none` sets `--tw-drop-shadow` to nothing, which a blank cell would not explain
     return { class: classPrefix + name, cssVariable, value: resolveValue(shown, values) || 'none' };
   };
@@ -470,8 +506,9 @@ export function extractTokens(
     for (const name of names) {
       if (!matches(name, stem)) continue;
       const rule = declarations.get(name);
-      const value = rule?.find(([p]) => p === property)?.[1];
-      const shown = rule?.find(([p]) => p === SHADOW_VALUE[property])?.[1];
+      // a `@utility` of the same name adds its declarations before the theme's, and the last one applies
+      const value = rule?.findLast(([p]) => p === property)?.[1];
+      const shown = rule?.findLast(([p]) => p === SHADOW_VALUE[property])?.[1];
       if (value === undefined) continue;
       const suffix = name.slice(stem.length + 1);
       const own = namespace && suffix ? `${variablePrefix}${namespace}-${suffix}` : null;
