@@ -12,6 +12,8 @@ import { extractTokens, rootVariables, type DesignSystemLike } from './tailwind-
 export type Resolver = (id: string, base: string) => Promise<string | false | undefined>;
 
 const MIN_VERSION = '4.1.0';
+// the extensions `@tailwindcss/node` tries for a `@plugin` or `@config` id
+const JS_EXTENSIONS = ['.js', '.json', '.node', '.ts'];
 
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 // `@reference` is a different at-rule, so it never matches
@@ -20,10 +22,10 @@ const importIds = (css: string, url = true) =>
     (m) => m[2]
   );
 const isTailwindId = (id: string) => id === 'tailwindcss' || id.startsWith('tailwindcss/');
-// like Tailwind's resolver, which tries the id as written, then with `.css`
-const resolveFallback = (base: string, id: string) => {
+// like Tailwind's resolver, which tries the id as written, then with each extension
+const resolveFallback = (base: string, id: string, extensions = ['.css']) => {
   const file = path.resolve(base, id);
-  return !existsSync(file) && existsSync(`${file}.css`) ? `${file}.css` : file;
+  return existsSync(file) ? file : (extensions.map((ext) => file + ext).find((f) => existsSync(f)) ?? file);
 };
 const importsTailwind = (css: string) => importIds(css).some(isTailwindId);
 export const isCandidate = (css: string) => importsTailwind(css) || /@theme\b/.test(stripComments(css));
@@ -329,7 +331,22 @@ async function loadEntry(
     onDependency(file);
     return { path: file, base: path.dirname(file), content: await readFile(file, 'utf8') };
   };
-  const load = (id: string, from: string) => loadModule(id, from, onDependency, resolvers.js);
+  const load = async (id: string, from: string) => {
+    try {
+      const loaded = await loadModule(id, from, onDependency, resolvers.js);
+      // `loadModule` reports the files of a relative id only, so an alias (`$lib/plugin.ts`) would not be watched
+      const file = (loaded as { path?: unknown } | null)?.path;
+      if (typeof file === 'string') onDependency(file);
+      return loaded;
+    } catch (e) {
+      // and only once the import has succeeded, so a plugin that throws would not be watched either
+      const file =
+        (await resolvers.js?.(id, from).catch(() => undefined)) ||
+        (id.startsWith('.') || path.isAbsolute(id) ? resolveFallback(from, id, JS_EXTENSIONS) : null);
+      if (file) onDependency(file);
+      throw e;
+    }
+  };
 
   const system = await loadDesignSystem(css, { base, loadStylesheet, loadModule: load });
   if (
@@ -346,6 +363,11 @@ async function loadEntry(
     customCssResolver: resolvers.css,
     customJsResolver: resolvers.js
   });
-  const { prefix, categories, variables, classes } = extractTokens(system, rootVariables(compiled.build([])));
+  const defaults = await loadDesignSystem('@import "tailwindcss";', { base, loadStylesheet, loadModule: load });
+  const { prefix, categories, variables, classes } = extractTokens(
+    system,
+    rootVariables(compiled.build([])),
+    defaults.theme
+  );
   return { ...empty, prefix, categories, variables, css: compiled.build(classes) };
 }
