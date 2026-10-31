@@ -16,7 +16,7 @@ import {
 import type { CatalogGroup, CatalogItem, TailwindSource } from '../types.js';
 import { discoverGroups, isComponentFile, listCatalog, listUncataloged } from './discover.js';
 import { catalogJson } from './catalog-json.js';
-import { extractSections } from './extract.js';
+import { extractSections, normalizeSource } from './extract.js';
 import { extractProps } from './props.js';
 import { renderHtml } from './html.js';
 import { detectSvelteKit } from './kit.js';
@@ -501,7 +501,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         let doc: string | null = null;
         if (existsSync(docPath)) {
           this.addWatchFile(docPath);
-          doc = marked.parse(readFileSync(docPath, 'utf-8'), { async: false });
+          doc = marked.parse(normalizeSource(readFileSync(docPath, 'utf-8')), { async: false });
         }
         let sections: ReturnType<typeof extractSections> = [];
         let error: string | undefined;
