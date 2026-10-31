@@ -3,10 +3,14 @@ import { createRequire } from 'node:module';
 import type { OutgoingHttpHeaders, ServerResponse } from 'node:http';
 import { dirname, extname, isAbsolute, join, posix, relative, resolve } from 'node:path';
 import { marked } from 'marked';
+import { stripVTControlCharacters, styleText } from 'node:util';
 import {
+  buildErrorMessage,
   createIdResolver,
+  type Connect,
   normalizePath,
   type Environment,
+  type EnvironmentModuleNode,
   type FSWatcher,
   type Plugin,
   type PreviewServer,
@@ -94,6 +98,16 @@ const setHeaders = (res: ServerResponse, headers: OutgoingHttpHeaders | undefine
   for (const [name, value] of Object.entries(headers ?? {})) if (value !== undefined) res.setHeader(name, value);
 };
 
+/** whether only the catalog's own modules import `mod`, directly or through other modules */
+const catalogOnly = (mod: EnvironmentModuleNode, seen = new Set<EnvironmentModuleNode>()): boolean => {
+  if (seen.has(mod)) return true;
+  seen.add(mod);
+  return (
+    mod.importers.size > 0 &&
+    [...mod.importers].every((i) => i.id?.startsWith('\0virtual:svelte-zukan/') || catalogOnly(i, seen))
+  );
+};
+
 /**
  * Vite's resolver, wrapped like `@tailwindcss/vite` wraps it for `@tailwindcss/node`: aliases first, a relative result
  * made absolute, and only results that `accept` takes. Built from the environment's config on the first call.
@@ -172,6 +186,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   let items: Map<string, CatalogItem> | null = null;
   /** why the last listing failed (a duplicate ID), on the dev server only */
   let listError: string | null = null;
+  /** the files the dev server answered with a module that throws: Vite never analyzed them, so their HMR stops there */
+  const failed = new Set<string>();
   const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e)).replaceAll(root + '/', '');
   const scanned = () => groups.flatMap((g) => g.dirs);
   // the watcher reports a file of a dir reached through a symlink (a `groups` dir under a `node_modules` link) by its
@@ -632,6 +648,33 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       });
 
       printCatalogUrl(server);
+
+      const onError: Connect.ErrorHandleFunction = (err, _req, res, next) => {
+        // relative to the working directory when the Svelte compiler names the file
+        const id = typeof err?.id === 'string' ? normalizePath(resolve(err.id.split('?')[0])) : '';
+        const mods = id ? server.environments.client.moduleGraph.getModulesByFile(id) : undefined;
+        if (res.headersSent || !mods?.size || ![...mods].every((m) => catalogOnly(m))) return next(err);
+        failed.add(id);
+        const message = `Internal server error: ${err.message}`;
+        server.config.logger.error(buildErrorMessage(err, [styleText('red', message)]), {
+          clear: true,
+          timestamp: true,
+          error: err
+        });
+        setHeaders(res, server.config.server.headers);
+        res.setHeader('content-type', CONTENT_TYPES['.js']);
+        res.setHeader('cache-control', 'no-cache');
+        // a module that throws, not a 500, after which the browser rejects the import with no reason: the preview
+        // shows the import's error. The default export keeps a component's importer from failing to link first
+        res.end(
+          `throw new Error(${JSON.stringify(messageOf(stripVTControlCharacters(err.message)))});\nexport default null;\n`
+        );
+      };
+      // after Vite's transform middleware, which hands its errors on, and ahead of Vite's error handler, which would
+      // put an overlay on every tab, the app's too, where the fix (which reloads only the catalog) would not clear it
+      return () => {
+        server.middlewares.use(onError);
+      };
     },
     configurePreviewServer(server) {
       const out = resolved.build;
@@ -739,6 +782,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         for (const mod of [list, ...metas()]) moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
         this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
         return;
+      } else if (this.environment.config.consumer === 'client' && failed.delete(normalizePath(file))) {
+        targets = metas();
       } else if (servedProps.has(normalized) || propsDeps.has(normalized)) {
         // the component's own HMR updates the previews; only a change to its props changes the detail page. A props
         // type file counts when it is created or deleted too: the component may import one that is not there yet
