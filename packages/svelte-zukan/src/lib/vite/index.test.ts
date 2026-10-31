@@ -1140,6 +1140,27 @@ describe('build', () => {
     expect(app.emitFile).not.toHaveBeenCalled();
   });
 
+  // `worker.rolldownOptions.output.entryFileNames` can name a worker so
+  it.each(['mjs', 'cjs'])('points a .%s worker at the assets moved with it', async (ext) => {
+    const { root } = await makeApp();
+    const { p } = await bootBuild(root, { build: true });
+    const bundle = {
+      [`w-1.${ext}`]: { type: 'asset', source: 'fetch(`/app/assets/m-1.txt`)' },
+      'assets/m-1.txt': { type: 'asset', source: 'm' }
+    };
+    const emitFile = vi.fn();
+    await p.generateBundle.handler.call(
+      { environment: { name: 'zukan', config: { base: '/app/' } }, emitFile },
+      {},
+      bundle
+    );
+    expect(emitFile).toHaveBeenCalledWith({
+      type: 'asset',
+      fileName: `_zukan/w-1.${ext}`,
+      source: 'fetch(`./assets/m-1.txt`)'
+    });
+  });
+
   it('leaves _app/version.json alone without SvelteKit', async () => {
     const { root } = await makeApp();
     const outDir = `${root}/zukan-dist`;

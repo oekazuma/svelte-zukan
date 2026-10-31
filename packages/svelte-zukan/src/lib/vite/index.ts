@@ -456,7 +456,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           let { source } = file;
           // a worker names the assets it loads from the app's base, where the catalog has none; next to it, they move
           // with it (a worker resolves a relative URL against its own script)
-          if (fileName.endsWith('.js') && !base.startsWith('.')) {
+          if (/\.[cm]?js$/.test(fileName) && !base.startsWith('.')) {
             let code = typeof source === 'string' ? source : new TextDecoder().decode(source);
             for (const other of moved) {
               const url = posix.relative(posix.dirname(fileName), other);
