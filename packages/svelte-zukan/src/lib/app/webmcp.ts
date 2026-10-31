@@ -158,8 +158,10 @@ export function buildTools(opts: {
         frame.setAttribute('aria-hidden', 'true');
         frame.tabIndex = -1;
         frame.style.cssText = `position:fixed;left:-100000px;top:0;width:${num(input.width) ?? 1280}px;height:800px;border:0`;
-        frame.src =
-          opts.page + formatHash('preview', id!, section, { theme: theme(input.theme) ?? opts.currentTheme?.() });
+        const scheme = theme(input.theme) ?? opts.currentTheme?.();
+        // a frame's prefers-color-scheme follows its element's color-scheme, not the theme in its URL
+        if (scheme) frame.style.colorScheme = scheme;
+        frame.src = opts.page + formatHash('preview', id!, section, { theme: scheme });
         try {
           await new Promise((resolve) => {
             frame.addEventListener('load', resolve, { once: true });
