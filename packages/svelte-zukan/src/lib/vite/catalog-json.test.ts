@@ -40,3 +40,20 @@ it('gives a catalog file that can not be read an error without an absolute path'
   expect(components[0].error).toContain('../../packages/ui/src/Gone.zukan.svelte');
   expect(components[0].error).not.toContain(dir);
 });
+
+it('gives the .md without a byte order mark or CRLF', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'zukan-catalog-json-'));
+  const file = join(dir, 'A.zukan.svelte');
+  writeFileSync(file, '<Section title="a">x</Section>\n');
+  writeFileSync(join(dir, 'A.zukan.md'), '\uFEFF# A\r\n\r\ntext');
+  const { components } = catalogJson({
+    root: dir,
+    title: 't',
+    items: [{ group: 'ui', name: 'A', dir: '', path: 'ui/A', file }],
+    uncataloged: [],
+    docFileOf: (f) => f.replace('.svelte', '.md'),
+    componentFileOf: (f) => f.replace('.zukan', ''),
+    tailwind: []
+  });
+  expect(components[0].doc).toBe('# A\n\ntext');
+});

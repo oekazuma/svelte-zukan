@@ -248,6 +248,18 @@ describe('modules shared with the app', () => {
     for (const id of [ENTRY, 'virtual:svelte-zukan/catalog', '/src/A.zukan.svelte']) await env.transformRequest(id);
   }
 
+  /** a request through the dev server's middlewares, as a page makes it; rejected when they all pass it on */
+  const get = (url: string) =>
+    new Promise<string>((resolve, reject) => {
+      const res = {
+        statusCode: 200,
+        getHeader() {},
+        setHeader() {},
+        end: (body: string | Buffer) => resolve(String(body))
+      };
+      server.middlewares({ url, method: 'GET', headers: { host: 'localhost' } } as never, res as never, reject);
+    });
+
   it('an app page that imports a catalog file still hot-updates it', { timeout: 25_000 }, async () => {
     await withApp();
     await server.environments.client.transformRequest('/src/main.js');
@@ -272,6 +284,81 @@ describe('modules shared with the app', () => {
       await waitForReload();
       await new Promise((r) => setTimeout(r, 300));
       expect(fullReloads()).toBe(0);
+    }
+  );
+
+  it.each([false, true])(
+    "a catalog file that fails to compile sends Vite's error to every tab only when the app imports it (%s)",
+    { timeout: 25_000 },
+    async (imported) => {
+      await server.close();
+      link('svelte');
+      writeFileSync(
+        join(tmp, 'app/src/A.zukan.svelte'),
+        '<script>\n  let n = 1;\n  n = $state(2);\n</script>\n<Section title="A"><p>{n}</p></Section>'
+      );
+      writeFileSync(join(tmp, 'app/src/main.js'), "import A from './A.zukan.svelte';\nexport default A;\n");
+      await start({}, { plugins: [svelte()] });
+      await list();
+      if (imported) await server.environments.client.transformRequest('/src/main.js');
+      send.mockClear();
+      const body = await get('/src/A.zukan.svelte').catch(() => null);
+      expect(errors()).toHaveLength(imported ? 1 : 0);
+      // the preview's import fails with the compiler's message
+      if (!imported) expect(body).toMatch(/^throw new Error\(".*`\$state\(\.\.\.\)` can only be used/);
+    }
+  );
+
+  it(
+    'a component only a catalog file imports keeps its compile error off the app and reloads the catalog once fixed',
+    { timeout: 25_000 },
+    async () => {
+      await server.close();
+      link('svelte');
+      const inner = join(tmp, 'app/src/Inner.svelte');
+      writeFileSync(inner, '<script>\n  let n = 1;\n  n = $state(2);\n</script>\n<p>{n}</p>');
+      writeFileSync(
+        join(tmp, 'app/src/A.zukan.svelte'),
+        '<script>\n  import Inner from \'./Inner.svelte\';\n</script>\n<Section title="A"><Inner /></Section>'
+      );
+      await start({}, { plugins: [svelte()] });
+      await list();
+      await server.environments.client.transformRequest('/src/A.zukan.svelte');
+      send.mockClear();
+      expect(await get('/src/Inner.svelte')).toMatch(/^throw new Error\(/);
+      expect(errors()).toHaveLength(0);
+      writeFileSync(inner, '<script>\n  let n = $state(2);\n</script>\n<p>{n}</p>');
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(fullReloads()).toBe(0);
+    }
+  );
+
+  it.each([
+    ['helper.js', "import { n } from './helper.js';", '{n}', 'export const n = 1;\n'],
+    ['Inner.svelte', "import Inner from './Inner.svelte';", '<Inner />', '<p>inner</p>\n']
+  ])(
+    'creating the missing import %s of a catalog file reloads only the catalog',
+    { timeout: 25_000 },
+    async (name, imports, body, source) => {
+      await server.close();
+      link('svelte');
+      writeFileSync(
+        join(tmp, 'app/src/A.zukan.svelte'),
+        `<script>\n  ${imports}\n</script>\n<Section title="A"><p>${body}</p></Section>`
+      );
+      await start({}, { plugins: [svelte()] });
+      await list();
+      send.mockClear();
+      expect(await get('/src/A.zukan.svelte')).toMatch(new RegExp(`^throw new Error\\(.*${name.replace('.', '\\.')}`));
+      expect(errors()).toHaveLength(0);
+      writeFileSync(join(tmp, 'app/src', name), source);
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(fullReloads()).toBe(0);
+      // fixed: the failure is no longer tracked, so its next change goes through the app's own HMR
+      send.mockClear();
+      expect(await get('/src/A.zukan.svelte')).not.toMatch(/^throw /);
     }
   );
 
@@ -322,16 +409,6 @@ describe('modules shared with the app', () => {
       );
       await start({ logo: 'public/logo.svg' });
       const warn = vi.spyOn(server.config.logger, 'warn');
-      const get = (url: string) =>
-        new Promise<string>((resolve, reject) => {
-          const res = {
-            statusCode: 200,
-            getHeader() {},
-            setHeader() {},
-            end: (body: string | Buffer) => resolve(String(body))
-          };
-          server.middlewares({ url, method: 'GET', headers: { host: 'localhost' } } as never, res as never, reject);
-        });
       const entry = await get('/@id/__x00__' + ENTRY);
       const logo = entry.match(/import logo from "([^"]+)"/)![1];
       expect(await get(logo)).toMatch(/^export default "\/logo\.svg"/);

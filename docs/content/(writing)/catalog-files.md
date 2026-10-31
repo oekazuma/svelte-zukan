@@ -42,6 +42,8 @@ A catalog file is a Svelte component made of `<Section>` blocks. Each section is
 
 A missing, dynamic, or empty `title`, a duplicate `title`, or a `<Section>` that is not at the top level each cause a build error with the file name and line. A file that is not plain Svelte markup also causes a build error with the file name. On the dev server, the file's detail page shows the same message instead, and the app's tabs are left alone, unless one of the app's own pages imports the file: Vite then shows the error there as usual.
 
+Other errors in a catalog file, such as one the Svelte compiler reports or an import that cannot be resolved, show in the terminal and, on the dev server, in the file's previews. So do errors in a file that only catalog files import. Here too the app's tabs are left alone unless the app imports the file, and fixing the file reloads the previews.
+
 A file with no `<Section>` is not an error: its detail page says that there is nothing to preview. A `<Section>` without content renders nothing.
 
 ## Code view
@@ -96,4 +98,3 @@ The `suffix` option changes the file names. `zukan({ suffix: 'catalog' })` uses 
 - Editing the `logo` image also reloads only the `/__zukan/` tab
 - Editing a component itself (such as `Button.svelte`) goes through normal HMR and is reflected in both the app and the catalog. If the edit changes its props, the `/__zukan/` tab also reloads to update the props table
 - Directories outside Vite's root, such as other packages in a monorepo, are also watched
-- When two catalog files end up with the same ID, Vite's error overlay appears in the terminal and in the app tabs connected to the dev server

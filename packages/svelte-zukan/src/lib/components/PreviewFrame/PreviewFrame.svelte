@@ -86,6 +86,12 @@
   const KEY_STEP = 10;
   /** what the detail page takes as the reader's own scroll or click, which ends a heading's pin */
   const POINTER_EVENTS = ['pointerdown', 'wheel', 'touchmove'];
+  const NOT_TYPED = ['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file', 'image'];
+  /** a field where Escape cancels the edit; by tag name, as an element of the preview is of the iframe's realm */
+  const typesText = (el: HTMLElement) =>
+    el.isContentEditable ||
+    ['TEXTAREA', 'SELECT'].includes(el.tagName) ||
+    (el.tagName === 'INPUT' && !NOT_TYPED.includes((el as HTMLInputElement).type));
 
   let {
     src,
@@ -284,7 +290,11 @@
     if (!page || !frame) return;
     const forward = (e: KeyboardEvent) => {
       const target = e.composedPath()[0] as HTMLElement;
-      const typing = target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+      // the catalog's own page takes no shortcut from a checkbox either, but Escape still leaves the expanded view
+      const typing =
+        e.key === 'Escape'
+          ? typesText(target)
+          : target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
       // Escape closes a dialog or a popover open in the preview first, which must not leave the expanded view too
       const closes = e.key === 'Escape' && page.querySelector('dialog[open], :popover-open');
       if (e.defaultPrevented || e.isComposing || typing || closes) return;
@@ -461,12 +471,7 @@
     hideTip();
     const target = e.target as HTMLElement;
     // Escape in a dialog over the expanded preview closes the dialog only, and in a field it cancels the edit only
-    const typing =
-      target.isContentEditable ||
-      ['TEXTAREA', 'SELECT'].includes(target.tagName) ||
-      (target instanceof HTMLInputElement &&
-        !['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file', 'image'].includes(target.type));
-    if (expanded && !typing && !target.closest('dialog')) toggleExpanded();
+    if (expanded && !typesText(target) && !target.closest('dialog')) toggleExpanded();
   }}
 />
 

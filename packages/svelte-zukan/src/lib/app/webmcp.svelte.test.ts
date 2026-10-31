@@ -142,6 +142,19 @@ describe('WebMCP tools', () => {
       }
     });
 
+    // what prefers-color-scheme follows inside a frame, which the theme in the URL does not set
+    it("gives the frame the theme's color-scheme", async () => {
+      const src = vi.spyOn(HTMLIFrameElement.prototype, 'src', 'set');
+      try {
+        for (const theme of [undefined, 'light']) {
+          await check('<div data-zukan-preview data-zukan-ready><p>ok</p></div>', { theme });
+          expect((src.mock.contexts.at(-1) as HTMLIFrameElement).style.colorScheme).toBe(theme ?? 'dark');
+        }
+      } finally {
+        src.mockRestore();
+      }
+    });
+
     it('renders the section and returns what axe-core finds', async () => {
       const result = await check('<div data-zukan-preview data-zukan-ready><img src=""></div>');
       expect(result.isError).toBeUndefined();

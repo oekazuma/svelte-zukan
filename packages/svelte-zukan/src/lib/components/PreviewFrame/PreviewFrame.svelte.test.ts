@@ -1036,6 +1036,31 @@ describe('PreviewFrame tools', () => {
     }
   });
 
+  it('passes Escape on from a checkbox inside the preview, but no other shortcut, and not from a text field', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.innerHTML = '<input type="checkbox"><input type="text">';
+    const keys: string[] = [];
+    const listener = (e: KeyboardEvent) => keys.push(`${e.key}:${(e.target as Element).tagName}`);
+    addEventListener('keydown', listener);
+    try {
+      const preview = screen.container.querySelector('.preview')!;
+      await screen.getByRole('button', { name: 'Expand' }).click();
+      doc.querySelector<HTMLElement>('[type=text]')!.focus();
+      await userEvent.keyboard('{Escape}');
+      doc.querySelector<HTMLElement>('[type=checkbox]')!.focus();
+      await userEvent.keyboard('j');
+      expect(preview.classList.contains('expanded')).toBe(true);
+      await userEvent.keyboard('{Escape}');
+      await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
+      expect(keys).toEqual(['Escape:IFRAME']);
+    } finally {
+      removeEventListener('keydown', listener);
+    }
+  });
+
   it('leaves Escape to a dialog open inside the preview, so closing it does not leave the expanded view', async () => {
     const screen = await render(PreviewFrame, { props });
     const iframe = screen.container.querySelector('iframe')!;

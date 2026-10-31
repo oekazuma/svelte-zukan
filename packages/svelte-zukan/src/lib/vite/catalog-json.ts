@@ -3,7 +3,7 @@ import { relative } from 'node:path';
 import { normalizePath } from 'vite';
 import { formatHash } from '../app/hash.js';
 import type { CatalogItem, TailwindSource, ZukanProp } from '../types.js';
-import { extractSections } from './extract.js';
+import { extractSections, normalizeSource } from './extract.js';
 import { extractProps } from './props.js';
 
 /**
@@ -45,7 +45,7 @@ export function catalogJson(opts: {
   tailwind: TailwindSource[];
 }): CatalogJson {
   const rel = (file: string) => normalizePath(relative(opts.root, file));
-  const read = (file: string) => readFileSync(file, 'utf-8');
+  const read = (file: string) => normalizeSource(readFileSync(file, 'utf-8'));
   return {
     title: opts.title,
     components: opts.items.map((item) => {

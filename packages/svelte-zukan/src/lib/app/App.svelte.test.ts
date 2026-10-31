@@ -472,6 +472,42 @@ describe('App', () => {
     }
   });
 
+  it('going to another place on the page leaves the expanded preview and shows that place', async () => {
+    const { props } = setup('#/ui/Card?section=One');
+    props.catalog[0].meta = withProps();
+    const screen = await render(App, { props });
+    document.body.style.minHeight = '5000px';
+    try {
+      const link = screen.getByRole('heading', { level: 2, name: 'One' }).getByRole('link');
+      await expect.element(link).toBeInTheDocument();
+      // the URL marks the first section, which F then expands
+      const expand = async () => {
+        if (location.hash !== '#/ui/Card?section=One') await setHash('#/ui/Card?section=One');
+        (link.element() as HTMLElement).focus({ preventScroll: true });
+        await userEvent.keyboard('f');
+        await expect.poll(() => document.querySelector('.preview.expanded iframe')?.getAttribute('title')).toBe('One');
+      };
+      await expand();
+      await setHash('#/ui/Card?section=Two');
+      await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(0);
+      const two = screen.getByRole('heading', { level: 2, name: 'Two' }).element();
+      await expect.poll(() => Math.round(two.getBoundingClientRect().top)).toBe(0);
+
+      await expand();
+      await setHash('#/ui/Card?section=');
+      await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(0);
+      const heading = document.getElementById('zukan-props')!;
+      await expect.poll(() => Math.round(heading.getBoundingClientRect().top)).toBe(0);
+      expect(document.activeElement).toBe(heading);
+
+      await expand();
+      await setHash('#/ui/Card');
+      await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(0);
+    } finally {
+      document.body.style.minHeight = '';
+    }
+  });
+
   // the doc keeps every heading below the top third until the test scrolls
   const withProps =
     (doc = '<div style="height: 1000px"></div>') =>
