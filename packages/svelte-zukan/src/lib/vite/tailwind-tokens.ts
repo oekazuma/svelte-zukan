@@ -456,10 +456,11 @@ export function extractTokens(
     entries.flatMap(([key, { options }]) => (typeof options === 'number' && options & 1 ? [key] : []))
   );
   // `@theme reference` and what `@config` and `@plugin` load: listed with the theme, but Tailwind declares none of
-  // them, so only the project's own root declaration gives them a variable to copy
+  // them. A non-inline one is read as `var(--x, fallback)`, so the project's own root declaration makes it real; an
+  // inline one (`@config`, `@plugin`) puts its literal value into the class, which never reads the variable.
   const reference = new Set(
     entries.flatMap(([key, { options }]) =>
-      typeof options === 'number' && options & 2 && !Object.hasOwn(known, key) ? [key] : []
+      typeof options === 'number' && options & 2 && (options & 1 || !Object.hasOwn(known, key)) ? [key] : []
     )
   );
   const values = { ...variables, ...known };

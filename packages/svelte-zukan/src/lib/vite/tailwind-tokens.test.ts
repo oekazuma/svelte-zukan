@@ -218,6 +218,15 @@ describe('extractTokens', () => {
     expect(token('background-color', 'bg-brand')).toEqual({ class: 'bg-brand', cssVariable: null, value: '#123456' });
     expect(token('background-color', 'bg-plug')).toEqual({ class: 'bg-plug', cssVariable: null, value: '#0a0b0c' });
     expect(result.variables).toMatchObject({ '--color-brand': '#123456', '--color-plug': '#0a0b0c' });
+    // the class carries the literal value, so a root declaration of the same name is not what it reads
+    const declared = await load(
+      `@import "tailwindcss";\n@config "${dir}/tw.config.mjs";\n:root { --color-brand: #abcdef; }`
+    );
+    expect(declared.token('background-color', 'bg-brand')).toEqual({
+      class: 'bg-brand',
+      cssVariable: null,
+      value: '#123456'
+    });
   });
 
   it('reads the last declaration of the property', async () => {
