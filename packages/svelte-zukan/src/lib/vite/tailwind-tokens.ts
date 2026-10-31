@@ -2,7 +2,8 @@ import type { TailwindCategory, TailwindCategoryId, TailwindToken } from '../typ
 
 /** the members of Tailwind's unstable design system that svelte-zukan uses */
 export type DesignSystemLike = {
-  theme: { prefix: string | null; entries(): Iterable<[string, { value: string }]> };
+  /** `options & 1` marks an `@theme inline` variable */
+  theme: { prefix: string | null; entries(): Iterable<[string, { value: string; options?: unknown }]> };
   getClassList(): [string, ...unknown[]][];
   candidatesToCss(classes: string[]): (string | null)[];
 };
@@ -268,8 +269,9 @@ function operand(text: string): number | null {
 }
 
 /**
- * The value in px at a 16px root, for ordering: a number or length, or a `calc()` of them with `*` and `/` only, as
- * Tailwind's resolved scales are (`calc(0.25rem * 4)`). A unitless line height is a multiple of the font size.
+ * The value in px at a 16px root, for ordering: a number or length, or a flat `calc()` of them, as Tailwind's resolved
+ * scales (`calc(0.25rem * 4)`) and shadcn's radii (`calc(0.625rem - 4px)`) are. A unitless line height is a multiple of
+ * the font size.
  */
 export function sizeOf(value: string, property: string): number | null {
   // `none` and `shadow-none`'s `0 0 #0000`
@@ -280,13 +282,17 @@ export function sizeOf(value: string, property: string): number | null {
   const calc = /^calc\((.+)\)$/.exec(value);
   const parts = (calc?.[1] ?? value).trim().split(/\s+/);
   if (!calc && parts.length > 1) return null;
-  let out = operand(parts[0]);
-  for (let i = 1; out !== null && i < parts.length; i += 2) {
+  // CSS requires spaces around a binary `+` or `-`, so splitting on whitespace keeps `-4px` one signed operand
+  let sum = 0;
+  let term = operand(parts[0]);
+  for (let i = 1; term !== null && i < parts.length; i += 2) {
     const next = operand(parts[i + 1] ?? '');
-    if (next === null || !/^[*/]$/.test(parts[i])) return null;
-    out = parts[i] === '*' ? out * next : out / next;
+    if (next === null || !/^[-+*/]$/.test(parts[i])) return null;
+    if (parts[i] === '*') term *= next;
+    else if (parts[i] === '/') term /= next;
+    else [sum, term] = [sum + term, parts[i] === '+' ? next : -next];
   }
-  return out;
+  return term === null ? null : sum + term;
 }
 
 /** `index` is the token's place in the theme, -1 outside it; `size` is from `sizeOf` */
@@ -317,7 +323,12 @@ export function extractTokens(
   // a prefixed design system accepts only `tw:p-4`, while its class list and the stems stay unprefixed
   const classPrefix = prefix ? `${prefix}:` : '';
   const variablePrefix = prefix ? `--${prefix}-` : '--';
-  const variables = Object.fromEntries([...system.theme.entries()].map(([key, { value }]) => [key, collapse(value)]));
+  const entries = [...system.theme.entries()];
+  const variables = Object.fromEntries(entries.map(([key, { value }]) => [key, collapse(value)]));
+  // an `options` of another shape (the API is unstable) reads as not inline
+  const inline = new Set(
+    entries.flatMap(([key, { options }]) => (typeof options === 'number' && options & 1 ? [key] : []))
+  );
   const values = { ...variables, ...known };
   const matches = (name: string, stem: string) => name === stem || name.startsWith(`${stem}-`);
 
@@ -343,9 +354,10 @@ export function extractTokens(
     if (variable && own && variable !== own && Object.hasOwn(variables, own)) cssVariable = own;
     // another namespace can hold the same value under the same suffix (`--text-xs` and `--spacing-xs`)
     if (!cssVariable && own && variables[own] === value) cssVariable = own;
+    // only an inline variable can be the source of a literal value; a plain one would be read through `var()`, so a
+    // match there is a coincidence (`border-2` is `2px` like `--radius-2`)
     if (!cssVariable && suffix) {
-      cssVariable =
-        Object.keys(variables).find((key) => variables[key] === value && key.endsWith(`-${suffix}`)) ?? null;
+      cssVariable = [...inline].find((key) => variables[key] === value && key.endsWith(`-${suffix}`)) ?? null;
     }
     // `drop-shadow-none` sets `--tw-drop-shadow` to nothing, which a blank cell would not explain
     return { class: classPrefix + name, cssVariable, value: resolveValue(shown, values) || 'none' };
