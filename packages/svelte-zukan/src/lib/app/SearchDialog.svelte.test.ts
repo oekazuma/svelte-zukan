@@ -171,6 +171,31 @@ describe('the search dialog', () => {
     expect(isOpen()).toBe(false);
   });
 
+  it('after an in-page anchor of a doc, picking the section on the page scrolls to it', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card?section=Dismissible');
+      const screen = await render(App, { props });
+      const heading = screen.getByRole('heading', { level: 2, name: 'Dismissible' });
+      await expect.element(heading).toBeInTheDocument();
+      const changed = new Promise((r) => addEventListener('hashchange', r, { once: true }));
+      location.hash = '#usage';
+      await changed;
+      const before = spy.mock.calls.length;
+      await openSearch();
+      await screen.getByRole('combobox').fill('Dismissible');
+      await screen
+        .getByRole('option', { name: /Dismissible/ })
+        .first()
+        .click();
+      await expect.poll(() => spy.mock.calls.length).toBeGreaterThan(before);
+      expect(spy.mock.contexts.at(-1)).toBe(heading.element());
+      expect(location.hash).toBe('#/ui/Card?section=Dismissible');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('a click opens a result', async () => {
     const { props } = setup();
     const screen = await render(App, { props });

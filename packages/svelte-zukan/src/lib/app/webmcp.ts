@@ -69,7 +69,10 @@ export function buildTools(opts: {
   currentTheme?: () => Theme;
   /** whether the catalog has Tailwind CSS data */
   tailwind?: boolean;
+  /** goes to a hash route; the catalog page's own also brings a section it already shows into view */
+  open?: (hash: string) => void;
 }): WebMcpTool[] {
+  const open = opts.open ?? ((hash: string) => (location.hash = hash));
   const withTheme: Record<string, object> = opts.themes === false ? {} : { theme: THEME };
   const find = async (id: string | undefined) => (await opts.fetchCatalog()).components.find((c) => c.id === id);
   const tools: WebMcpTool[] = [
@@ -119,11 +122,16 @@ export function buildTools(opts: {
       annotations: { readOnlyHint: false, openWorldHint: false },
       async execute(input) {
         const id = str(input.id);
-        if (!(await find(id))) return text(`No component with the ID "${String(input.id)}".`, true);
-        location.hash = formatHash('detail', id!, str(input.section), {
-          width: num(input.width),
-          theme: theme(input.theme)
-        });
+        const component = await find(id);
+        if (!component) return text(`No component with the ID "${String(input.id)}".`, true);
+        if (input.section != null && !component.sections.some((s) => s.title === input.section))
+          return text(`No section "${String(input.section)}" in "${String(input.id)}".`, true);
+        open(
+          formatHash('detail', id!, str(input.section), {
+            width: num(input.width),
+            theme: theme(input.theme)
+          })
+        );
         return text(`Opened ${id}.`);
       }
     }
@@ -150,8 +158,10 @@ export function buildTools(opts: {
         frame.setAttribute('aria-hidden', 'true');
         frame.tabIndex = -1;
         frame.style.cssText = `position:fixed;left:-100000px;top:0;width:${num(input.width) ?? 1280}px;height:800px;border:0`;
-        frame.src =
-          opts.page + formatHash('preview', id!, section, { theme: theme(input.theme) ?? opts.currentTheme?.() });
+        const scheme = theme(input.theme) ?? opts.currentTheme?.();
+        // a frame's prefers-color-scheme follows its element's color-scheme, not the theme in its URL
+        if (scheme) frame.style.colorScheme = scheme;
+        frame.src = opts.page + formatHash('preview', id!, section, { theme: scheme });
         try {
           await new Promise((resolve) => {
             frame.addEventListener('load', resolve, { once: true });

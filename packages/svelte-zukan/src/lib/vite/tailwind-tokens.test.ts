@@ -65,6 +65,37 @@ describe('extractTokens', () => {
     expect(token('padding', 'p-xs')?.cssVariable).toBe('--spacing-xs');
   });
 
+  it('gives no variable for a value that only an @theme variable of another namespace shares', async () => {
+    const { token } = await load(
+      '@import "tailwindcss";\n@theme { --radius-2: 2px; --radius-4: 4px; --radius-px: 1px; }'
+    );
+    expect(token('border-width', 'border-2')?.cssVariable).toBeNull();
+    expect(token('border-width', 'border-4')?.cssVariable).toBeNull();
+    for (const [id, cls] of [
+      ['padding', 'p-px'],
+      ['margin', 'm-px'],
+      ['width', 'w-px']
+    ] as const) {
+      expect(token(id, cls)?.cssVariable).toBeNull();
+    }
+  });
+
+  it('gives no variable for a value that only an @theme inline variable of another namespace shares', async () => {
+    const { token } = await load('@import "tailwindcss";\n@theme inline { --radius-2: 2px; --radius-px: 1px; }');
+    expect(token('border-width', 'border-2')?.cssVariable).toBeNull();
+    expect(token('padding', 'p-px')?.cssVariable).toBeNull();
+    expect(token('width', 'w-px')?.cssVariable).toBeNull();
+    expect(token('border-radius', 'rounded-2')?.cssVariable).toBe('--radius-2');
+  });
+
+  it('names an @theme inline variable of another namespace that the class reads', async () => {
+    const { token } = await load(
+      '@import "tailwindcss";\n@theme inline { --container-card: 20rem; --border-width-thick: 3px; }'
+    );
+    expect(token('width', 'w-card')).toEqual({ class: 'w-card', cssVariable: '--container-card', value: '20rem' });
+    expect(token('border-width', 'border-thick')?.cssVariable).toBe('--border-width-thick');
+  });
+
   it('resolves a theme variable with an escaped dot', async () => {
     const { result, token } = await load('@import "tailwindcss";\n@theme { --spacing-2\\.5: 10px; }');
     expect(token('padding', 'p-2.5')).toEqual({ class: 'p-2.5', cssVariable: '--spacing-2.5', value: '10px' });
@@ -246,6 +277,16 @@ describe('extractTokens', () => {
       expect(width.indexOf('w-px')).toBe(width.indexOf('w-0') + 1);
     });
 
+    it('orders radii computed with calc() sums among the defaults', async () => {
+      const { result } = await load(
+        '@import "tailwindcss";\n:root { --radius: 0.625rem; }\n@theme inline { --radius-sm: calc(var(--radius) - 4px);' +
+          ' --radius-md: calc(var(--radius) - 2px); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) + 4px); }'
+      );
+      expect(classes(result, 'border-radius')).toEqual(
+        ['none', 'xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', 'full'].map((size) => `rounded-${size}`)
+      );
+    });
+
     it('orders a unitless project opacity among the percentages', async () => {
       const { result } = await load('@import "tailwindcss"; @theme { --opacity-disabled: 0.4; }');
       const opacity = classes(result, 'opacity');
@@ -284,19 +325,31 @@ describe('extractTokens', () => {
 });
 
 describe('sizeOf', () => {
-  it('computes lengths and calc() products at a 16px root', () => {
+  it('computes lengths and calc() expressions at a 16px root', () => {
     expect(sizeOf('0 0 #0000', 'box-shadow')).toBe(0);
     expect(sizeOf('none', 'filter')).toBe(0);
     expect(sizeOf('1px', 'padding')).toBe(1);
     expect(sizeOf('-0.05em', 'letter-spacing')).toBeCloseTo(-0.8);
     expect(sizeOf('calc(0.25rem * 4)', 'padding')).toBe(16);
     expect(sizeOf('calc(infinity * 1px)', 'border-radius')).toBe(Infinity);
+    expect(sizeOf('calc(0.625rem - 4px)', 'border-radius')).toBe(6);
+    expect(sizeOf('calc(1rem + 2px * 3 - -4px / 2)', 'width')).toBe(24);
     expect(sizeOf('1.5', 'line-height')).toBe(24);
     expect(sizeOf('700', 'font-weight')).toBe(700);
   });
 
   it('gives up on values that need a browser', () => {
-    for (const value of ['100%', '100vw', 'auto', 'calc(1 / 2 * 100%)', 'calc(var(--x) * 2)', '0 1px 2px red']) {
+    for (const value of [
+      '100%',
+      '100vw',
+      'auto',
+      'calc(1 / 2 * 100%)',
+      'calc(var(--x) * 2)',
+      '0 1px 2px red',
+      'calc(1rem -4px)',
+      'calc(1rem-4px)',
+      'calc(1rem - 50%)'
+    ]) {
       expect(sizeOf(value, 'width')).toBeNull();
     }
   });

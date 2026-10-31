@@ -71,7 +71,7 @@
 {#each groups as [group, items], i (group)}
   {#if groups.size > 1}
     <!-- the list is named by the group alone, not by its count -->
-    <div class="group"><span id="{id}-{i}">{group}</span><span class="count">{items.length}</span></div>
+    <h2 class="group"><span id="{id}-{i}">{group}</span><span class="count">{items.length}</span></h2>
   {/if}
   {@render list(tree(items), groups.size > 1 ? `${id}-${i}` : undefined)}
 {/each}

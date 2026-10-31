@@ -86,6 +86,12 @@
   const KEY_STEP = 10;
   /** what the detail page takes as the reader's own scroll or click, which ends a heading's pin */
   const POINTER_EVENTS = ['pointerdown', 'wheel', 'touchmove'];
+  const NOT_TYPED = ['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file', 'image'];
+  /** a field where Escape cancels the edit; by tag name, as an element of the preview is of the iframe's realm */
+  const typesText = (el: HTMLElement) =>
+    el.isContentEditable ||
+    ['TEXTAREA', 'SELECT'].includes(el.tagName) ||
+    (el.tagName === 'INPUT' && !NOT_TYPED.includes((el as HTMLInputElement).type));
 
   let {
     src,
@@ -284,7 +290,11 @@
     if (!page || !frame) return;
     const forward = (e: KeyboardEvent) => {
       const target = e.composedPath()[0] as HTMLElement;
-      const typing = target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+      // the catalog's own page takes no shortcut from a checkbox either, but Escape still leaves the expanded view
+      const typing =
+        e.key === 'Escape'
+          ? typesText(target)
+          : target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
       // Escape closes a dialog or a popover open in the preview first, which must not leave the expanded view too
       const closes = e.key === 'Escape' && page.querySelector('dialog[open], :popover-open');
       if (e.defaultPrevented || e.isComposing || typing || closes) return;
@@ -459,8 +469,9 @@
   onkeydown={(e) => {
     if (e.key !== 'Escape') return;
     hideTip();
-    // Escape in a dialog over the expanded preview closes the dialog only
-    if (expanded && !(e.target as Element).closest('dialog')) toggleExpanded();
+    const target = e.target as HTMLElement;
+    // Escape in a dialog over the expanded preview closes the dialog only, and in a field it cancels the edit only
+    if (expanded && !typesText(target) && !target.closest('dialog')) toggleExpanded();
   }}
 />
 
@@ -470,7 +481,8 @@
 {/if}
 
 <div class={['preview', { expanded }]} bind:this={preview}>
-  <div class="toolbar" use:tooltips>
+  <!-- a group, not a toolbar: role="toolbar" promises arrow-key movement between the controls -->
+  <div class="toolbar" role="group" aria-label="{title} {labels.sectionPreview}" use:tooltips>
     <div class="group" role="group" aria-label={labels.previewWidth}>
       {#each PRESETS as preset (preset.width)}
         {@const name = `${labels[preset.label]} (${preset.width}px)`}

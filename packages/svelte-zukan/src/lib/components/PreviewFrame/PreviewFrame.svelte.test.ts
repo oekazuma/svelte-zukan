@@ -84,6 +84,15 @@ describe('PreviewFrame', () => {
     expect(screen.container.querySelector('output')).toBeNull();
   });
 
+  it('the toolbar is a group named by the section, so the controls of several previews are told apart', async () => {
+    const screen = await render(PreviewFrame, { props: { ...props, title: 'Variants' } });
+    const toolbar = screen.getByRole('group', { name: 'Variants preview', exact: true });
+    await expect.element(toolbar.getByRole('group', { name: 'Preview width', exact: true })).toBeInTheDocument();
+    await expect.element(toolbar.getByRole('button', { name: 'Expand', exact: true })).toBeInTheDocument();
+    const ja = await render(PreviewFrame, { props: { ...props, title: 'Variants', labels: messages.ja } });
+    await expect.element(ja.getByRole('group', { name: 'Variants のプレビュー', exact: true })).toBeInTheDocument();
+  });
+
   it('full width preset', async () => {
     const screen = await render(PreviewFrame, { props });
     screen.container.style.width = '1000px';
@@ -434,7 +443,7 @@ describe('PreviewFrame resizing', () => {
     await screen.getByRole('button', { name: 'Check again' }).click();
     await expect.element(screen.getByText('Accessibility issues (1)')).toBeInTheDocument();
     expect(axe).toHaveBeenCalledTimes(1);
-    await screen.getByRole('button', { name: 'Close' }).click();
+    await screen.getByRole('button', { name: 'Close the accessibility check' }).click();
     await expect.element(screen.getByText('Accessibility issues (1)')).not.toBeInTheDocument();
   });
 
@@ -467,7 +476,7 @@ describe('PreviewFrame resizing', () => {
     await expect.element(vision.getByRole('radio', { name: 'Blurred' })).toBeChecked();
     expect(document.activeElement?.textContent?.trim()).toBe('Blurred');
     await expect.poll(head).toContain('blur(2px)');
-    await screen.getByRole('button', { name: 'Close' }).click();
+    await screen.getByRole('button', { name: 'Close the accessibility check' }).click();
     await expect.poll(head).not.toContain('filter');
     expect(frame.contentDocument!.querySelector('#zukan-vision')).toBeNull();
   });
@@ -948,6 +957,31 @@ describe('PreviewFrame tools', () => {
     await expect.element(screen.getByRole('button', { name: 'Expand' })).toHaveFocus();
   });
 
+  it('Escape in the width field cancels the edit and stays in the expanded view', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const preview = screen.container.querySelector('.preview')!;
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    const input = screen.getByRole('spinbutton', { name: 'Width in pixels' });
+    const shown = (input.element() as HTMLInputElement).value;
+    await userEvent.fill(input, '300');
+    await userEvent.keyboard('{Escape}');
+    await expect.element(input).toHaveValue(Number(shown));
+    expect(preview.classList.contains('expanded')).toBe(true);
+  });
+
+  it('Escape on a checkbox in the expanded view still leaves it', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const preview = screen.container.querySelector('.preview')!;
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    preview.append(box);
+    box.focus();
+    expect(document.activeElement).toBe(box);
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
+  });
+
   it('keeps Tab inside the expanded preview, but not out of a dialog opened over it', async () => {
     const outside = document.createElement('button');
     const dialog = document.createElement('dialog');
@@ -997,6 +1031,31 @@ describe('PreviewFrame tools', () => {
         'J+shift:IFRAME',
         'Escape:IFRAME'
       ]);
+    } finally {
+      removeEventListener('keydown', listener);
+    }
+  });
+
+  it('passes Escape on from a checkbox inside the preview, but no other shortcut, and not from a text field', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.innerHTML = '<input type="checkbox"><input type="text">';
+    const keys: string[] = [];
+    const listener = (e: KeyboardEvent) => keys.push(`${e.key}:${(e.target as Element).tagName}`);
+    addEventListener('keydown', listener);
+    try {
+      const preview = screen.container.querySelector('.preview')!;
+      await screen.getByRole('button', { name: 'Expand' }).click();
+      doc.querySelector<HTMLElement>('[type=text]')!.focus();
+      await userEvent.keyboard('{Escape}');
+      doc.querySelector<HTMLElement>('[type=checkbox]')!.focus();
+      await userEvent.keyboard('j');
+      expect(preview.classList.contains('expanded')).toBe(true);
+      await userEvent.keyboard('{Escape}');
+      await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
+      expect(keys).toEqual(['Escape:IFRAME']);
     } finally {
       removeEventListener('keydown', listener);
     }

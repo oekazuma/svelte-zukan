@@ -472,6 +472,42 @@ describe('App', () => {
     }
   });
 
+  it('going to another place on the page leaves the expanded preview and shows that place', async () => {
+    const { props } = setup('#/ui/Card?section=One');
+    props.catalog[0].meta = withProps();
+    const screen = await render(App, { props });
+    document.body.style.minHeight = '5000px';
+    try {
+      const link = screen.getByRole('heading', { level: 2, name: 'One' }).getByRole('link');
+      await expect.element(link).toBeInTheDocument();
+      // the URL marks the first section, which F then expands
+      const expand = async () => {
+        if (location.hash !== '#/ui/Card?section=One') await setHash('#/ui/Card?section=One');
+        (link.element() as HTMLElement).focus({ preventScroll: true });
+        await userEvent.keyboard('f');
+        await expect.poll(() => document.querySelector('.preview.expanded iframe')?.getAttribute('title')).toBe('One');
+      };
+      await expand();
+      await setHash('#/ui/Card?section=Two');
+      await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(0);
+      const two = screen.getByRole('heading', { level: 2, name: 'Two' }).element();
+      await expect.poll(() => Math.round(two.getBoundingClientRect().top)).toBe(0);
+
+      await expand();
+      await setHash('#/ui/Card?section=');
+      await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(0);
+      const heading = document.getElementById('zukan-props')!;
+      await expect.poll(() => Math.round(heading.getBoundingClientRect().top)).toBe(0);
+      expect(document.activeElement).toBe(heading);
+
+      await expand();
+      await setHash('#/ui/Card');
+      await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(0);
+    } finally {
+      document.body.style.minHeight = '';
+    }
+  });
+
   // the doc keeps every heading below the top third until the test scrolls
   const withProps =
     (doc = '<div style="height: 1000px"></div>') =>
@@ -1023,6 +1059,47 @@ describe('App', () => {
     }
   });
 
+  it('after an in-page anchor of a doc, a link to the section on the page still scrolls to it', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const { props } = setup('#/ui/Card?section=Two');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      const two = screen.getByRole('heading', { level: 2, name: 'Two' });
+      await expect.element(two).toBeInTheDocument();
+      await setHash('#usage');
+      await screen.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Two' }).click();
+      await expect.poll(() => spy.mock.calls.length).toBe(2);
+      expect(spy.mock.contexts[1]).toBe(two.element());
+      expect(location.hash).toBe('#/ui/Card?section=Two');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('leaving the section in the URL releases it, so a preview growing above does not scroll back to it', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    document.body.style.paddingBottom = '2000px';
+    try {
+      const { props } = setup('#/ui/Card');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      await screen.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Two' }).click();
+      await expect.poll(() => spy.mock.calls.length).toBe(1);
+      const back = new Promise((r) => addEventListener('hashchange', r, { once: true }));
+      history.back();
+      await back;
+      await tick();
+      expect(location.hash).toBe('#/ui/Card');
+      document.querySelector<HTMLElement>('.example')!.style.minHeight = '700px';
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      expect(spy).toHaveBeenCalledOnce();
+    } finally {
+      spy.mockRestore();
+      document.body.style.paddingBottom = '';
+    }
+  });
+
   it('picking the section already in the URL in the search scrolls to it again', async () => {
     const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
     try {
@@ -1040,6 +1117,25 @@ describe('App', () => {
       expect(location.hash).toBe('#/ui/Card?section=Two');
     } finally {
       spy.mockRestore();
+    }
+  });
+
+  it('picking the page already shown in the search scrolls it to the top', async () => {
+    document.body.style.paddingBottom = '2000px';
+    try {
+      const { props } = setup('#/ui/Card');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      scrollTo(0, 500);
+      expect(scrollY).toBe(500);
+      await userEvent.keyboard(modifier === '⌘' ? '{Meta>}k{/Meta}' : '{Control>}k{/Control}');
+      await screen.getByRole('combobox').fill('Card');
+      await screen.getByRole('option', { name: /Card/ }).first().click();
+      await expect.poll(() => scrollY).toBe(0);
+      expect(location.hash).toBe('#/ui/Card');
+    } finally {
+      document.body.style.paddingBottom = '';
     }
   });
 

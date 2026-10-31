@@ -33,7 +33,13 @@ const props = (hash: string, theme: 'light' | 'dark') => {
     meta: () => Promise.resolve({ default: meta })
   });
   return {
-    catalog: [entry('Alert'), entry('Card'), entry('Button', 'forms')],
+    // two groups, so the sidebar shows its group headings
+    catalog: [
+      entry('Alert'),
+      entry('Card'),
+      entry('Button', 'forms'),
+      { ...entry('Demo'), group: 'examples', path: 'examples/Demo' }
+    ],
     logo: null,
     wrapper: null,
     title: 'zukan',

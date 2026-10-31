@@ -1,5 +1,32 @@
 # svelte-zukan
 
+## 0.16.4
+
+### Patch Changes
+
+- 42f9efd: fix: name each preview toolbar after its section, name the accessibility check's close button after the check, and make the sidebar's group titles headings, so screen readers can tell them apart and navigate to them.
+- 8932ab2: fix: on the dev server, a compile or import error in a catalog file (or in a file only catalog files import) shows in its preview instead of Vite's error overlay on the app's tabs, which stayed after the fix.
+- 6133229: fix: keep a props default that is a regex literal containing `//` or `/*` as written.
+  fix: follow a props type imported from `'.'` or `'..'` to that folder's `index.ts` / `index.d.ts`.
+  fix: render a `.zukan.md` that starts with a byte order mark, and give it to `catalog.json` without the mark.
+- 32ce93d: fix: order Tailwind CSS tokens whose value is a `calc()` with `+` or `-` (such as shadcn's radii) among the defaults, and stop showing a theme variable of another namespace for a token whose class does not read it.
+- 764ec7d: fix: leave the expanded preview when the URL goes to another section of the same component, let Escape leave the expanded preview from a checkbox inside the preview, and run the WebMCP `check_accessibility` check with the chosen theme's `prefers-color-scheme`.
+
+## 0.16.3
+
+### Patch Changes
+
+- 90aa4ec: fix: several fixes to the Vite plugin.
+
+  - On the dev server, a duplicate catalog ID no longer puts a Vite error overlay on any tab, including the app's: the catalog's top page shows the error, and `/__zukan/catalog.json` answers 500 with `{ "error" }`, which the WebMCP tools report.
+  - The catalog build no longer inherits `build.rolldownOptions.external` (library mode), so it no longer imports a bare `svelte` it can not load.
+  - The catalog's `build.outDir` is also checked against the `build.outDir` of each environment other than the catalog's, including one a `configEnvironment` hook sets.
+  - `vite preview` serves the catalog's .pdf, .txt, .vtt, audio, .mov and .webmanifest files with their content types instead of octet-stream.
+
+- 09e5212: fix: read catalog files and components that start with a byte order mark without shifting the code view, error lines, prop types and defaults by one character; keep a leading `*` in the first line of a prop's JSDoc (`/** **Deprecated** */`); parse a file that has `<style>` inside an attribute or expression (`<Code code="<style>" />`) instead of failing it and dropping its props table; and ignore directories whose names end in `.zukan.svelte` or `.svelte` when listing catalog and uncataloged files.
+- 35757c7: fix: read Tailwind CSS tokens correctly with `@import "tailwindcss" important`, root variables declared together with other selectors (`:root, [data-theme="light"]`), `@theme inline` tokens that share a value and suffix with another namespace, theme keys with an escaped dot (`--spacing-2\.5`), and project opacities written as plain numbers (ordered among the default percentages).
+- a5d034b: fix: a section opened from a link stays in view only while the URL names it, so a preview growing after Back no longer scrolls the page back to it; a link, a search result or WebMCP `open_component` to the section already shown scrolls to it again, also after an in-page anchor in the description; `open_component` answers an unknown section with an error instead of opening it; and Escape in the width field of an expanded preview cancels the edit without leaving the expanded view.
+
 ## 0.16.2
 
 ### Patch Changes

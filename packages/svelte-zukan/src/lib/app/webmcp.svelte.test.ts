@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { TailwindSource } from '../types.js';
+import { render } from 'vitest-browser-svelte';
+import type { TailwindSource, ZukanMeta } from '../types.js';
+import App from './App.svelte';
+import Catalog from './Catalog.test.svelte';
 import { buildTools, fetchCatalog, registerTools, type WebMcpTool } from './webmcp.js';
 
 const catalog = {
@@ -69,6 +72,14 @@ describe('WebMCP tools', () => {
     respond.mockRestore();
   });
 
+  it('refuses a section the component does not have, leaving the URL as it is', async () => {
+    location.hash = '#/ui/Button';
+    const result = await tool(tools, 'open_component').execute({ id: 'ui/Button', section: 'Nope' });
+    expect(result.isError).toBe(true);
+    expect(body(result)).toContain('Nope');
+    expect(location.hash).toBe('#/ui/Button');
+  });
+
   it('has no accessibility tool without axe-core, and marks what only reads', () => {
     expect(tools.map((t) => t.name)).toEqual(['list_components', 'get_component', 'open_component']);
     expect(tools.map((t) => t.annotations.readOnlyHint)).toEqual([true, true, false]);
@@ -126,6 +137,19 @@ describe('WebMCP tools', () => {
         expect(src.mock.calls.at(-1)![0]).toMatch(/#\/preview\/ui\/Button\?section=Primary&theme=dark$/);
         await check('<div data-zukan-preview data-zukan-ready><p>ok</p></div>', { theme: 'light' });
         expect(src.mock.calls.at(-1)![0]).toMatch(/&theme=light$/);
+      } finally {
+        src.mockRestore();
+      }
+    });
+
+    // what prefers-color-scheme follows inside a frame, which the theme in the URL does not set
+    it("gives the frame the theme's color-scheme", async () => {
+      const src = vi.spyOn(HTMLIFrameElement.prototype, 'src', 'set');
+      try {
+        for (const theme of [undefined, 'light']) {
+          await check('<div data-zukan-preview data-zukan-ready><p>ok</p></div>', { theme });
+          expect((src.mock.contexts.at(-1) as HTMLIFrameElement).style.colorScheme).toBe(theme ?? 'dark');
+        }
       } finally {
         src.mockRestore();
       }
@@ -252,6 +276,66 @@ describe('list_tailwind_tokens', () => {
     const result = await run({ category: 'nope' });
     expect(result.isError).toBe(true);
     expect(body(result)).toContain('nope');
+  });
+});
+
+describe('the tools on the catalog page', () => {
+  it('opening the section the page already shows scrolls to it again', async () => {
+    const provideContext = vi.fn();
+    Object.defineProperty(navigator, 'modelContext', { value: { provideContext }, configurable: true });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(
+        Response.json({
+          components: [
+            { id: 'ui/Card', name: 'Card', group: 'ui', doc: null, sections: [{ title: 'One' }, { title: 'Two' }] }
+          ],
+          uncataloged: []
+        })
+      )
+    );
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      location.hash = '#/ui/Card?section=Two';
+      const meta: ZukanMeta = {
+        sections: [
+          { title: 'One', code: '' },
+          { title: 'Two', code: '' }
+        ],
+        doc: null
+      };
+      const screen = await render(App, {
+        props: {
+          catalog: [
+            {
+              group: 'ui',
+              name: 'Card',
+              dir: '',
+              path: 'ui/Card',
+              load: () => Promise.resolve({ default: Catalog }),
+              meta: () => Promise.resolve({ default: meta })
+            }
+          ],
+          logo: null,
+          wrapper: null,
+          title: 'zukan',
+          locale: 'en',
+          searched: []
+        }
+      });
+      const two = screen.getByRole('heading', { level: 2, name: 'Two' });
+      await expect.element(two).toBeInTheDocument();
+      await expect.poll(() => provideContext.mock.calls.length).toBe(1);
+      const tools: WebMcpTool[] = provideContext.mock.calls[0][0].tools;
+      const before = spy.mock.calls.length;
+      const result = await tool(tools, 'open_component').execute({ id: 'ui/Card', section: 'Two' });
+      expect(result.isError).toBeUndefined();
+      expect(spy.mock.calls.length).toBe(before + 1);
+      expect(spy.mock.contexts.at(-1)).toBe(two.element());
+    } finally {
+      spy.mockRestore();
+      fetch.mockRestore();
+      delete (navigator as { modelContext?: unknown }).modelContext;
+    }
   });
 });
 
