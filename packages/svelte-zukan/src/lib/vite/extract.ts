@@ -31,44 +31,100 @@ function dedent(text: string) {
   return lines.map((line) => (line.trim() ? line.slice(prefix!.length) : '')).join('\n');
 }
 
-function identifiersOf(value: unknown) {
-  const names = new Set<string>();
-  // `obj.label` and `{ label: 1 }` name no variable; `walk` sees a parent before its children
-  const skip = new Set<unknown>();
-  walk(value, (n) => {
-    if (n.type === 'MemberExpression' && !n.computed) skip.add(n.property);
-    else if (
+/** the names a pattern declares: `x`, `{ a, b: [c] }`, `d = 1`, `...e` */
+function patternNames(p: Node | null | undefined, names: string[] = []) {
+  if (!p) return names;
+  if (p.type === 'Identifier') names.push(p.name as string);
+  else if (p.type === 'ObjectPattern')
+    for (const prop of p.properties as Node[])
+      patternNames((prop.type === 'Property' ? prop.value : prop.argument) as Node, names);
+  else if (p.type === 'ArrayPattern') for (const e of p.elements as (Node | null)[]) patternNames(e, names);
+  else if (p.type === 'AssignmentPattern') patternNames(p.left as Node, names);
+  else if (p.type === 'RestElement') patternNames(p.argument as Node, names);
+  return names;
+}
+
+function declaredNames(node: Node) {
+  if (node.type === 'ImportDeclaration')
+    return (node.specifiers as { local: Node }[]).flatMap((s) => patternNames(s.local));
+  if (node.type === 'VariableDeclaration')
+    return (node.declarations as { id: Node }[]).flatMap((d) => patternNames(d.id));
+  return patternNames(node.id as Node);
+}
+
+/** the names `node` declares for what is under its `key` */
+function namesFor(node: Node, key: string): string[] {
+  switch (node.type) {
+    case 'EachBlock':
+      // `{:else}` does not see the item
+      return key === 'expression' || key === 'fallback'
+        ? []
+        : patternNames(node.context as Node, node.index ? [node.index as string] : []);
+    case 'AwaitBlock':
+      return key === 'value' || key === 'then'
+        ? patternNames(node.value as Node)
+        : key === 'error' || key === 'catch'
+          ? patternNames(node.error as Node)
+          : [];
+    case 'SnippetBlock':
+      return key === 'expression' ? [] : (node.parameters as Node[]).flatMap((p) => patternNames(p));
+    case 'ArrowFunctionExpression':
+    case 'FunctionExpression':
+    case 'FunctionDeclaration':
+      return (node.params as Node[]).flatMap((p) => patternNames(p));
+    case 'CatchClause':
+      return patternNames(node.param as Node);
+  }
+  // `let:item` and `let:item={alias}` of an element or a component
+  return ((node.attributes as Node[] | undefined) ?? []).flatMap((a) =>
+    a.type === 'LetDirective' ? (a.expression ? patternNames(a.expression as Node) : [a.name as string]) : []
+  );
+}
+
+/**
+ * The variables `value` reads. A name the template or a function declares (an `{#each}` item, a snippet parameter,
+ * `{@const}`) hides a script variable of the same name under it.
+ */
+function identifiersOf(value: unknown, hidden: ReadonlySet<string> = new Set(), names = new Set<string>()) {
+  if (Array.isArray(value)) {
+    // `{@const}` and a declaration in a block are seen by everything next to them
+    const local = (value as (Node | null)[]).flatMap((n) =>
+      n?.type === 'ConstTag'
+        ? declaredNames(n.declaration as Node)
+        : n && ['VariableDeclaration', 'FunctionDeclaration', 'ClassDeclaration'].includes(n.type)
+          ? declaredNames(n)
+          : []
+    );
+    const inner = local.length ? new Set([...hidden, ...local]) : hidden;
+    for (const v of value) identifiersOf(v, inner, names);
+    return names;
+  }
+  if (!value || typeof value !== 'object') return names;
+  const n = value as Node;
+  const add = (name: string) => {
+    if (!hidden.has(name)) names.add(name);
+  };
+  if (n.type === 'Identifier') add(n.name as string);
+  else if (['Component', 'UseDirective', 'TransitionDirective', 'AnimateDirective'].includes(n.type))
+    add((n.name as string).split('.')[0]);
+  // `style:color` alone reads the variable `color`
+  else if (n.type === 'StyleDirective' && n.value === true) add(n.name as string);
+  for (const [key, child] of Object.entries(n)) {
+    if (key === 'metadata' || key === 'parent') continue;
+    // `obj.label` and `{ label: 1 }` name no variable
+    if (key === 'property' && n.type === 'MemberExpression' && !n.computed) continue;
+    if (
+      key === 'key' &&
       ['Property', 'MethodDefinition', 'PropertyDefinition', 'TSPropertySignature', 'TSMethodSignature'].includes(
         n.type
       ) &&
       !n.computed &&
       !n.shorthand
     )
-      skip.add(n.key);
-    else if (n.type === 'Identifier' && !skip.has(n)) names.add(n.name as string);
-    else if (['Component', 'UseDirective', 'TransitionDirective', 'AnimateDirective'].includes(n.type))
-      names.add((n.name as string).split('.')[0]);
-    // `style:color` alone reads the variable `color`
-    else if (n.type === 'StyleDirective' && n.value === true) names.add(n.name as string);
-  });
-  return names;
-}
-
-function declaredNames(node: Node) {
-  const names: string[] = [];
-  const addPattern = (p: Node | null) => {
-    if (!p) return;
-    if (p.type === 'Identifier') names.push(p.name as string);
-    else if (p.type === 'ObjectPattern')
-      for (const prop of p.properties as Node[])
-        addPattern((prop.type === 'Property' ? prop.value : prop.argument) as Node);
-    else if (p.type === 'ArrayPattern') (p.elements as (Node | null)[]).forEach(addPattern);
-    else if (p.type === 'AssignmentPattern') addPattern(p.left as Node);
-    else if (p.type === 'RestElement') addPattern(p.argument as Node);
-  };
-  if (node.type === 'ImportDeclaration') for (const s of node.specifiers as { local: Node }[]) addPattern(s.local);
-  else if (node.type === 'VariableDeclaration') for (const d of node.declarations as { id: Node }[]) addPattern(d.id);
-  else addPattern(node.id as Node);
+      continue;
+    const local = typeof n.type === 'string' ? namesFor(n, key) : [];
+    identifiersOf(child, local.length ? new Set([...hidden, ...local]) : hidden, names);
+  }
   return names;
 }
 

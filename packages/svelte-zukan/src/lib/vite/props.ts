@@ -11,7 +11,8 @@ type Node = { type: string; start: number; end: number } & Record<string, unknow
 /** the declarations and imports of one file, with its source for slicing text */
 type Scope = {
   file: string;
-  text: (n: Node) => string;
+  /** `replaced` gives the text of some nodes inside `n` */
+  text: (n: Node, replaced?: [Node, string][]) => string;
   declarations: Node[];
   /** imported names */
   imports: Map<string, { from: string; name: string }>;
@@ -111,11 +112,14 @@ function scopeOf(file: string, lf: string, body: Node[], pkg = false): Scope {
     file,
     // a regex or template literal is kept as the parser found it: a `//`, `/*` or quote in it starts neither a comment
     // nor a string
-    text: (n) => {
+    text: (n, replaced = []) => {
       let out = '';
       let at = n.start;
-      for (const r of verbatimOf(n).sort((a, b) => a.start - b.start)) {
-        out += collapse(lf.slice(at, r.start)) + lf.slice(r.start, r.end);
+      const kept = verbatimOf(n).map((r): [Node, string | null] => [r, null]);
+      for (const [r, s] of [...kept, ...replaced].sort((a, b) => a[0].start - b[0].start)) {
+        // a type parameter inside a template literal type stays as written
+        if (r.start < at) continue;
+        out += collapse(lf.slice(at, r.start)) + (s ?? lf.slice(r.start, r.end));
         at = r.end;
       }
       return (out + collapse(lf.slice(at, n.end))).trim();
@@ -259,6 +263,54 @@ function readScope(file: string, pkg: boolean): Scope | null {
  */
 const packageScopes = new Map<string, Scope | null>();
 
+/** what the type parameters of a declaration stand for: the arguments, read where they are written */
+type Bindings = Map<string, { node: Node; scope: Scope; depth: number; bindings: Bindings }>;
+
+/** what `T` stands for, when `n` is a bare reference to a bound type parameter */
+const paramOf = (n: Node, bindings: Bindings) =>
+  n.type === 'TSTypeReference' && !n.typeArguments && (n.typeName as Node).type === 'Identifier'
+    ? bindings.get((n.typeName as Node).name as string)
+    : undefined;
+
+/** the parameter names a node declares for itself: `<V>(v: V) => V`, `{ [K in keyof T]: … }`, `infer U` */
+const ownParams = (n: Node) =>
+  [...(((n.typeParameters as Node | undefined)?.params as Node[] | undefined) ?? []), n.typeParameter as Node]
+    .filter((p) => p?.type === 'TSTypeParameter')
+    .map((p) => p.name as string);
+
+/** how loosely a type binds: an argument put in a tighter place than it is written needs parentheses */
+const looseness: Record<string, number> = {
+  TSFunctionType: 0,
+  TSConstructorType: 0,
+  TSConditionalType: 0,
+  TSUnionType: 1,
+  TSIntersectionType: 2,
+  TSTypeOperator: 3,
+  TSArrayType: 4,
+  TSIndexedAccessType: 4
+};
+
+/** `n` as written, with each bound type parameter replaced by its argument */
+function print(scope: Scope, n: Node, bindings: Bindings): string {
+  const replaced: [Node, string][] = [];
+  const visit = (value: unknown, parent: Node, bindings: Bindings) => {
+    if (Array.isArray(value)) return value.forEach((v) => visit(v, parent, bindings));
+    if (!value || typeof value !== 'object' || typeof (value as Node).type !== 'string') return;
+    const node = value as Node;
+    const bound = paramOf(node, bindings);
+    if (bound) {
+      const text = print(bound.scope, bound.node, bound.bindings);
+      const wrap = (looseness[bound.node.type] ?? 9) < (looseness[parent.type] ?? -1);
+      return void replaced.push([node, wrap ? `(${text})` : text]);
+    }
+    const own = ownParams(node);
+    if (own.length) bindings = new Map([...bindings].filter(([k]) => !own.includes(k)));
+    for (const [k, v] of Object.entries(node)) if (!k.endsWith('Comments')) visit(v, node, bindings);
+  };
+  if (bindings.size) visit(n, n, bindings);
+  return scope.text(n, replaced);
+}
+
 /** imports are followed this many files deep */
 const MAX_DEPTH = 3;
 
@@ -295,7 +347,7 @@ export function extractProps(
   if (!declarator) return null;
   const id = declarator.id as Node;
 
-  const members: { node: Node; scope: Scope }[] = [];
+  const members: { node: Node; scope: Scope; bindings: Bindings }[] = [];
   const files = new Set<string>();
   const scopes = new Map<string, Scope | null>();
   /** may repeat: an `Omit` that can not be read takes back the names its type added */
@@ -361,18 +413,23 @@ export function extractProps(
    */
   const seen = new Set<Node>();
   /** as written in the project: what a package type refers to inside its own files is behind the name already given */
-  const name = (scope: Scope, type: Node) => {
-    if (!scope.package) typeNames.push(scope.text(type));
+  const name = (scope: Scope, type: Node, bindings: Bindings) => {
+    if (!scope.package) typeNames.push(print(scope, type, bindings));
   };
-  function collect(type: Node | undefined, scope: Scope, depth: number) {
+  function collect(type: Node | undefined, scope: Scope, depth: number, bindings: Bindings = new Map()) {
     if (!type) return;
-    if (type.type === 'TSParenthesizedType') collect(type.typeAnnotation as Node, scope, depth);
-    else if (type.type === 'TSTypeLiteral') members.push(...(type.members as Node[]).map((node) => ({ node, scope })));
-    else if (type.type === 'TSIntersectionType') for (const t of type.types as Node[]) collect(t, scope, depth);
+    if (type.type === 'TSParenthesizedType') collect(type.typeAnnotation as Node, scope, depth, bindings);
+    else if (type.type === 'TSTypeLiteral')
+      members.push(...(type.members as Node[]).map((node) => ({ node, scope, bindings })));
+    else if (type.type === 'TSIntersectionType')
+      for (const t of type.types as Node[]) collect(t, scope, depth, bindings);
     else if (type.type === 'TSTypeReference') {
+      const param = paramOf(type, bindings);
+      if (param) return collect(param.node, param.scope, param.depth, param.bindings);
       const typeName = type.typeName as Node;
       const ref = typeName.type === 'Identifier' ? (typeName.name as string) : null;
-      const [first, second] = ((type.typeArguments as Node | undefined)?.params as Node[] | undefined) ?? [];
+      const args = ((type.typeArguments as Node | undefined)?.params as Node[] | undefined) ?? [];
+      const [first, second] = args;
       const from = ref === null ? undefined : scope.imports.get(ref);
       // `ComponentProps<typeof Button>`, with `Button` a source component, or declared `Component<Props>` as
       // svelte-package writes it
@@ -389,7 +446,7 @@ export function extractProps(
               ? ((t!.typeArguments as Node | undefined)?.params as Node[] | undefined)?.[0]
               : undefined;
         if (component && props) {
-          if (component.scope.package) name(scope, type);
+          if (component.scope.package) name(scope, type, bindings);
           return collect(props, component.scope, component.depth);
         }
       }
@@ -398,7 +455,7 @@ export function extractProps(
       if (keys) {
         const start = members.length;
         const named = typeNames.length;
-        collect(first, scope, depth);
+        collect(first, scope, depth, bindings);
         // with anything under it that is not listed in full (a package type, a union), `Omit<…>` is named as written
         if (typeNames.length === named && members.slice(start).every((m) => !m.scope.package)) {
           const picked = members
@@ -427,11 +484,31 @@ export function extractProps(
                 depth
               )
             : null;
-      if (!found || found.scope.package) name(scope, type);
+      if (!found || found.scope.package) name(scope, type, bindings);
       if (!found || seen.has(found.node)) return;
+      // a package's own type parameters stay as written, as its members are listed below
+      const bind = (declaration: Node) => {
+        const bound: Bindings = new Map();
+        if (found.scope.package) return bound;
+        const params = ((declaration.typeParameters as Node | undefined)?.params as Node[] | undefined) ?? [];
+        params.forEach((p, i) => {
+          const value = args[i]
+            ? (paramOf(args[i], bindings) ?? { node: args[i], scope, depth, bindings })
+            : p.default
+              ? (paramOf(p.default as Node, bound) ?? {
+                  node: p.default as Node,
+                  scope: found.scope,
+                  depth: found.depth,
+                  bindings: bound
+                })
+              : undefined;
+          if (value) bound.set(p.name as string, value);
+        });
+        return bound;
+      };
       if (found.node.type === 'TSTypeAliasDeclaration') {
         seen.add(found.node);
-        collect(found.node.typeAnnotation as Node, found.scope, found.depth);
+        collect(found.node.typeAnnotation as Node, found.scope, found.depth, bind(found.node));
         seen.delete(found.node);
       } else {
         // the declarations of an interface declared more than once merge, all of their own members before anything
@@ -439,9 +516,16 @@ export function extractProps(
         const merged = found.scope.declarations.filter(
           (node) => node.type === 'TSInterfaceDeclaration' && (node.id as Node).name === (found.node.id as Node).name
         );
+        const bound = new Map(merged.map((node) => [node, bind(node)]));
         for (const node of merged) {
           seen.add(node);
-          members.push(...((node.body as Node).body as Node[]).map((m) => ({ node: m, scope: found.scope })));
+          members.push(
+            ...((node.body as Node).body as Node[]).map((m) => ({
+              node: m,
+              scope: found.scope,
+              bindings: bound.get(node)!
+            }))
+          );
         }
         for (const node of merged)
           for (const h of (node.extends as Node[] | undefined) ?? [])
@@ -453,13 +537,14 @@ export function extractProps(
                 typeArguments: h.typeArguments ?? h.typeParameters
               },
               found.scope,
-              found.depth
+              found.depth,
+              bound.get(node)
             );
         for (const node of merged) seen.delete(node);
       }
     }
     // a union and the like: the reader gets the type as written
-    else name(scope, type);
+    else name(scope, type, bindings);
   }
   collect((id.typeAnnotation as Node | undefined)?.typeAnnotation as Node | undefined, own, 0);
 
@@ -483,7 +568,8 @@ export function extractProps(
     }
 
   /** `import('svelte').Snippet` reads as `Snippet` */
-  const typeText = (scope: Scope, n: Node) => scope.text(n).replace(/import\((['"])[^'"]*\1\)\./g, '');
+  const typeText = (scope: Scope, n: Node, bindings: Bindings) =>
+    print(scope, n, bindings).replace(/import\((['"])[^'"]*\1\)\./g, '');
   // the component's own types first, so that they win over a package's member of the same name
   // ponytail: a package member keeps its type parameters as written (`MouseEventHandler<T>`); substitute the
   // arguments (`HTMLAttributes<HTMLButtonElement>`) if that reads badly in practice
@@ -491,7 +577,7 @@ export function extractProps(
   // first one read, an interface's own member before the one it extends
   const props: ZukanProp[] = [];
   const listed = new Set<string>();
-  for (const { node: m, scope } of [
+  for (const { node: m, scope, bindings } of [
     ...members.filter((m) => !m.scope.package),
     ...members.filter((m) => m.scope.package)
   ]) {
@@ -506,9 +592,9 @@ export function extractProps(
       name,
       type:
         m.type === 'TSMethodSignature'
-          ? typeText(scope, m).replace(/[;,]$/, '')
+          ? typeText(scope, m, bindings).replace(/[;,]$/, '')
           : annotation
-            ? typeText(scope, annotation)
+            ? typeText(scope, annotation, bindings)
             : null,
       default: d?.value ?? null,
       required: !m.optional && d?.value == null,
