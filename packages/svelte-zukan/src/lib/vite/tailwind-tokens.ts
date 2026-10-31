@@ -455,9 +455,12 @@ export function extractTokens(
   const inline = new Set(
     entries.flatMap(([key, { options }]) => (typeof options === 'number' && options & 1 ? [key] : []))
   );
-  // `@theme reference` and what `@config` and `@plugin` load: listed with the theme, but no CSS declares them
+  // `@theme reference` and what `@config` and `@plugin` load: listed with the theme, but Tailwind declares none of
+  // them, so only the project's own root declaration gives them a variable to copy
   const reference = new Set(
-    entries.flatMap(([key, { options }]) => (typeof options === 'number' && options & 2 ? [key] : []))
+    entries.flatMap(([key, { options }]) =>
+      typeof options === 'number' && options & 2 && !Object.hasOwn(known, key) ? [key] : []
+    )
   );
   const values = { ...variables, ...known };
   const matches = (name: string, stem: string) => name === stem || name.startsWith(`${stem}-`);

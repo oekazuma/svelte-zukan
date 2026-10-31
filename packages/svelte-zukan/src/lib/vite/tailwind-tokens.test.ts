@@ -183,6 +183,15 @@ describe('extractTokens', () => {
     expect(result.variables['--color-mine']).toBe('red');
     // Tailwind never declares a reference variable, so there is no variable to copy
     expect(token('background-color', 'bg-mine')).toEqual({ class: 'bg-mine', cssVariable: null, value: 'red' });
+    // unless the project declares it on the root itself
+    const declared = await load(
+      '@import "tailwindcss";\n@theme reference { --color-mine: red; }\n:root { --color-mine: blue; }'
+    );
+    expect(declared.token('background-color', 'bg-mine')).toEqual({
+      class: 'bg-mine',
+      cssVariable: '--color-mine',
+      value: 'blue'
+    });
     expect(token('border-radius', 'rounded-lg')).toEqual({
       class: 'rounded-lg',
       cssVariable: '--radius-lg',
