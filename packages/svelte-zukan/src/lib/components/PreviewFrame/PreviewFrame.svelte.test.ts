@@ -960,6 +960,19 @@ describe('PreviewFrame tools', () => {
     expect(preview.classList.contains('expanded')).toBe(true);
   });
 
+  it('Escape on a checkbox in the expanded view still leaves it', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const preview = screen.container.querySelector('.preview')!;
+    await screen.getByRole('button', { name: 'Expand' }).click();
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    preview.append(box);
+    box.focus();
+    expect(document.activeElement).toBe(box);
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
+  });
+
   it('keeps Tab inside the expanded preview, but not out of a dialog opened over it', async () => {
     const outside = document.createElement('button');
     const dialog = document.createElement('dialog');

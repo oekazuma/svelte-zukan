@@ -120,7 +120,10 @@
    */
   export function revealRoute(hash: string) {
     const to = parseHash(hash);
-    if (section !== null && to.view === 'detail' && to.path === entry.path && to.section === section) show(section);
+    if (to.view !== 'detail' || to.path !== entry.path || to.section !== section) return;
+    // the unchanged hash fires no hashchange, whose handler scrolls a page without a section to the top
+    if (section === null) scrollTo(0, 0);
+    else show(section);
   }
 
   function onclick(e: MouseEvent) {

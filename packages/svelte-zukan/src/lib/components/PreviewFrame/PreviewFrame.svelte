@@ -461,7 +461,11 @@
     hideTip();
     const target = e.target as HTMLElement;
     // Escape in a dialog over the expanded preview closes the dialog only, and in a field it cancels the edit only
-    const typing = target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+    const typing =
+      target.isContentEditable ||
+      ['TEXTAREA', 'SELECT'].includes(target.tagName) ||
+      (target instanceof HTMLInputElement &&
+        !['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file', 'image'].includes(target.type));
     if (expanded && !typing && !target.closest('dialog')) toggleExpanded();
   }}
 />

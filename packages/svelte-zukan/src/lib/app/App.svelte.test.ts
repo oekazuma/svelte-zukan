@@ -1084,6 +1084,25 @@ describe('App', () => {
     }
   });
 
+  it('picking the page already shown in the search scrolls it to the top', async () => {
+    document.body.style.paddingBottom = '2000px';
+    try {
+      const { props } = setup('#/ui/Card');
+      props.catalog[0].meta = twoSections;
+      const screen = await render(App, { props });
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      scrollTo(0, 500);
+      expect(scrollY).toBe(500);
+      await userEvent.keyboard(modifier === '⌘' ? '{Meta>}k{/Meta}' : '{Control>}k{/Control}');
+      await screen.getByRole('combobox').fill('Card');
+      await screen.getByRole('option', { name: /Card/ }).first().click();
+      await expect.poll(() => scrollY).toBe(0);
+      expect(location.hash).toBe('#/ui/Card');
+    } finally {
+      document.body.style.paddingBottom = '';
+    }
+  });
+
   it('an unknown section shows the page without scrolling', async () => {
     const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
     try {
