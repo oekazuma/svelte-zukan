@@ -715,9 +715,13 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       const inScanned = scanned().some((dir) => isInside(normalized, dir));
       // what the app imports too: the chain of imports through the catalog's own modules (the list, and a meta module
       // that watches the file) ends at the entry, which accepts no update, so Vite would answer with `full-reload` on
-      // every tab
+      // every tab. On a creation, also an app entry whose import failed: it has no importers, and Vite reloads the app
       const appModules = () =>
-        modules.filter((m) => [...m.importers].some((i) => !i.id?.startsWith('\0virtual:svelte-zukan/')));
+        modules.filter(
+          (m) =>
+            [...m.importers].some((i) => !i.id?.startsWith('\0virtual:svelte-zukan/')) ||
+            (type === 'create' && !m.importers.size)
+        );
       // Vite adds the modules whose imports failed to resolve to a creation: the new file may be one of them
       const resolvedFailed =
         type === 'create' && this.environment.config.consumer === 'client'

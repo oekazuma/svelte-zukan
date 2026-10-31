@@ -388,6 +388,33 @@ describe('modules shared with the app', () => {
     }
   );
 
+  it.each([
+    ['Inner.css', 'p { color: red }\n'],
+    ['helper.js', 'export const n = 1;\n'],
+    ['Inner.svelte', '<p>inner</p>\n']
+  ])(
+    'creating the missing import %s of a catalog file and of an app entry recovers the app too',
+    { timeout: 25_000 },
+    async (name, source) => {
+      await server.close();
+      link('svelte');
+      writeFileSync(
+        join(tmp, 'app/src/A.zukan.svelte'),
+        `<script>\n  import './${name}';\n</script>\n<Section title="A"><p>a</p></Section>`
+      );
+      writeFileSync(join(tmp, 'app/src/main.js'), `import './${name}';\n`);
+      await start({}, { plugins: [svelte()] });
+      await list();
+      await server.environments.client.transformRequest('/src/main.js').catch(() => {});
+      send.mockClear();
+      expect(await get('/src/A.zukan.svelte')).toMatch(/^throw new Error\(/);
+      writeFileSync(join(tmp, 'app/src', name), source);
+      await waitForReload();
+      // the entry accepts no update: Vite reloads the app, as it does without the catalog
+      await expect.poll(fullReloads, { timeout: 10_000 }).toBeGreaterThan(0);
+    }
+  );
+
   it('editing the logo reloads only the catalog', { timeout: 25_000 }, async () => {
     await server.close();
     link('svelte');
