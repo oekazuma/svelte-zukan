@@ -503,6 +503,21 @@ describe('configureServer', () => {
     expect(JSON.parse(fixed.body!).components).toHaveLength(1);
   });
 
+  it('gives a duplicate ID outside the root by the path relative to it', async () => {
+    const { tmp, root, outside } = await makeApp();
+    mkdirSync(path.join(outside, 'B'));
+    await writeFile(path.join(outside, 'B/B.zukan.svelte'), source);
+    const { p } = boot(root, { groups: { app: 'src', ui: '../outside' } });
+    const server = fakeServer(root);
+    p.configureServer(server);
+    const res = await request(server.middlewares.use.mock.calls[0][0], '/__zukan/catalog.json');
+    expect(res).toMatchObject({ status: 500 });
+    expect(res.body).not.toContain(tmp);
+    expect(JSON.parse(res.body!).error).toContain('../outside/B.zukan.svelte');
+    const list: string = p.load('\0virtual:svelte-zukan/catalog');
+    expect(list).not.toContain(tmp);
+  });
+
   it('fails the build on a duplicate ID', async () => {
     const { root } = await makeApp();
     mkdirSync(path.join(root, 'src/A'));
@@ -635,7 +650,9 @@ describe('configurePreviewServer', () => {
     ['sound.opus', 'audio/ogg'],
     ['sound.m4a', 'audio/mp4'],
     ['clip.mov', 'video/quicktime'],
-    ['app.webmanifest', 'application/manifest+json']
+    ['app.webmanifest', 'application/manifest+json'],
+    ['worker.mjs', 'text/javascript; charset=utf-8'],
+    ['lib.cjs', 'text/javascript; charset=utf-8']
   ])('serves %s as %s', async (name, type) => {
     const { root, mw } = await setup();
     await writeFile(path.join(root, 'zukan-dist/_zukan', name), '');
