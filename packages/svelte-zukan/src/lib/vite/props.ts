@@ -66,6 +66,16 @@ function jsdocOf(node: Node) {
   return text ? jsdoc.parseInline(resolveLinks(text), { async: false }) : null;
 }
 
+function regexesOf(value: unknown, out: Node[] = []): Node[] {
+  if (Array.isArray(value)) for (const v of value) regexesOf(v, out);
+  else if (value && typeof value === 'object' && typeof (value as Node).type === 'string') {
+    const node = value as Node;
+    if (node.type === 'Literal' && node.regex) out.push(node);
+    else for (const [k, v] of Object.entries(node)) if (!k.endsWith('Comments')) regexesOf(v, out);
+  }
+  return out;
+}
+
 function scopeOf(file: string, lf: string, body: Node[], pkg = false): Scope {
   const imports = new Map<string, { from: string; name: string }>();
   const reexports = new Map<string, { from: string; name: string }>();
@@ -93,14 +103,21 @@ function scopeOf(file: string, lf: string, body: Node[], pkg = false): Scope {
         else if (s.type === 'ImportNamespaceSpecifier') imports.set(s.local.name as string, { from, name: '*' });
     } else if (n.type === 'ExportAllDeclaration' && !n.exported) stars.push(from);
   }
+  // a string keeps its spaces; a `//` comment would swallow what follows once the lines are joined
+  const collapse = (s: string) =>
+    s.replace(/(['"`])(?:\\[\s\S]|(?!\1)[^\\])*\1|(?:\s|\/\/.*|\/\*[\s\S]*?\*\/)+/g, (m, quote) => (quote ? m : ' '));
   return {
     file,
-    // a string keeps its spaces; a `//` comment would swallow what follows once the lines are joined
-    text: (n) =>
-      lf
-        .slice(n.start, n.end)
-        .replace(/(['"`])(?:\\[\s\S]|(?!\1)[^\\])*\1|(?:\s|\/\/.*|\/\*[\s\S]*?\*\/)+/g, (m, quote) => (quote ? m : ' '))
-        .trim(),
+    // a regex literal is kept as the parser found it: a `//`, `/*` or quote in it starts neither a comment nor a string
+    text: (n) => {
+      let out = '';
+      let at = n.start;
+      for (const r of regexesOf(n).sort((a, b) => a.start - b.start)) {
+        out += collapse(lf.slice(at, r.start)) + lf.slice(r.start, r.end);
+        at = r.end;
+      }
+      return (out + collapse(lf.slice(at, n.end))).trim();
+    },
     declarations: body.map((n) =>
       (n.type === 'ExportNamedDeclaration' || n.type === 'ExportDefaultDeclaration') && n.declaration
         ? (n.declaration as Node)
@@ -137,7 +154,7 @@ function literalKeys(type: Node | undefined): string[] | null {
 
 const isFile = (file: string) => existsSync(file) && statSync(file).isFile();
 
-const isRelative = (spec: string) => spec.startsWith('./') || spec.startsWith('../');
+const isRelative = (spec: string) => /^\.\.?(\/|$)/.test(spec);
 
 /** `./props.mjs` is declared by `./props.mts` or `./props.d.mts`, as TypeScript resolves it */
 function declarationsOf(file: string): string[] {
@@ -207,8 +224,12 @@ function entryOf(dir: string, sub: string): string[] {
 }
 
 /** the files `import … from './types'` may point to */
-const candidatesOf = (from: string, spec: string) =>
-  isRelative(spec) ? filesOf(resolve(dirname(from), spec)) : packageCandidates(from, spec);
+function candidatesOf(from: string, spec: string) {
+  if (!isRelative(spec)) return packageCandidates(from, spec);
+  const base = resolve(dirname(from), spec);
+  // `.`, `..` and `./dir/` name a folder only, as in TypeScript: never the `dir.ts` next to it
+  return /(^|\/)\.\.?$|\/$/.test(spec) ? [`${base}/index.ts`, `${base}/index.d.ts`].map(normalizePath) : filesOf(base);
+}
 
 /** a `.ts` file parses as the module script of a component, which allows its exports */
 function readScope(file: string, pkg: boolean): Scope | null {

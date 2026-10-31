@@ -296,6 +296,13 @@ describe('metadata modules', () => {
     expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/A.zukan.md`);
   });
 
+  it('renders an .md that starts with a byte order mark', async () => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/A.zukan.md'), '\uFEFF# A\r\n\r\ntext');
+    const { p } = boot(root);
+    expect(p.load.call({ addWatchFile: vi.fn() }, meta('app/A'))).toContain('<h1>A</h1>');
+  });
+
   it('reads the props of the component next to the file without making it an import of the metadata', async () => {
     const { tmp, root } = await makeApp();
     const { p } = boot(root);

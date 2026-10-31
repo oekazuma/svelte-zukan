@@ -31,6 +31,7 @@ zukan({
 - All paths are relative to Vite's root, and can point outside `src`, such as `.zukan/`
 - Invalid values (a `suffix` that does not match the rule, an unknown `locale` or `theme`, a file or directory that does not exist, an empty `groups` key or an empty list of directories) cause an error when the config is loaded
 - If a `groups` key consists only of digits, JavaScript orders it numerically instead of in declaration order. Include a non-digit character in group names
+- Symbolic links to directories inside a scanned directory are not followed. To include a linked directory, point a `groups` entry at the link itself
 
 ## UI language
 

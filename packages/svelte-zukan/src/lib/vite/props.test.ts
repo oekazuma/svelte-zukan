@@ -190,6 +190,21 @@ describe('extractProps', () => {
     ]);
   });
 
+  it('keeps a regex literal as written', () => {
+    const found = extractProps(
+      ts(String.raw`  let { p = /https?:\/\//, q = 'x', r = /\/*/, s = /'*/, t = 4 / 2 // half
+  }: { p?: RegExp; q?: string; r?: RegExp; s?: RegExp; t?: number } = $props();`),
+      'R.svelte'
+    );
+    expect(found?.props.map((p) => [p.name, p.default])).toEqual([
+      ['p', String.raw`/https?:\/\//`],
+      ['q', "'x'"],
+      ['r', String.raw`/\/*/`],
+      ['s', "/'*/"],
+      ['t', '4 / 2']
+    ]);
+  });
+
   it('merges the declarations of an interface declared twice', () => {
     const found = extractProps(
       ts(`  interface Props { a: string }
@@ -428,6 +443,25 @@ export default Section;
     expect(found.files.sort()).toEqual(
       ['types.ts', 'types.d.ts', 'types/index.ts', 'types/index.d.ts'].map((f) => `${tmp}/lib/${f}`).sort()
     );
+  });
+
+  it("follows '.' and '..' to the index of the folder, not a file next to it", () => {
+    write('lib/tabs.ts', 'export type TabProps = { value: number };\n');
+    const index = write('lib/tabs/index.ts', 'export type TabProps = {\n  /** the value */\n  value: string;\n};\n');
+    const parent = write('lib/index.ts', 'export type Base = { id?: number };\n');
+    const file = write(
+      'lib/tabs/Tab.svelte',
+      ts(
+        "  import type { TabProps } from '.';\n  import type { Base } from '..';\n  let { value, id }: TabProps & Base = $props();"
+      )
+    );
+    const found = read(file)!;
+    expect(found.props.map((p) => [p.name, p.type, p.required, p.description])).toEqual([
+      ['value', 'string', true, 'the value'],
+      ['id', 'number', false, null]
+    ]);
+    expect(found.typeName).toBeNull();
+    expect(found.files.sort()).toEqual([index, parent].sort());
   });
 
   it('types the destructured props of a package type, and only those', () => {
