@@ -80,6 +80,11 @@ describe('extractTokens', () => {
     }
   });
 
+  it('names an @theme inline variable of another namespace that the class reads', async () => {
+    const { token } = await load('@import "tailwindcss";\n@theme inline { --container-card: 20rem; }');
+    expect(token('width', 'w-card')).toEqual({ class: 'w-card', cssVariable: '--container-card', value: '20rem' });
+  });
+
   it('resolves a theme variable with an escaped dot', async () => {
     const { result, token } = await load('@import "tailwindcss";\n@theme { --spacing-2\\.5: 10px; }');
     expect(token('padding', 'p-2.5')).toEqual({ class: 'p-2.5', cssVariable: '--spacing-2.5', value: '10px' });
