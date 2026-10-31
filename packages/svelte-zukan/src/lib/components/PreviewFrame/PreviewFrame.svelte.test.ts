@@ -681,6 +681,44 @@ describe('PreviewFrame resizing', () => {
     expect(runs()).toBe(4);
   });
 
+  it('checks again after a theme switch or a width change, keeping the options picked', async () => {
+    const source = 'window.runs = 0; window.axe = { run: async () => (window.runs++, { violations: [] }) };';
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    screen.container.style.width = '1000px';
+    await expect.element(screen.getByRole('spinbutton', { name: 'Width in pixels' })).toHaveValue(1000 - 14);
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    const runs = () => (frame.contentWindow as Window & { runs?: number }).runs;
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.poll(runs).toBe(1);
+    await screen.getByRole('radio', { name: 'Deuteranopia' }).click();
+    await new Promise((r) => setTimeout(r, 600));
+    expect(runs()).toBe(1);
+    await screen.rerender({ theme: 'dark' });
+    await expect.poll(runs).toBe(2);
+    await screen.getByRole('button', { name: 'Mobile (375px)', exact: true }).click();
+    await expect.poll(runs).toBe(3);
+    await new Promise((r) => setTimeout(r, 600));
+    expect(runs()).toBe(3);
+    await expect.element(screen.getByRole('radio', { name: 'Deuteranopia' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('checks a theme switch once the preview has finished its transitions', async () => {
+    const source = `window.colors = []; window.axe = { run: async () => (window.colors.push(
+      getComputedStyle(document.querySelector('p')).color), { violations: [] }) };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    frame.contentDocument!.body.innerHTML =
+      '<div data-zukan-preview><p style="color: light-dark(#000, #fff); transition: color 1s linear">a</p></div>';
+    const colors = () => (frame.contentWindow as Window & { colors?: string[] }).colors;
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.poll(() => colors()?.length).toBe(1);
+    await screen.rerender({ theme: 'dark' });
+    await expect.poll(() => colors()?.length, { timeout: 3000 }).toBe(2);
+    expect(colors()![1]).toBe('rgb(255, 255, 255)');
+  });
+
   it('waits for a check still running when the panel is closed and opened again', async () => {
     // axe-core rejects a run while another one is running in the same page
     const source = `let busy = false; window.axe = { run: async () => {

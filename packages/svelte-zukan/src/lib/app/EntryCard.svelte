@@ -23,6 +23,8 @@
   const scale = $derived(fit?.scale ?? (width ? width / LAYOUT_WIDTH : 1));
   /** the background behind the example, such as the page's own body color; the card and the page's edges take it */
   let paint = $state<string>();
+  // a whole grapheme, so an emoji sequence or a flag is not cut in half
+  const initial = $derived([...new Intl.Segmenter().segment(entry.name)][0]?.segment);
   const hue = $derived([...entry.name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 11));
 
   /** the first paragraph of the .md, as text */
@@ -134,10 +136,10 @@
           }}
         ></iframe>
       {:else}
-        <span class="mark" style:--hue={hue}>{entry.name[0]}</span>
+        <span class="mark" style:--hue={hue}>{initial}</span>
       {/if}
     {:catch}
-      <span class="mark" style:--hue={hue}>{entry.name[0]}</span>
+      <span class="mark" style:--hue={hue}>{initial}</span>
     {/await}
   </div>
   <div class="text">

@@ -196,6 +196,12 @@ describe('WebMCP tools', () => {
       expect(body(result)).toBe('The check could not run: Failed to render: boom');
     });
 
+    it('reports a preview that never finished rendering instead of checking an empty page', async () => {
+      const result = await check('<div data-zukan-preview></div>');
+      expect(result.isError).toBe(true);
+      expect(body(result)).toMatch(/did not finish rendering/);
+    }, 20_000);
+
     it('reports a preview that failed to load instead of checking its error message', async () => {
       const result = await check('<div data-zukan-preview><p data-zukan-error>Failed to load: boom</p></div>');
       expect(result.isError).toBe(true);

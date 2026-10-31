@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick, type Component, type Snippet } from 'svelte';
+  import { flushSync, onMount, tick, type Component, type Snippet } from 'svelte';
   import { readTheme, writeTheme, type Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry, TailwindListItem } from '../types.js';
   import Detail from './Detail.svelte';
@@ -62,6 +62,9 @@
   const initial = remembered() ?? location.hash;
   let hash = $state(initial);
   remember(initial);
+
+  /** the route came from Back or Forward, whose scroll position the browser restores */
+  let restored = $state(false);
 
   // `fixedTheme` comes from the config, so its initial value is all there is
   // svelte-ignore state_referenced_locally
@@ -145,17 +148,19 @@
       shortcuts?.showModal();
       return;
     }
-    if (e.key === 't') {
+    // Shift or Caps Lock gives an upper-case key
+    const key = e.key.toLowerCase();
+    if (key === 't') {
       e.preventDefault();
       toggleTheme();
       return;
     }
-    if (e.key === 'f' && detail) {
+    if (key === 'f' && detail) {
       e.preventDefault();
       detail.toggleExpanded();
       return;
     }
-    const to = e.key === 'j' ? next : e.key === 'k' ? previous : undefined;
+    const to = key === 'j' ? next : key === 'k' ? previous : undefined;
     if (!to) return;
     e.preventDefault();
     location.hash = formatHash('detail', to.path);
@@ -171,11 +176,10 @@
   function filterTailwind(query: string) {
     if (route.view !== 'tailwind') return;
     hash = formatTailwindHash(route.source ?? undefined, route.category ?? undefined, query);
-    // the entry now holds a catalog route; a route remembered for an ignored hash would win on reload
-    const state = typeof history.state === 'object' && history.state ? { ...history.state } : {};
-    delete state[KEY];
+    // remembered, as a route an ignored hash left would win on reload, and Back onto the entry is told by it
+    const state = typeof history.state === 'object' && history.state ? history.state : {};
     try {
-      history.replaceState(state, '', hash);
+      history.replaceState({ ...state, [KEY]: hash }, '', hash);
     } catch {
       // Safari throws past about 100 calls in 10 seconds; the page shows the filter already, only the URL lags
     }
@@ -192,6 +196,7 @@
       return;
     }
     hash = traversal ?? location.hash;
+    restored = traversal !== null;
     if (traversal === null) remember(hash);
     theme = fixedTheme ?? themeOf(route) ?? theme;
     // the browser keeps the scroll position on a new hash, where the previous page's position means nothing, and
@@ -202,10 +207,23 @@
     )
       tick().then(() => scrollTo(0, 0));
   }
+
+  // the browser restores the scroll position of Back and Forward right after popstate, before hashchange: the entry's
+  // page must be there by then, or a position past the end of the page it leaves is cut short
+  function onpopstate() {
+    if (remembered() === null) return;
+    onhashchange();
+    flushSync();
+  }
 </script>
 
 <!-- the entry's listener stops ⌘K before this one; this one is for an App mounted without the entry -->
-<svelte:window {onhashchange} onkeydowncapture={(e) => searchKey(e) && e.stopImmediatePropagation()} {onkeydown} />
+<svelte:window
+  {onhashchange}
+  {onpopstate}
+  onkeydowncapture={(e) => searchKey(e) && e.stopImmediatePropagation()}
+  {onkeydown}
+/>
 
 <svelte:head>
   <title
@@ -271,6 +289,7 @@
             {entry}
             section={route.view === 'detail' ? route.section : null}
             width={route.view === 'detail' ? route.width : undefined}
+            {restored}
             {previous}
             {next}
             {theme}

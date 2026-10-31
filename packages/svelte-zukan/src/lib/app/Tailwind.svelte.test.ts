@@ -439,7 +439,25 @@ describe('the Tailwind CSS page', () => {
     await expect.element(filter).toHaveValue('old');
     await filter.fill('brand');
     expect(location.hash).toBe('#/tailwind?q=brand');
-    expect(history.state?.zukanHash).toBeUndefined();
+    expect(history.state?.zukanHash).toBe('#/tailwind?q=brand');
+  });
+
+  it('Back onto a filtered page shows the filter at the position it was left', async () => {
+    const screen = await render(App, { props: props('#/tailwind?source=app') });
+    const filter = screen.getByRole('searchbox', { name: 'Filter tokens' });
+    await filter.fill('brand');
+    document.body.style.minHeight = '5000px';
+    try {
+      window.scrollTo(0, 1000);
+      await setHash('#/');
+      await expect.poll(() => window.scrollY).toBe(0);
+      history.back();
+      await expect.element(filter).toHaveValue('brand');
+      await new Promise((r) => setTimeout(r, 300));
+      expect(window.scrollY).toBe(1000);
+    } finally {
+      document.body.style.minHeight = '';
+    }
   });
 
   it('filters when the browser refuses to replace the URL', async () => {

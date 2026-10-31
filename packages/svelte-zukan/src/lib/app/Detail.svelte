@@ -13,6 +13,7 @@
     entry,
     section = null,
     width,
+    restored = false,
     previous,
     next,
     theme,
@@ -22,6 +23,8 @@
     entry: Entry;
     section?: string | null;
     width?: number | null;
+    /** the route came from Back or Forward, whose scroll position the browser restores */
+    restored?: boolean;
     previous?: Entry;
     next?: Entry;
     theme: Theme;
@@ -157,6 +160,20 @@
     if (title !== null) showRoute(title, node);
     return { update: (next: string | null) => next !== null && showRoute(next, node) };
   }
+
+  /**
+   * A section that names no heading (renamed since the link was made) opens the page at the top, as one without a
+   * section does; the hashchange handler leaves a page with a section to `reveal`, which then never runs
+   */
+  function top(_: HTMLElement, unmatched: string | null) {
+    const apply = (next: string | null) => {
+      if (next === null) return;
+      unpin();
+      if (!restored) scrollTo(0, 0);
+    };
+    apply(unmatched);
+    return { update: apply };
+  }
 </script>
 
 <!-- what the reader does to scroll, in a preview too, which forwards these to its iframe; a scroll event alone would
@@ -194,7 +211,12 @@
 {#await entry.meta() then { default: meta }}
   {@const hasProps = !!(meta.props?.length || meta.propsType)}
   {@const toc = meta.sections.length + (hasProps ? 1 : 0) > 1}
-  <div class="page">
+  <div
+    class="page"
+    use:top={section === null || (section === PROPS && hasProps) || meta.sections.some((s) => s.title === section)
+      ? null
+      : section}
+  >
     <div class={['layout', { toc }]}>
       <div class="content">
         {#if meta.doc}

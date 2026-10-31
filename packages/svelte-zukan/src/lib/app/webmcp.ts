@@ -169,8 +169,10 @@ export function buildTools(opts: {
           });
           const doc = frame.contentDocument!;
           // the preview mounts the component after the page's load event
-          for (let i = 0; i < 50 && !doc.querySelector('[data-zukan-ready], [data-zukan-error]'); i++)
-            await new Promise((r) => setTimeout(r, 100));
+          const settled = () => doc.querySelector('[data-zukan-ready], [data-zukan-error]');
+          for (let i = 0; i < 100 && !settled(); i++) await new Promise((r) => setTimeout(r, 100));
+          if (!settled())
+            return text('The preview did not finish rendering within 10 seconds, so it was not checked.', true);
           return text(await runAxe(doc, axe));
         } catch (e) {
           return text(`The check could not run: ${messageOf(e)}`, true);
