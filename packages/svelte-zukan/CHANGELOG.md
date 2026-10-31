@@ -1,5 +1,17 @@
 # svelte-zukan
 
+## 0.16.4
+
+### Patch Changes
+
+- 42f9efd: fix: name each preview toolbar after its section, name the accessibility check's close button after the check, and make the sidebar's group titles headings, so screen readers can tell them apart and navigate to them.
+- 8932ab2: fix: on the dev server, a compile or import error in a catalog file (or in a file only catalog files import) shows in its preview instead of Vite's error overlay on the app's tabs, which stayed after the fix.
+- 6133229: fix: keep a props default that is a regex literal containing `//` or `/*` as written.
+  fix: follow a props type imported from `'.'` or `'..'` to that folder's `index.ts` / `index.d.ts`.
+  fix: render a `.zukan.md` that starts with a byte order mark, and give it to `catalog.json` without the mark.
+- 32ce93d: fix: order Tailwind CSS tokens whose value is a `calc()` with `+` or `-` (such as shadcn's radii) among the defaults, and stop showing a theme variable of another namespace for a token whose class does not read it.
+- 764ec7d: fix: leave the expanded preview when the URL goes to another section of the same component, let Escape leave the expanded preview from a checkbox inside the preview, and run the WebMCP `check_accessibility` check with the chosen theme's `prefers-color-scheme`.
+
 ## 0.16.3
 
 ### Patch Changes
