@@ -80,9 +80,20 @@ describe('extractTokens', () => {
     }
   });
 
+  it('gives no variable for a value that only an @theme inline variable of another namespace shares', async () => {
+    const { token } = await load('@import "tailwindcss";\n@theme inline { --radius-2: 2px; --radius-px: 1px; }');
+    expect(token('border-width', 'border-2')?.cssVariable).toBeNull();
+    expect(token('padding', 'p-px')?.cssVariable).toBeNull();
+    expect(token('width', 'w-px')?.cssVariable).toBeNull();
+    expect(token('border-radius', 'rounded-2')?.cssVariable).toBe('--radius-2');
+  });
+
   it('names an @theme inline variable of another namespace that the class reads', async () => {
-    const { token } = await load('@import "tailwindcss";\n@theme inline { --container-card: 20rem; }');
+    const { token } = await load(
+      '@import "tailwindcss";\n@theme inline { --container-card: 20rem; --border-width-thick: 3px; }'
+    );
     expect(token('width', 'w-card')).toEqual({ class: 'w-card', cssVariable: '--container-card', value: '20rem' });
+    expect(token('border-width', 'border-thick')?.cssVariable).toBe('--border-width-thick');
   });
 
   it('resolves a theme variable with an escaped dot', async () => {

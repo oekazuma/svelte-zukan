@@ -180,6 +180,8 @@ export const CATEGORIES: readonly {
   kind: Kind;
   /** the theme namespace of the class's own variable, `<namespace>-<suffix>` */
   namespace?: string;
+  /** the other theme namespaces the utility reads, in Tailwind's order */
+  alsoReads?: string[];
 }[] = [
   {
     id: 'background-color',
@@ -187,19 +189,45 @@ export const CATEGORIES: readonly {
     stem: 'bg',
     property: 'background-color',
     kind: 'color',
-    namespace: 'color'
+    namespace: 'color',
+    alsoReads: ['background-color']
   },
-  { id: 'text-color', title: 'Text Color', stem: 'text', property: 'color', kind: 'text-color', namespace: 'color' },
+  {
+    id: 'text-color',
+    title: 'Text Color',
+    stem: 'text',
+    property: 'color',
+    kind: 'text-color',
+    namespace: 'color',
+    alsoReads: ['text-color']
+  },
   {
     id: 'border-color',
     title: 'Border Color',
     stem: 'border',
     property: 'border-color',
     kind: 'border-color',
-    namespace: 'color'
+    namespace: 'color',
+    alsoReads: ['border-color']
   },
-  { id: 'padding', title: 'Padding', stem: 'p', property: 'padding', kind: 'padding', namespace: 'spacing' },
-  { id: 'margin', title: 'Margin', stem: 'm', property: 'margin', kind: 'margin', namespace: 'spacing' },
+  {
+    id: 'padding',
+    title: 'Padding',
+    stem: 'p',
+    property: 'padding',
+    kind: 'padding',
+    namespace: 'spacing',
+    alsoReads: ['padding']
+  },
+  {
+    id: 'margin',
+    title: 'Margin',
+    stem: 'm',
+    property: 'margin',
+    kind: 'margin',
+    namespace: 'spacing',
+    alsoReads: ['margin']
+  },
   { id: 'font-size', title: 'Font Size', stem: 'text', property: 'font-size', kind: 'text', namespace: 'text' },
   {
     id: 'font-weight',
@@ -224,7 +252,8 @@ export const CATEGORIES: readonly {
     stem: 'leading',
     property: 'line-height',
     kind: 'text',
-    namespace: 'leading'
+    namespace: 'leading',
+    alsoReads: ['spacing']
   },
   {
     id: 'drop-shadow',
@@ -242,9 +271,32 @@ export const CATEGORIES: readonly {
     kind: 'box',
     namespace: 'radius'
   },
-  { id: 'border-width', title: 'Border Width', stem: 'border', property: 'border-width', kind: 'border' },
-  { id: 'width', title: 'Width', stem: 'w', property: 'width', kind: 'width', namespace: 'spacing' },
-  { id: 'height', title: 'Height', stem: 'h', property: 'height', kind: 'height', namespace: 'spacing' },
+  {
+    id: 'border-width',
+    title: 'Border Width',
+    stem: 'border',
+    property: 'border-width',
+    kind: 'border',
+    alsoReads: ['border-width']
+  },
+  {
+    id: 'width',
+    title: 'Width',
+    stem: 'w',
+    property: 'width',
+    kind: 'width',
+    namespace: 'spacing',
+    alsoReads: ['width', 'container']
+  },
+  {
+    id: 'height',
+    title: 'Height',
+    stem: 'h',
+    property: 'height',
+    kind: 'height',
+    namespace: 'spacing',
+    alsoReads: ['height']
+  },
   {
     id: 'box-shadow',
     title: 'Box Shadow',
@@ -253,9 +305,9 @@ export const CATEGORIES: readonly {
     kind: 'box',
     namespace: 'shadow'
   },
-  { id: 'opacity', title: 'Opacity', stem: 'opacity', property: 'opacity', kind: 'box' },
+  { id: 'opacity', title: 'Opacity', stem: 'opacity', property: 'opacity', kind: 'box', alsoReads: ['opacity'] },
   { id: 'breakpoints', title: 'Breakpoints', stem: 'breakpoint', property: '', kind: 'value' },
-  { id: 'z-index', title: 'Z-index', stem: 'z', property: 'z-index', kind: 'value' },
+  { id: 'z-index', title: 'Z-index', stem: 'z', property: 'z-index', kind: 'value', alsoReads: ['z-index'] },
   { id: 'spacing', title: 'Spacing', stem: 'p', property: 'padding', kind: 'width' }
 ];
 
@@ -345,27 +397,24 @@ export function extractTokens(
     if (rule) declarations.set(name, rule.declarations);
   });
 
-  const token = (name: string, stem: string, own: string | null, value: string, shown = value): TailwindToken => {
+  const token = (name: string, own: string | null, others: string[], value: string, shown = value): TailwindToken => {
     const variable = soleVar(value);
     let cssVariable: string | null = variable && Object.hasOwn(variables, variable) ? variable : null;
     // an `@theme inline` token puts its value into the class, so the class reads the variable it aliases
     // (`--color-primary: var(--color-blue-500)` gives `bg-primary` the value `var(--color-blue-500)`): name its own
-    const suffix = name.slice(stem.length + 1);
     if (variable && own && variable !== own && Object.hasOwn(variables, own)) cssVariable = own;
     // another namespace can hold the same value under the same suffix (`--text-xs` and `--spacing-xs`)
     if (!cssVariable && own && variables[own] === value) cssVariable = own;
-    // only an inline variable can be the source of a literal value; a plain one would be read through `var()`, so a
-    // match there is a coincidence (`border-2` is `2px` like `--radius-2`)
-    if (!cssVariable && suffix) {
-      cssVariable = [...inline].find((key) => variables[key] === value && key.endsWith(`-${suffix}`)) ?? null;
-    }
+    // only an inline variable of a namespace the utility reads can be the source of a literal value; elsewhere an equal
+    // value is a coincidence (`border-2` is `2px` like `--radius-2`)
+    cssVariable ??= others.find((key) => inline.has(key) && variables[key] === value) ?? null;
     // `drop-shadow-none` sets `--tw-drop-shadow` to nothing, which a blank cell would not explain
     return { class: classPrefix + name, cssVariable, value: resolveValue(shown, values) || 'none' };
   };
 
   const themeIndex = new Map(Object.keys(variables).map((key, i) => [key, i]));
   const byCategory = new Map<TailwindCategoryId, TailwindToken[]>();
-  for (const { id, stem, property, namespace, kind } of stems) {
+  for (const { id, stem, property, namespace, alsoReads = [], kind } of stems) {
     const tokens: Ordered[] = [];
     for (const name of names) {
       if (!matches(name, stem)) continue;
@@ -375,7 +424,8 @@ export function extractTokens(
       if (value === undefined) continue;
       const suffix = name.slice(stem.length + 1);
       const own = namespace && suffix ? `${variablePrefix}${namespace}-${suffix}` : null;
-      const t = token(name, stem, own, value, shown);
+      const others = suffix ? alsoReads.map((ns) => `${variablePrefix}${ns}-${suffix}`) : [];
+      const t = token(name, own, others, value, shown);
       // `getClassList()` sorts names alphabetically, so `text-2xl` precedes `text-xs`. The theme lists a scale in its own
       // order. A variable that does not end in the class suffix (`p-1` reads `--spacing`) says nothing about the position.
       const key = t.cssVariable?.endsWith(`-${suffix}`) ? t.cssVariable : (own ?? '');
