@@ -120,7 +120,14 @@
   $effect(() => {
     void [theme, width];
     if (first) return void (first = false);
-    const timer = setTimeout(() => check(true), 300);
+    const timer = setTimeout(async () => {
+      // a color transition in the preview would be checked halfway; an endless or paused animation never finishes
+      const running = doc
+        .getAnimations()
+        .filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().endTime !== Infinity);
+      await Promise.allSettled(running.map((a) => a.finished));
+      check(true);
+    }, 300);
     return () => clearTimeout(timer);
   });
 

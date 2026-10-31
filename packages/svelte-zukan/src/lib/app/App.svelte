@@ -63,6 +63,9 @@
   let hash = $state(initial);
   remember(initial);
 
+  /** the route came from Back or Forward, whose scroll position the browser restores */
+  let restored = $state(false);
+
   // `fixedTheme` comes from the config, so its initial value is all there is
   // svelte-ignore state_referenced_locally
   let theme = $state<Theme>(
@@ -173,11 +176,10 @@
   function filterTailwind(query: string) {
     if (route.view !== 'tailwind') return;
     hash = formatTailwindHash(route.source ?? undefined, route.category ?? undefined, query);
-    // the entry now holds a catalog route; a route remembered for an ignored hash would win on reload
-    const state = typeof history.state === 'object' && history.state ? { ...history.state } : {};
-    delete state[KEY];
+    // remembered, as a route an ignored hash left would win on reload, and Back onto the entry is told by it
+    const state = typeof history.state === 'object' && history.state ? history.state : {};
     try {
-      history.replaceState(state, '', hash);
+      history.replaceState({ ...state, [KEY]: hash }, '', hash);
     } catch {
       // Safari throws past about 100 calls in 10 seconds; the page shows the filter already, only the URL lags
     }
@@ -194,6 +196,7 @@
       return;
     }
     hash = traversal ?? location.hash;
+    restored = traversal !== null;
     if (traversal === null) remember(hash);
     theme = fixedTheme ?? themeOf(route) ?? theme;
     // the browser keeps the scroll position on a new hash, where the previous page's position means nothing, and
@@ -286,6 +289,7 @@
             {entry}
             section={route.view === 'detail' ? route.section : null}
             width={route.view === 'detail' ? route.width : undefined}
+            {restored}
             {previous}
             {next}
             {theme}

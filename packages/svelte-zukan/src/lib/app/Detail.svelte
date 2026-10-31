@@ -13,6 +13,7 @@
     entry,
     section = null,
     width,
+    restored = false,
     previous,
     next,
     theme,
@@ -22,6 +23,8 @@
     entry: Entry;
     section?: string | null;
     width?: number | null;
+    /** the route came from Back or Forward, whose scroll position the browser restores */
+    restored?: boolean;
     previous?: Entry;
     next?: Entry;
     theme: Theme;
@@ -163,8 +166,13 @@
    * section does; the hashchange handler leaves a page with a section to `reveal`, which then never runs
    */
   function top(_: HTMLElement, unmatched: string | null) {
-    if (unmatched !== null) scrollTo(0, 0);
-    return { update: (next: string | null) => next !== null && scrollTo(0, 0) };
+    const apply = (next: string | null) => {
+      if (next === null) return;
+      unpin();
+      if (!restored) scrollTo(0, 0);
+    };
+    apply(unmatched);
+    return { update: apply };
   }
 </script>
 

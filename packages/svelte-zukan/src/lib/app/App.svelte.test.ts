@@ -789,9 +789,11 @@ describe('App', () => {
 
   it('a name starting with an emoji shows the whole emoji as its initial', async () => {
     const { props } = setup('');
-    props.catalog[0].name = '\u{1F389}Party';
+    props.catalog[0].name = '\u{1F9D1}\u200D\u{1F4BB}Dev';
     const screen = await render(App, { props });
-    await expect.poll(() => screen.container.querySelector('.thumb .mark')?.textContent).toBe('\u{1F389}');
+    await expect
+      .poll(() => screen.container.querySelector('.thumb .mark')?.textContent)
+      .toBe('\u{1F9D1}\u200D\u{1F4BB}');
   });
 
   it('uses the Japanese dictionary', async () => {
@@ -1196,6 +1198,47 @@ describe('App', () => {
       await expect.poll(() => window.scrollY).toBe(0);
     } finally {
       document.body.style.minHeight = '';
+    }
+  });
+
+  it('Back onto a section that names no heading keeps the position the browser restores', async () => {
+    const { props } = setup('');
+    // a module import resolves after the browser has restored the position
+    props.catalog[0].meta = () => new Promise((r) => setTimeout(r, 50)).then(twoSections);
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: 'Components' })).toBeInTheDocument();
+    document.body.style.minHeight = '5000px';
+    try {
+      await setHash('#/ui/Card?section=Nope');
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      window.scrollTo(0, 1000);
+      await setHash('#/');
+      await expect.poll(() => window.scrollY).toBe(0);
+      history.back();
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(window.scrollY).toBe(1000);
+    } finally {
+      document.body.style.minHeight = '';
+    }
+  });
+
+  it('a section that names no heading releases the one the URL named before', async () => {
+    const { props } = setup('#/ui/Card?section=Two');
+    props.catalog[0].meta = twoSections;
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+    await setHash('#/ui/Card?section=Nope');
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const grow = document.createElement('div');
+      grow.style.height = '2000px';
+      document.querySelector('.content')!.prepend(grow);
+      await new Promise((r) => setTimeout(r, 300));
+      expect(spy).not.toHaveBeenCalled();
+      grow.remove();
+    } finally {
+      spy.mockRestore();
     }
   });
 
