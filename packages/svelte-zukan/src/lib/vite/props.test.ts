@@ -106,6 +106,42 @@ describe('extractProps', () => {
     expect(found?.typeName).toBeNull();
   });
 
+  it('reads a generic type alias and interface with the type arguments in place of their parameters', () => {
+    const alias = extractProps(
+      ts(`  type WithRef<T> = T & { ref?: HTMLElement | null };
+  let { ref, label }: WithRef<{ label: string }> = $props();`),
+      'G.svelte'
+    );
+    expect(alias?.typeName).toBeNull();
+    expect(alias?.props.map((p) => [p.name, p.type])).toEqual([
+      ['label', 'string'],
+      ['ref', 'HTMLElement | null']
+    ]);
+    const iface = extractProps(
+      ts(`  interface Base<V> { value?: V; pick?: <V>(v: V) => V }
+  interface ListProps<T, K = keyof T> extends Base<T | null> { items: T[]; key?: K; map?: Record<string, T> }
+  let { items, key, map, value, pick }: ListProps<string> = $props();`),
+      'H.svelte'
+    );
+    expect(iface?.typeName).toBeNull();
+    expect(iface?.props.map((p) => [p.name, p.type])).toEqual([
+      ['items', 'string[]'],
+      ['key', 'keyof string'],
+      ['map', 'Record<string, string>'],
+      ['value', 'string | null'],
+      ['pick', '<V>(v: V) => V']
+    ]);
+    const union = extractProps(
+      ts(`  interface ListProps<T> { items: T[]; map?: Record<string, T> }
+  let { items, map }: ListProps<'a' | 'b'> = $props();`),
+      'I.svelte'
+    );
+    expect(union?.props.map((p) => [p.name, p.type])).toEqual([
+      ['items', "('a' | 'b')[]"],
+      ['map', "Record<string, 'a' | 'b'>"]
+    ]);
+  });
+
   it("lists a name declared twice once: the interface's own member, or the first side of an intersection", () => {
     const narrowed = extractProps(
       ts(`  interface Base { /** any look */ variant?: string; id: string }
@@ -515,6 +551,36 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
     ]);
     // a package does not change while the dev server runs
     expect(found.files).toEqual([]);
+  });
+
+  it('reads a generic helper type over a package type, with its default', () => {
+    write('node_modules/ui/package.json', JSON.stringify({ exports: { './elements': { types: './elements.d.ts' } } }));
+    write(
+      'node_modules/ui/elements.d.ts',
+      `export interface HTMLButtonAttributes {
+  children?: import('svelte').Snippet;
+  disabled?: boolean | undefined | null;
+}
+`
+    );
+    write(
+      'lib/utils.ts',
+      'export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & { ref?: U | null };\n'
+    );
+    const file = component(
+      "  import type { HTMLButtonAttributes } from 'ui/elements';\n  import type { WithElementRef } from './utils';\n  let { ref = $bindable(null), disabled, children }: WithElementRef<HTMLButtonAttributes, HTMLButtonElement> = $props();"
+    );
+    const found = read(file)!;
+    expect(found.typeName).toBe('HTMLButtonAttributes');
+    expect(found.props.map((p) => [p.name, p.type])).toEqual([
+      ['ref', 'HTMLButtonElement | null'],
+      ['children', 'Snippet'],
+      ['disabled', 'boolean | undefined | null']
+    ]);
+    const defaulted = component(
+      "  import type { HTMLButtonAttributes } from 'ui/elements';\n  import type { WithElementRef } from './utils';\n  let { ref }: WithElementRef<HTMLButtonAttributes> = $props();"
+    );
+    expect(read(defaulted)!.props.map((p) => [p.name, p.type])).toEqual([['ref', 'HTMLElement | null']]);
   });
 
   it('reads a workspace package afresh and reports its files, like the project files', () => {

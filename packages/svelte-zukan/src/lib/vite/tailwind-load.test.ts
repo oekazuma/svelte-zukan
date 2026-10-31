@@ -277,6 +277,49 @@ describe('loadTailwind', () => {
     expect(watch).toContain(normalizePath(join(src, 'plugin.ts')));
   });
 
+  it.each(['@plugin', '@config'])('watches a %s file that throws', async (rule) => {
+    const { root, src } = fixture(`@import "tailwindcss";\n${rule} "../plugins/brand.js";`);
+    write(join(root, 'plugins/brand.js'), 'throw new Error("boom");\n');
+    const { sources, watch } = await loadTailwind(root, [src]);
+    expect(sources[0].error).toContain('boom');
+    expect(watch).toContain(normalizePath(join(root, 'plugins/brand.js')));
+  });
+
+  it('watches an extensionless relative @plugin that throws as the file Tailwind loads', async () => {
+    const { root, src } = fixture('@import "tailwindcss";\n@plugin "./plugin";');
+    write(join(src, 'plugin.ts'), 'throw new Error("boom");\n');
+    const { sources, watch } = await loadTailwind(root, [src]);
+    expect(sources[0].error).toContain('boom');
+    expect(watch).toContain(normalizePath(join(src, 'plugin.ts')));
+    expect(watch).not.toContain(normalizePath(join(src, 'plugin')));
+  });
+
+  it('watches an aliased @plugin whose function throws', async () => {
+    const { root, src } = fixture('@import "tailwindcss";\n@plugin "$lib/plugin.mjs";');
+    const file = join(root, 'elsewhere/plugin.mjs');
+    write(file, 'export default function () {\n  throw new Error("boom");\n}\n');
+    const js: Resolver = async (id) => (id === '$lib/plugin.mjs' ? file : undefined);
+    const { sources, watch } = await loadTailwind(root, [src], { js });
+    expect(sources[0].error).toContain('boom');
+    expect(watch).toContain(normalizePath(file));
+  });
+
+  it('keeps the theme values of a @config file, but not those Tailwind registers by itself', async () => {
+    const { root, src } = fixture('@import "tailwindcss";\n@config "../tailwind.config.mjs";');
+    write(
+      join(root, 'tailwind.config.mjs'),
+      "export default { theme: { extend: { screens: { tablet: '700px' }, borderRadius: { DEFAULT: '0.5rem' } } } };\n"
+    );
+    const [s] = (await loadTailwind(root, [src])).sources;
+    expect(s.error).toBeUndefined();
+    expect(s.variables['--breakpoint-tablet']).toBe('700px');
+    expect(s.variables['--radius']).toBe('0.5rem');
+    expect(s.variables).not.toHaveProperty('--blur');
+    expect(s.categories.find((c) => c.id === 'breakpoints')?.tokens.map((t) => t.cssVariable)).toContain(
+      '--breakpoint-tablet'
+    );
+  });
+
   it('reports a 4.0.x Tailwind as too old', async () => {
     const { root, src } = fixture('@import "tailwindcss";', { tailwind: false });
     const nm = join(root, 'node_modules');

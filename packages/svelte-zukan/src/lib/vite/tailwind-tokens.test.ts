@@ -15,7 +15,10 @@ const base = import.meta.dirname;
 async function load(css: string) {
   const system = (await __unstable__loadDesignSystem(css, { base })) as unknown as DesignSystemLike;
   const built = (await compile(css, { base, onDependency() {} })).build([]);
-  const result = extractTokens(system, rootVariables(built));
+  const defaults = (await __unstable__loadDesignSystem('@import "tailwindcss";', {
+    base
+  })) as unknown as DesignSystemLike;
+  const result = extractTokens(system, rootVariables(built), defaults.theme);
   const token = (id: TailwindCategoryId, cls: string | null) =>
     result.categories.find((c) => c.id === id)?.tokens.find((t) => t.class === cls);
   const classesOf = (cls: string) =>
@@ -52,6 +55,13 @@ describe('extractTokens', () => {
         '@theme inline { --color-primary: var(--primary); }'
     );
     expect(token('background-color', 'bg-primary')?.value).toBe('oklch(0.6 0.2 30)');
+  });
+
+  it('resolves @theme inline tokens through a :where(:root) rule', async () => {
+    const { token } = await load(
+      '@import "tailwindcss";\n:where(:root) { --brand: #ff3e00; }\n@theme inline { --color-primary: var(--brand); }'
+    );
+    expect(token('background-color', 'bg-primary')?.value).toBe('#ff3e00');
   });
 
   it('reads the same tokens with important', async () => {
@@ -147,6 +157,34 @@ describe('extractTokens', () => {
     const drop = token('drop-shadow', 'drop-shadow-md');
     expect(drop?.value).toContain('drop-shadow(0 3px 3px');
     expect(drop?.value).not.toContain('var(--tw-blur');
+  });
+
+  it('names the drop shadow variable that the shadow helper reads', async () => {
+    const { token } = await load('@import "tailwindcss";');
+    expect(token('drop-shadow', 'drop-shadow-md')?.cssVariable).toBe('--drop-shadow-md');
+    const escaped = await load('@import "tailwindcss";\n@theme { --drop-shadow-1\\.5: 0 0 1px red; }');
+    expect(escaped.token('drop-shadow', 'drop-shadow-1.5')?.cssVariable).toBe('--drop-shadow-1.5');
+    // Tailwind copies a box shadow's value into `--tw-shadow` instead of reading `--shadow-lg`
+    expect(token('box-shadow', 'shadow-lg')?.cssVariable).toBeNull();
+  });
+
+  it("leaves out Tailwind's reference-only compatibility variables, but keeps the project's @theme reference", async () => {
+    const { result, token } = await load(
+      '@import "tailwindcss";\n@theme reference { --color-mine: red; }\n:root { --radius: 0.625rem; }\n' +
+        '@theme inline { --radius-lg: var(--radius); }'
+    );
+    for (const key of ['--radius', '--blur', '--shadow', '--shadow-inner', '--drop-shadow', '--max-width-prose']) {
+      expect(result.variables).not.toHaveProperty(key);
+    }
+    expect(result.variables['--color-mine']).toBe('red');
+    expect(token('border-radius', 'rounded-lg')).toEqual({
+      class: 'rounded-lg',
+      cssVariable: '--radius-lg',
+      value: '0.625rem'
+    });
+    const shadows = result.categories.find((c) => c.id === 'box-shadow')?.tokens.map((t) => t.class);
+    const plain = (await load('@import "tailwindcss";')).result.categories.find((c) => c.id === 'box-shadow');
+    expect(shadows).toEqual(plain?.tokens.map((t) => t.class));
   });
 
   it('shows fallbacks instead of unknown variables', async () => {
@@ -321,6 +359,7 @@ describe('extractTokens', () => {
     expect(result.categories.find((c) => c.id === 'spacing')?.tokens[0].cssVariable).toBe('--tw-spacing');
     expect(result.classes).toContain('tw:bg-red-500');
     expect(result.classes).not.toContain('bg-red-500');
+    expect(result.variables).not.toHaveProperty('--tw-blur');
   });
 });
 
@@ -409,6 +448,18 @@ describe('rootVariables', () => {
         ':root{--a:1}\n@layer base{:root,:host{--b:2}}\n@media (x){:root{--c:3}}\n.dark{--d:4}\nhtml{--e:5}'
       )
     ).toEqual({ '--a': '1', '--b': '2', '--e': '5' });
+  });
+
+  it('reads variables from a root selector inside :where() or :is()', () => {
+    expect(rootVariables(':where(:root),[data-theme=light] { --color-base-100: oklch(100% 0 0); }')).toEqual({
+      '--color-base-100': 'oklch(100% 0 0)'
+    });
+    expect(rootVariables(':is(html){--a:1}\n:root:not([data-theme]){--b:2}\n:where(.x){--c:3}')).toEqual({
+      '--a': '1'
+    });
+    expect(rootVariables(':is(.dark, :where(:root), .light) .card{--a:1}\n:where(:root, .x){--b:2}')).toEqual({
+      '--b': '2'
+    });
   });
 
   it('reads variables from a rule whose selector list includes the root', () => {

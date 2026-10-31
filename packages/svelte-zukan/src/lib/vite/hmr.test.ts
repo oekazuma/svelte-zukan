@@ -334,9 +334,35 @@ describe('modules shared with the app', () => {
     }
   );
 
+  it(
+    'a stylesheet only a catalog file imports reloads the catalog once its error is fixed',
+    { timeout: 25_000 },
+    async () => {
+      await server.close();
+      link('svelte');
+      const inner = join(tmp, 'app/src/Inner.css');
+      writeFileSync(inner, "@import './missing.css';\np { color: red }\n");
+      writeFileSync(
+        join(tmp, 'app/src/A.zukan.svelte'),
+        '<script>\n  import \'./Inner.css\';\n</script>\n<Section title="A"><p>a</p></Section>'
+      );
+      await start({}, { plugins: [svelte()] });
+      await list();
+      await server.environments.client.transformRequest('/src/A.zukan.svelte');
+      send.mockClear();
+      expect(await get('/src/Inner.css')).toMatch(/^throw new Error\(/);
+      expect(errors()).toHaveLength(0);
+      writeFileSync(inner, 'p { color: blue }\n');
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(fullReloads()).toBe(0);
+    }
+  );
+
   it.each([
     ['helper.js', "import { n } from './helper.js';", '{n}', 'export const n = 1;\n'],
-    ['Inner.svelte', "import Inner from './Inner.svelte';", '<Inner />', '<p>inner</p>\n']
+    ['Inner.svelte', "import Inner from './Inner.svelte';", '<Inner />', '<p>inner</p>\n'],
+    ['Inner.css', "import './Inner.css';", 'a', 'p { color: red }\n']
   ])(
     'creating the missing import %s of a catalog file reloads only the catalog',
     { timeout: 25_000 },
@@ -359,6 +385,33 @@ describe('modules shared with the app', () => {
       // fixed: the failure is no longer tracked, so its next change goes through the app's own HMR
       send.mockClear();
       expect(await get('/src/A.zukan.svelte')).not.toMatch(/^throw /);
+    }
+  );
+
+  it.each([
+    ['Inner.css', 'p { color: red }\n'],
+    ['helper.js', 'export const n = 1;\n'],
+    ['Inner.svelte', '<p>inner</p>\n']
+  ])(
+    'creating the missing import %s of a catalog file and of an app entry recovers the app too',
+    { timeout: 25_000 },
+    async (name, source) => {
+      await server.close();
+      link('svelte');
+      writeFileSync(
+        join(tmp, 'app/src/A.zukan.svelte'),
+        `<script>\n  import './${name}';\n</script>\n<Section title="A"><p>a</p></Section>`
+      );
+      writeFileSync(join(tmp, 'app/src/main.js'), `import './${name}';\n`);
+      await start({}, { plugins: [svelte()] });
+      await list();
+      await server.environments.client.transformRequest('/src/main.js').catch(() => {});
+      send.mockClear();
+      expect(await get('/src/A.zukan.svelte')).toMatch(/^throw new Error\(/);
+      writeFileSync(join(tmp, 'app/src', name), source);
+      await waitForReload();
+      // the entry accepts no update: Vite reloads the app, as it does without the catalog
+      await expect.poll(fullReloads, { timeout: 10_000 }).toBeGreaterThan(0);
     }
   );
 
