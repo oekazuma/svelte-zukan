@@ -203,6 +203,12 @@ describe('extractProps', () => {
       ['s', "/'*/"],
       ['t', '4 / 2']
     ]);
+    // a regex in a template literal must not leave the template's backtick unmatched
+    const template = extractProps(
+      ts("  let { u = `https://a.b/${/x/.test('x')}` }: { u?: string } = $props();"),
+      'T.svelte'
+    );
+    expect(template?.props[0].default).toBe("`https://a.b/${/x/.test('x')}`");
   });
 
   it('merges the declarations of an interface declared twice', () => {

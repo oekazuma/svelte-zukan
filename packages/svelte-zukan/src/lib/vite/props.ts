@@ -66,12 +66,13 @@ function jsdocOf(node: Node) {
   return text ? jsdoc.parseInline(resolveLinks(text), { async: false }) : null;
 }
 
-function regexesOf(value: unknown, out: Node[] = []): Node[] {
-  if (Array.isArray(value)) for (const v of value) regexesOf(v, out);
+/** the regex literals and template literals in a node, which `collapse` would misread when split around one another */
+function verbatimOf(value: unknown, out: Node[] = []): Node[] {
+  if (Array.isArray(value)) for (const v of value) verbatimOf(v, out);
   else if (value && typeof value === 'object' && typeof (value as Node).type === 'string') {
     const node = value as Node;
-    if (node.type === 'Literal' && node.regex) out.push(node);
-    else for (const [k, v] of Object.entries(node)) if (!k.endsWith('Comments')) regexesOf(v, out);
+    if ((node.type === 'Literal' && node.regex) || node.type === 'TemplateLiteral') out.push(node);
+    else for (const [k, v] of Object.entries(node)) if (!k.endsWith('Comments')) verbatimOf(v, out);
   }
   return out;
 }
@@ -108,11 +109,12 @@ function scopeOf(file: string, lf: string, body: Node[], pkg = false): Scope {
     s.replace(/(['"`])(?:\\[\s\S]|(?!\1)[^\\])*\1|(?:\s|\/\/.*|\/\*[\s\S]*?\*\/)+/g, (m, quote) => (quote ? m : ' '));
   return {
     file,
-    // a regex literal is kept as the parser found it: a `//`, `/*` or quote in it starts neither a comment nor a string
+    // a regex or template literal is kept as the parser found it: a `//`, `/*` or quote in it starts neither a comment
+    // nor a string
     text: (n) => {
       let out = '';
       let at = n.start;
-      for (const r of regexesOf(n).sort((a, b) => a.start - b.start)) {
+      for (const r of verbatimOf(n).sort((a, b) => a.start - b.start)) {
         out += collapse(lf.slice(at, r.start)) + lf.slice(r.start, r.end);
         at = r.end;
       }
