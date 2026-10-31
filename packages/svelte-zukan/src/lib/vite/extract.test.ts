@@ -365,6 +365,32 @@ describe('extractSections', () => {
     ]);
   });
 
+  it('does not take a name the template declares for the script variable it shadows', () => {
+    const source = `<script>
+  import List from './List.svelte';
+  let option = $state('a');
+  const options = ['a', 'b'];
+</script>
+
+<Section title="radio"><input type="radio" bind:group={option} value="a" /></Section>
+<Section title="each">{#each options as option, i (option)}{@const label = option + i}<p>{label}</p>{/each}</Section>
+<Section title="fallback">{#each options as option}{option}{:else}{option}{/each}</Section>
+<Section title="await">{#await Promise.resolve(options) then option}{option}{:catch option}{option}{/await}</Section>
+<Section title="snippet">{#snippet row(option, { i = options.length })}{option}{i}{/snippet}{@render row(1, {})}</Section>
+<Section title="arrow"><button onclick={(option) => console.log(option)}>x</button></Section>
+<Section title="let"><List let:option>{option}</List><List let:item={option}>{option}</List></Section>`;
+    const code = Object.fromEntries(extractSections(source, FILE).map((s) => [s.title, s.code]));
+    expect(code.radio).toContain("let option = $state('a');");
+    expect(code.each).not.toContain('let option');
+    // `{:else}` does not see the item
+    expect(code.fallback).toContain("let option = $state('a');");
+    expect(code.await).not.toContain('let option');
+    expect(code.snippet).not.toContain('let option');
+    expect(code.snippet).toContain("const options = ['a', 'b'];");
+    expect(code.arrow).not.toContain('<script>');
+    expect(code.let).not.toContain('let option');
+  });
+
   it('keeps generics on the script tag', () => {
     const source = `<script lang="ts" generics="T">
   let items: T[] = [];
