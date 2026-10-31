@@ -3,7 +3,7 @@
   import EntryList from '../components/EntryList.svelte';
   import type { Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
-  import { formatTailwindHash } from './hash.js';
+  import { followsHere, formatTailwindHash } from './hash.js';
   import type { Messages } from './i18n.js';
   import { modifier } from './SearchDialog.svelte';
 
@@ -197,7 +197,8 @@
     <nav
       aria-label={t.nav}
       onclick={(e) => {
-        if ((e.target as Element).closest('a[href]')) open = false;
+        const link = (e.target as Element).closest('a[href]');
+        if (link instanceof HTMLAnchorElement && followsHere(e, link)) open = false;
       }}
       onkeydown={moveInTree}
     >

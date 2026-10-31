@@ -1,5 +1,6 @@
 <script lang="ts">
   import { mount, unmount, type ComponentProps } from 'svelte';
+  import { forwardEvents } from '../components/PreviewFrame/forward.js';
   import type { Theme } from '../components/PreviewFrame/storage.js';
   import type { TailwindListItem, TailwindSource } from '../types.js';
   import { CATEGORIES } from '../vite/tailwind-tokens.js';
@@ -116,8 +117,10 @@
     return (iframe: HTMLIFrameElement) => {
       let app: ReturnType<typeof mount> | undefined;
       let observer: ResizeObserver | undefined;
+      let stopForwarding: (() => void) | undefined;
       const onload = () => {
         const doc = iframe.contentDocument!;
+        stopForwarding = forwardEvents(doc.defaultView!, iframe);
         const style = doc.createElement('style');
         style.textContent = css;
         doc.head.append(style);
@@ -134,6 +137,7 @@
       return () => {
         iframe.removeEventListener('load', onload);
         observer?.disconnect();
+        stopForwarding?.();
         if (app) unmount(app);
       };
     };

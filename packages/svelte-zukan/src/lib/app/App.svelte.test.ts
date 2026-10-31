@@ -1223,6 +1223,110 @@ describe('App', () => {
     }
   });
 
+  /** a page past the first screen, whose module resolves after the browser has restored the position */
+  const longPage =
+    (sections: { title: string; code: string }[] = []) =>
+    () =>
+      new Promise((r) => setTimeout(r, 50)).then(() => ({
+        default: { sections, doc: '<div style="height:5000px">long description</div>' }
+      }));
+
+  it('Back onto a detail page returns to its position past the first screen', async () => {
+    const { props } = setup('#/ui/Card');
+    props.catalog[0].meta = longPage();
+    const screen = await render(App, { props });
+    await expect.element(screen.getByText('long description')).toBeInTheDocument();
+    window.scrollTo(0, 1000);
+    expect(window.scrollY).toBe(1000);
+    await setHash('#/');
+    await expect.poll(() => window.scrollY).toBe(0);
+    history.back();
+    await expect.element(screen.getByText('long description')).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(window.scrollY).toBe(1000);
+  });
+
+  it('Back onto a section URL keeps the position the browser restores', async () => {
+    const { props } = setup('');
+    props.catalog[0].meta = longPage([
+      { title: 'One', code: '<p>1</p>' },
+      { title: 'Two', code: '<p>2</p>' }
+    ]);
+    document.body.style.minHeight = '20000px';
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const screen = await render(App, { props });
+      await setHash('#/ui/Card?section=Two');
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      await expect.poll(() => window.scrollY).toBeGreaterThan(4000);
+      dispatchEvent(new WheelEvent('wheel'));
+      window.scrollTo(0, 1000);
+      await setHash('#/');
+      await expect.poll(() => window.scrollY).toBe(0);
+      spy.mockClear();
+      history.back();
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      // the previews grow as they load, which brings a pinned heading back to the top
+      document.querySelector<HTMLElement>('.example')!.style.minHeight = '1200px';
+      await new Promise((r) => setTimeout(r, 300));
+      expect(window.scrollY).toBe(1000);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+      document.body.style.minHeight = '';
+    }
+  });
+
+  it.each(['metaKey', 'ctrlKey', 'shiftKey', 'altKey'])(
+    'a %s click on a link to the section shown leaves this page where it is',
+    async (modifier) => {
+      const { props } = setup('#/ui/Card?section=Two');
+      props.catalog[0].meta = twoSections;
+      document.body.style.minHeight = '5000px';
+      // after the page's own listener: the link opens nowhere, and the page still sees a click nobody prevented
+      const prevent = (e: Event) => e.preventDefault();
+      try {
+        const screen = await render(App, { props });
+        const two = screen.getByRole('heading', { level: 2, name: 'Two' });
+        await expect.element(two).toBeInTheDocument();
+        dispatchEvent(new WheelEvent('wheel'));
+        window.scrollTo(0, 0);
+        addEventListener('click', prevent);
+        two
+          .getByRole('link')
+          .element()
+          .dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, [modifier]: true }));
+        await new Promise((r) => setTimeout(r, 100));
+        expect(window.scrollY).toBe(0);
+      } finally {
+        removeEventListener('click', prevent);
+        document.body.style.minHeight = '';
+      }
+    }
+  );
+
+  it('a link to the section shown that opens in another tab leaves this page where it is', async () => {
+    const { props } = setup('#/ui/Card?section=Two');
+    props.catalog[0].meta = twoSections;
+    document.body.style.minHeight = '5000px';
+    const prevent = (e: Event) => e.preventDefault();
+    try {
+      const screen = await render(App, { props });
+      const link = screen.getByRole('heading', { level: 2, name: 'Two' }).getByRole('link');
+      await expect.element(link).toBeInTheDocument();
+      dispatchEvent(new WheelEvent('wheel'));
+      window.scrollTo(0, 0);
+      addEventListener('click', prevent);
+      link.element().setAttribute('target', '_blank');
+      link.element().dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 100));
+      expect(window.scrollY).toBe(0);
+    } finally {
+      removeEventListener('click', prevent);
+      document.body.style.minHeight = '';
+    }
+  });
+
   it('a section that names no heading releases the one the URL named before', async () => {
     const { props } = setup('#/ui/Card?section=Two');
     props.catalog[0].meta = twoSections;
@@ -1403,6 +1507,27 @@ describe('App', () => {
     await screen.rerender({ catalog: [...props.catalog] });
     await expect.element(nav.getByRole('list', { name: 'ui' })).toBeInTheDocument();
     await expect.element(nav.getByRole('list', { name: 'examples' })).toHaveTextContent('Demo');
+  });
+
+  it('on a narrow screen the menu stays open when a link opens in another tab', async () => {
+    await page.viewport(400, 800);
+    const { props } = setup('#/ui/Card');
+    const screen = await render(App, { props });
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    await menu.click();
+    const prevent = (e: Event) => e.preventDefault();
+    addEventListener('click', prevent);
+    try {
+      screen
+        .getByRole('navigation', { name: 'Components' })
+        .getByRole('link', { name: 'Card' })
+        .element()
+        .dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
+      await tick();
+      expect(menu.element().getAttribute('aria-expanded')).toBe('true');
+    } finally {
+      removeEventListener('click', prevent);
+    }
   });
 
   it('on a narrow screen the menu closes when the logo link or Back navigates', async () => {
