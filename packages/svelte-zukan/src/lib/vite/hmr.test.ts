@@ -334,9 +334,35 @@ describe('modules shared with the app', () => {
     }
   );
 
+  it(
+    'a stylesheet only a catalog file imports reloads the catalog once its error is fixed',
+    { timeout: 25_000 },
+    async () => {
+      await server.close();
+      link('svelte');
+      const inner = join(tmp, 'app/src/Inner.css');
+      writeFileSync(inner, "@import './missing.css';\np { color: red }\n");
+      writeFileSync(
+        join(tmp, 'app/src/A.zukan.svelte'),
+        '<script>\n  import \'./Inner.css\';\n</script>\n<Section title="A"><p>a</p></Section>'
+      );
+      await start({}, { plugins: [svelte()] });
+      await list();
+      await server.environments.client.transformRequest('/src/A.zukan.svelte');
+      send.mockClear();
+      expect(await get('/src/Inner.css')).toMatch(/^throw new Error\(/);
+      expect(errors()).toHaveLength(0);
+      writeFileSync(inner, 'p { color: blue }\n');
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(fullReloads()).toBe(0);
+    }
+  );
+
   it.each([
     ['helper.js', "import { n } from './helper.js';", '{n}', 'export const n = 1;\n'],
-    ['Inner.svelte', "import Inner from './Inner.svelte';", '<Inner />', '<p>inner</p>\n']
+    ['Inner.svelte', "import Inner from './Inner.svelte';", '<Inner />', '<p>inner</p>\n'],
+    ['Inner.css', "import './Inner.css';", 'a', 'p { color: red }\n']
   ])(
     'creating the missing import %s of a catalog file reloads only the catalog',
     { timeout: 25_000 },

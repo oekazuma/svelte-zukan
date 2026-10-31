@@ -759,6 +759,13 @@ export function zukan(options: ZukanOptions = {}): Plugin {
             .then(read)
             .then((css) => isCandidate(css) && regenerate())
             .catch(() => {});
+        // a stylesheet only the catalog imports can be a failed file too
+        if (failed.delete(normalizePath(file)) || resolvedFailed.length) {
+          for (const mod of [...resolvedFailed, ...metas()])
+            moduleGraph.invalidateModule(mod, new Set(), timestamp, true);
+          this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
+          return appModules();
+        }
         // undefined, never []
         return;
       }
