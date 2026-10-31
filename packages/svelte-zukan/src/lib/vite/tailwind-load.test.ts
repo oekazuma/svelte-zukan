@@ -277,6 +277,14 @@ describe('loadTailwind', () => {
     expect(watch).toContain(normalizePath(join(src, 'plugin.ts')));
   });
 
+  it.each(['@plugin', '@config'])('watches a %s file that throws', async (rule) => {
+    const { root, src } = fixture(`@import "tailwindcss";\n${rule} "../plugins/brand.js";`);
+    write(join(root, 'plugins/brand.js'), 'throw new Error("boom");\n');
+    const { sources, watch } = await loadTailwind(root, [src]);
+    expect(sources[0].error).toContain('boom');
+    expect(watch).toContain(normalizePath(join(root, 'plugins/brand.js')));
+  });
+
   it('reports a 4.0.x Tailwind as too old', async () => {
     const { root, src } = fixture('@import "tailwindcss";', { tailwind: false });
     const nm = join(root, 'node_modules');

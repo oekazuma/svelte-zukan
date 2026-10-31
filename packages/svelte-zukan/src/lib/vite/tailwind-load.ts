@@ -329,7 +329,18 @@ async function loadEntry(
     onDependency(file);
     return { path: file, base: path.dirname(file), content: await readFile(file, 'utf8') };
   };
-  const load = (id: string, from: string) => loadModule(id, from, onDependency, resolvers.js);
+  const load = async (id: string, from: string) => {
+    try {
+      return await loadModule(id, from, onDependency, resolvers.js);
+    } catch (e) {
+      // `loadModule` reports a module's files only once it has loaded, so a plugin that throws would not be watched
+      const file =
+        (await resolvers.js?.(id, from).catch(() => undefined)) ||
+        (id.startsWith('.') || path.isAbsolute(id) ? path.resolve(from, id) : null);
+      if (file) onDependency(file);
+      throw e;
+    }
+  };
 
   const system = await loadDesignSystem(css, { base, loadStylesheet, loadModule: load });
   if (

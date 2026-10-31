@@ -92,14 +92,16 @@ export function scanCss(css: string): CssRule[] {
   return rules;
 }
 
+const unwrap = (selector: string) => /^:(?:where|is)\((.+)\)$/.exec(selector)?.[1].trim() ?? selector;
+
 /**
  * custom properties declared unconditionally on the root: by a rule whose selector list includes `:root`, `:host` or
- * `html`, at the top level or inside `@layer`
+ * `html`, alone or in `:where()` / `:is()` (daisyUI's `:where(:root)`), at the top level or inside `@layer`
  */
 export function rootVariables(css: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const rule of scanCss(css)) {
-    const selectors = rule.selector.split(',').map((s) => s.trim());
+    const selectors = rule.selector.split(',').map((s) => unwrap(s.trim()));
     if (!selectors.some((s) => s === ':root' || s === ':host' || s === 'html')) continue;
     if (!rule.atRules.every((a) => /^@layer(\s|$)/.test(a))) continue;
     for (const [property, value] of rule.declarations) if (property.startsWith('--')) out[unescape(property)] = value;
@@ -376,7 +378,12 @@ export function extractTokens(
   const classPrefix = prefix ? `${prefix}:` : '';
   const variablePrefix = prefix ? `--${prefix}-` : '--';
   const entries = [...system.theme.entries()];
-  const variables = Object.fromEntries(entries.map(([key, { value }]) => [key, collapse(value)]));
+  // Tailwind's compatibility variables (`--radius`, `--shadow`) are `@theme default inline reference`: never emitted,
+  // so a project's own `:root { --radius: … }` is what the page shows
+  const compat = (options: unknown) => typeof options === 'number' && (options & 6) === 6;
+  const variables = Object.fromEntries(
+    entries.flatMap(([key, { value, options }]) => (compat(options) ? [] : [[key, collapse(value)]]))
+  );
   // an `options` of another shape (the API is unstable) reads as not inline
   const inline = new Set(
     entries.flatMap(([key, { options }]) => (typeof options === 'number' && options & 1 ? [key] : []))
@@ -405,6 +412,14 @@ export function extractTokens(
     if (variable && own && variable !== own && Object.hasOwn(variables, own)) cssVariable = own;
     // another namespace can hold the same value under the same suffix (`--text-xs` and `--spacing-xs`)
     if (!cssVariable && own && variables[own] === value) cssVariable = own;
+    // a drop shadow's helper reads its variable (`drop-shadow(var(--drop-shadow-md))`), a box shadow's copies the value
+    if (
+      !cssVariable &&
+      own &&
+      Object.hasOwn(variables, own) &&
+      [')', ','].some((end) => shown.includes(`var(${own}${end}`))
+    )
+      cssVariable = own;
     // only an inline variable of a namespace the utility reads can be the source of a literal value; elsewhere an equal
     // value is a coincidence (`border-2` is `2px` like `--radius-2`)
     cssVariable ??= others.find((key) => inline.has(key) && variables[key] === value) ?? null;
@@ -412,7 +427,7 @@ export function extractTokens(
     return { class: classPrefix + name, cssVariable, value: resolveValue(shown, values) || 'none' };
   };
 
-  const themeIndex = new Map(Object.keys(variables).map((key, i) => [key, i]));
+  const themeIndex = new Map(entries.map(([key], i) => [key, i]));
   const byCategory = new Map<TailwindCategoryId, TailwindToken[]>();
   for (const { id, stem, property, namespace, alsoReads = [], kind } of stems) {
     const tokens: Ordered[] = [];
