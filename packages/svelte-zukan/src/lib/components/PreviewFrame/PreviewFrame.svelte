@@ -1,3 +1,13 @@
+<script module lang="ts">
+  /**
+   * The last height measured for each preview: a page that is shown again (Back) starts at it rather than at the
+   * minimum, so the position the browser restores is not cut short before the frames have loaded
+   */
+  // only read when a frame is created, so it needs no reactivity
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const heights = new Map<string, number>();
+</script>
+
 <script lang="ts">
   import { flushSync } from 'svelte';
   import type { Messages } from '../../app/i18n.js';
@@ -117,7 +127,8 @@
   let width = $state<number | null>(readWidth(src));
   // 0 until measured
   let stageWidth = $state(0);
-  let height = $state(MIN_HEIGHT);
+  // svelte-ignore state_referenced_locally
+  let height = $state(heights.get(src) ?? MIN_HEIGHT);
   let dragging = $state(false);
   let outlined = $state(false);
   let measuring = $state(false);
@@ -219,6 +230,8 @@
       requestAnimationFrame(() => {
         height = next;
         ready = true;
+        // an expanded frame takes the stage's height, not its own
+        if (!expanded) heights.set(src, next);
       });
     });
     observer.observe(doc.body);

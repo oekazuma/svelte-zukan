@@ -170,8 +170,11 @@
   function reveal(node: HTMLElement, title: string | null) {
     const apply = (next: string | null) => {
       if (next === null) return;
-      if (restored) active = next;
-      else showRoute(next, node);
+      if (!restored) return showRoute(next, node);
+      // a pin left by the previous route would bring its heading back as the previews grow
+      unpin();
+      if (expandedTitle !== next) expandedTitle = null;
+      active = next;
     };
     apply(title);
     return { update: apply };

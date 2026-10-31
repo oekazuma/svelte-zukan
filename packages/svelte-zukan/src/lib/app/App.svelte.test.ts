@@ -1277,6 +1277,42 @@ describe('App', () => {
     }
   });
 
+  it('Back onto another section of the page shown releases the heading the route left pinned', async () => {
+    const { props } = setup('');
+    props.catalog[0].meta = twoSections;
+    document.body.style.minHeight = '5000px';
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    try {
+      const screen = await render(App, { props });
+      await setHash('#/ui/Card?section=Two');
+      await setHash('#/ui/Card?section=One');
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'One' })).toBeInTheDocument();
+      history.back();
+      await expect.poll(() => location.hash).toBe('#/ui/Card?section=Two');
+      await tick();
+      spy.mockClear();
+      document.querySelector<HTMLElement>('.example')!.style.minHeight = '1200px';
+      await new Promise((r) => setTimeout(r, 300));
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+      document.body.style.minHeight = '';
+    }
+  });
+
+  it('Back onto another section of the page shown closes the expanded preview of a different one', async () => {
+    const { props } = setup('');
+    props.catalog[0].meta = twoSections;
+    const screen = await render(App, { props });
+    await setHash('#/ui/Card?section=Two');
+    await setHash('#/ui/Card?section=One');
+    await screen.getByRole('button', { name: 'Expand' }).first().click();
+    await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(1);
+    history.back();
+    await expect.poll(() => location.hash).toBe('#/ui/Card?section=Two');
+    await expect.poll(() => document.querySelectorAll('.preview.expanded').length).toBe(0);
+  });
+
   it.each(['metaKey', 'ctrlKey', 'shiftKey', 'altKey'])(
     'a %s click on a link to the section shown leaves this page where it is',
     async (modifier) => {
