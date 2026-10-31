@@ -1,11 +1,21 @@
+<script module lang="ts">
+  import type { Entry } from '../types.js';
+
+  // Back renders the page at once, before the browser restores its position, and a promise renders `then` only later,
+  // on a page cut to one screen. A `zukan:reload` reloads the whole page, which empties this
+  const loaded = new WeakMap<Entry['meta'], Awaited<ReturnType<Entry['meta']>>>();
+  function loadMeta(entry: Entry) {
+    return loaded.get(entry.meta) ?? entry.meta().then((m) => (loaded.set(entry.meta, m), m));
+  }
+</script>
+
 <script lang="ts">
   import { tick } from 'svelte';
   import Badge from '../components/Badge/Badge.svelte';
   import CodeBlock from '../components/CodeBlock/CodeBlock.svelte';
   import PreviewFrame from '../components/PreviewFrame/PreviewFrame.svelte';
   import type { Theme } from '../components/PreviewFrame/storage.js';
-  import type { Entry } from '../types.js';
-  import { formatHash, parseHash } from './hash.js';
+  import { followsHere, formatHash, parseHash } from './hash.js';
   import type { Messages } from './i18n.js';
   import { unionMembers } from './union.js';
 
@@ -147,7 +157,7 @@
 
   function onclick(e: MouseEvent) {
     const link = e.target instanceof Element ? e.target.closest('a') : null;
-    if (link) revealRoute(link.hash);
+    if (link && followsHere(e, link)) revealRoute(link.hash);
   }
 
   /** Vite's own endpoint, the one its error overlay uses; it is under the app's `base` like the catalog */
@@ -155,10 +165,16 @@
     fetch(`${location.pathname.replace(/__zukan\/.*$/, '')}__open-in-editor?file=${encodeURIComponent(file)}`);
   }
 
-  // the detail page is not remounted when only the section changes, so the action also runs on update
+  // the detail page is not remounted when only the section changes, so the action also runs on update. Back and
+  // Forward only mark the heading: the browser restores the position the reader left
   function reveal(node: HTMLElement, title: string | null) {
-    if (title !== null) showRoute(title, node);
-    return { update: (next: string | null) => next !== null && showRoute(next, node) };
+    const apply = (next: string | null) => {
+      if (next === null) return;
+      if (restored) active = next;
+      else showRoute(next, node);
+    };
+    apply(title);
+    return { update: apply };
   }
 
   /**
@@ -208,7 +224,7 @@
   </div>
 {/if}
 
-{#await entry.meta() then { default: meta }}
+{#await loadMeta(entry) then { default: meta }}
   {@const hasProps = !!(meta.props?.length || meta.propsType)}
   {@const toc = meta.sections.length + (hasProps ? 1 : 0) > 1}
   <div

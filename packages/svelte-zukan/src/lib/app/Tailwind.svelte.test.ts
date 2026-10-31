@@ -1,9 +1,10 @@
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import type { TailwindListItem, TailwindSource } from '../types.js';
 import App from './App.svelte';
+import { modifier } from './SearchDialog.svelte';
 
 const source: TailwindSource = {
   id: 'app',
@@ -473,6 +474,23 @@ describe('the Tailwind CSS page', () => {
     } finally {
       replaceState.mockRestore();
     }
+  });
+
+  it("passes the catalog's shortcuts on from a sample", async () => {
+    const screen = await render(App, { props: props('#/tailwind') });
+    const { doc } = await frame(screen.container);
+    const zukan = screen.container.querySelector('.zukan')!;
+    const theme = zukan.getAttribute('data-theme');
+    const shortcuts = screen.container.querySelector<HTMLDialogElement>('dialog.shortcuts')!;
+    doc.querySelector('button')!.focus();
+    await userEvent.keyboard('t');
+    expect(zukan.getAttribute('data-theme')).not.toBe(theme);
+    await userEvent.keyboard('?');
+    await expect.poll(() => shortcuts.open).toBe(true);
+    shortcuts.close();
+    doc.querySelector('button')!.focus();
+    await userEvent.keyboard(modifier === '⌘' ? '{Meta>}k{/Meta}' : '{Control>}k{/Control}');
+    await expect.element(screen.getByRole('combobox')).toBeVisible();
   });
 
   it('copies the class name', async () => {
