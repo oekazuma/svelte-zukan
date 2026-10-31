@@ -142,6 +142,70 @@ describe('extractProps', () => {
     ]);
   });
 
+  it('reads a generic type given itself as an argument, Omit and Pick of a type parameter, and parenthesizes', () => {
+    const typesOf = (s: string) => extractProps(ts(s), 'X.svelte')?.props.map((p) => [p.name, p.type]);
+    expect(
+      typesOf('  type And<A, B> = A & B;\n  let { x, y, z }: And<And<{ x: 1 }, { y: 2 }>, { z: 3 }> = $props();')
+    ).toEqual([
+      ['x', '1'],
+      ['y', '2'],
+      ['z', '3']
+    ]);
+    expect(typesOf('  type W<T> = T & { ref?: string };\n  let { x, ref }: W<W<{ x: 1 }>> = $props();')).toEqual([
+      ['x', '1'],
+      ['ref', 'string']
+    ]);
+    expect(typesOf('  type R<T> = T & R<T>;\n  let { x }: R<{ x: 1 }> = $props();')).toEqual([['x', '1']]);
+
+    const base = '  type Base = { a: string; b?: number };\n';
+    const without = extractProps(
+      ts(`${base}  type Without<T, K extends keyof T> = Omit<T, K>;\n  let { a, b }: Without<Base, 'a'> = $props();`),
+      'X.svelte'
+    );
+    expect(without?.typeName).toBeNull();
+    expect(without?.props.map((p) => [p.name, p.type])).toEqual([
+      ['b', 'number'],
+      ['a', null]
+    ]);
+    expect(
+      typesOf(
+        `${base}  type Without<T, K extends keyof T = 'a'> = Omit<T, K>;\n  let { a, b }: Without<Base> = $props();`
+      )
+    ).toEqual([
+      ['b', 'number'],
+      ['a', null]
+    ]);
+    expect(
+      typesOf(`${base}  type Only<T, K extends keyof T> = Pick<T, K>;\n  let { a, b }: Only<Base, 'a'> = $props();`)
+    ).toEqual([
+      ['a', 'string'],
+      ['b', null]
+    ]);
+    expect(
+      typesOf(
+        `${base}  interface Without<T, K extends keyof T> extends Omit<T, K> {}\n  let { a, b }: Without<Base, 'a'> = $props();`
+      )
+    ).toEqual([
+      ['b', 'number'],
+      ['a', null]
+    ]);
+
+    // invalid, but typed while editing
+    expect(typesOf('  type P<T = T> = { v?: T };\n  let { v }: P = $props();')).toEqual([['v', 'T']]);
+    expect(typesOf('  interface P<T = U, U = T> { v?: T }\n  let { v }: P = $props();')).toEqual([['v', 'U']]);
+
+    const check = '  type P<T> = { v?: T extends string ? 1 : 2 };\n';
+    expect(typesOf(`${check}  let { v }: P<() => void> = $props();`)).toEqual([
+      ['v', '(() => void) extends string ? 1 : 2']
+    ]);
+    expect(typesOf(`${check}  let { v }: P<number extends 1 ? 'a' : 'b'> = $props();`)).toEqual([
+      ['v', "(number extends 1 ? 'a' : 'b') extends string ? 1 : 2"]
+    ]);
+    expect(
+      typesOf(`  type P<T> = { v?: 1 extends T ? 1 : 2 };\n  let { v }: P<number extends 1 ? 'a' : 'b'> = $props();`)
+    ).toEqual([['v', "1 extends (number extends 1 ? 'a' : 'b') ? 1 : 2"]]);
+  });
+
   it("lists a name declared twice once: the interface's own member, or the first side of an intersection", () => {
     const narrowed = extractProps(
       ts(`  interface Base { /** any look */ variant?: string; id: string }
