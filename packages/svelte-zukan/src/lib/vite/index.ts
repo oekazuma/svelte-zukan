@@ -53,6 +53,8 @@ const installed = libDir.split('/').includes('node_modules');
 const CONTENT_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.cjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
@@ -91,6 +93,16 @@ const CONTENT_TYPES: Record<string, string> = {
   '.wasm': 'application/wasm',
   '.json': 'application/json',
   '.map': 'application/json'
+};
+
+/** a props type file may not exist yet: the component may import one that is about to be created */
+const realPath = (file: string): string => {
+  try {
+    return normalizePath(realpathSync(file));
+  } catch {
+    const dir = dirname(file);
+    return dir === file ? file : posix.join(realPath(dir), posix.basename(file));
+  }
 };
 
 /** Vite adds these to its own responses; the catalog's responses are the same pages */
@@ -161,13 +173,16 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     }
     const found = extractProps(readFileSync(component, 'utf-8'), component);
     servedProps.set(component, JSON.stringify(found));
-    for (const dep of found?.files ?? []) {
-      if (!propsDeps.has(dep)) propsDeps.set(dep, new Set());
-      propsDeps.get(dep)!.add(component);
+    // a file reached through a `node_modules` link: the watcher ignores node_modules and reports it by its real path
+    const deps = (found?.files ?? []).map((file) => (file.includes('/node_modules/') ? realPath(file) : file));
+    for (const dep of deps) {
+      const key = configuredPath(dep);
+      if (!propsDeps.has(key)) propsDeps.set(key, new Set());
+      propsDeps.get(key)!.add(component);
     }
     // not `addWatchFile`: like Tailwind's dependencies, the file would become an import of the meta module, and an
     // edit of it would end in `full-reload`; the root is watched already
-    const outside = (found?.files ?? []).filter((file) => !isInside(file, root));
+    const outside = deps.filter((file) => !isInside(file, root));
     if (outside.length) watcher?.add(outside);
     return found;
   };
@@ -188,7 +203,13 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   let listError: string | null = null;
   /** the files the dev server answered with a module that throws: Vite never analyzed them, so their HMR stops there */
   const failed = new Set<string>();
-  const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e)).replaceAll(root + '/', '');
+  /** a message for the dev server's catalog, with the paths relative to the root as catalog.json gives them */
+  const messageOf = (e: unknown) => {
+    let message = (e instanceof Error ? e.message : String(e)).replaceAll(root + '/', '');
+    for (const dir of scanned())
+      if (!isInside(dir, root)) message = message.replaceAll(dir + '/', normalizePath(relative(root, dir)) + '/');
+    return message;
+  };
   const scanned = () => groups.flatMap((g) => g.dirs);
   // the watcher reports a file of a dir reached through a symlink (a `groups` dir under a `node_modules` link) by its
   // real path, and Vite's watcher ignores node_modules
@@ -435,7 +456,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           let { source } = file;
           // a worker names the assets it loads from the app's base, where the catalog has none; next to it, they move
           // with it (a worker resolves a relative URL against its own script)
-          if (fileName.endsWith('.js') && !base.startsWith('.')) {
+          if (/\.[cm]?js$/.test(fileName) && !base.startsWith('.')) {
             let code = typeof source === 'string' ? source : new TextDecoder().decode(source);
             for (const other of moved) {
               const url = posix.relative(posix.dirname(fileName), other);

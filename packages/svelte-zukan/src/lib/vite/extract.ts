@@ -74,6 +74,12 @@ function namesFor(node: Node, key: string): string[] {
       return (node.params as Node[]).flatMap((p) => patternNames(p));
     case 'CatchClause':
       return patternNames(node.param as Node);
+    case 'ForStatement':
+    case 'ForInStatement':
+    case 'ForOfStatement': {
+      const head = (node.init ?? node.left) as Node | null;
+      return head?.type === 'VariableDeclaration' ? declaredNames(head) : [];
+    }
   }
   // `let:item` and `let:item={alias}` of an element or a component
   return ((node.attributes as Node[] | undefined) ?? []).flatMap((a) =>

@@ -263,8 +263,11 @@ function readScope(file: string, pkg: boolean): Scope | null {
  */
 const packageScopes = new Map<string, Scope | null>();
 
-/** what the type parameters of a declaration stand for: the arguments, read where they are written */
-type Bindings = Map<string, { node: Node; scope: Scope; depth: number; bindings: Bindings }>;
+/**
+ * what the type parameters of a declaration stand for: the arguments, read where they are written, with the types
+ * being read there (`seen`), so that `W<W<T>>` is not taken for `W` referring to itself
+ */
+type Bindings = Map<string, { node: Node; scope: Scope; depth: number; bindings: Bindings; seen?: Set<Node> }>;
 
 /** what `T` stands for, when `n` is a bare reference to a bound type parameter */
 const paramOf = (n: Node, bindings: Bindings) =>
@@ -293,21 +296,26 @@ const looseness: Record<string, number> = {
 /** `n` as written, with each bound type parameter replaced by its argument */
 function print(scope: Scope, n: Node, bindings: Bindings): string {
   const replaced: [Node, string][] = [];
-  const visit = (value: unknown, parent: Node, bindings: Bindings) => {
-    if (Array.isArray(value)) return value.forEach((v) => visit(v, parent, bindings));
+  const visit = (value: unknown, parent: Node, key: string, bindings: Bindings) => {
+    if (Array.isArray(value)) return value.forEach((v) => visit(v, parent, key, bindings));
     if (!value || typeof value !== 'object' || typeof (value as Node).type !== 'string') return;
     const node = value as Node;
     const bound = paramOf(node, bindings);
     if (bound) {
       const text = print(bound.scope, bound.node, bound.bindings);
-      const wrap = (looseness[bound.node.type] ?? 9) < (looseness[parent.type] ?? -1);
+      const loose = looseness[bound.node.type] ?? 9;
+      // `T extends …` takes no function or conditional type unparenthesized, `… extends T ?` no conditional type
+      const wrap =
+        loose < (looseness[parent.type] ?? -1) ||
+        (parent.type === 'TSConditionalType' &&
+          ((key === 'checkType' && loose === 0) || (key === 'extendsType' && bound.node.type === 'TSConditionalType')));
       return void replaced.push([node, wrap ? `(${text})` : text]);
     }
     const own = ownParams(node);
     if (own.length) bindings = new Map([...bindings].filter(([k]) => !own.includes(k)));
-    for (const [k, v] of Object.entries(node)) if (!k.endsWith('Comments')) visit(v, node, bindings);
+    for (const [k, v] of Object.entries(node)) if (!k.endsWith('Comments')) visit(v, node, k, bindings);
   };
-  if (bindings.size) visit(n, n, bindings);
+  if (bindings.size) visit(n, n, '', bindings);
   return scope.text(n, replaced);
 }
 
@@ -411,7 +419,7 @@ export function extractProps(
    * `depth` counts the files followed to reach `scope`; `seen`, the types being read, stops types that refer to
    * themselves, and only those: a type read again elsewhere (`Omit<A, 'x'> & A`) is read again
    */
-  const seen = new Set<Node>();
+  let seen = new Set<Node>();
   /** as written in the project: what a package type refers to inside its own files is behind the name already given */
   const name = (scope: Scope, type: Node, bindings: Bindings) => {
     if (!scope.package) typeNames.push(print(scope, type, bindings));
@@ -425,7 +433,13 @@ export function extractProps(
       for (const t of type.types as Node[]) collect(t, scope, depth, bindings);
     else if (type.type === 'TSTypeReference') {
       const param = paramOf(type, bindings);
-      if (param) return collect(param.node, param.scope, param.depth, param.bindings);
+      if (param) {
+        const outer = seen;
+        seen = param.seen ?? seen;
+        collect(param.node, param.scope, param.depth, param.bindings);
+        seen = outer;
+        return;
+      }
       const typeName = type.typeName as Node;
       const ref = typeName.type === 'Identifier' ? (typeName.name as string) : null;
       const args = ((type.typeArguments as Node | undefined)?.params as Node[] | undefined) ?? [];
@@ -451,7 +465,9 @@ export function extractProps(
         }
       }
       const keys =
-        (ref === 'Omit' || ref === 'Pick') && !from && !declared(scope, ref, false) ? literalKeys(second) : null;
+        (ref === 'Omit' || ref === 'Pick') && !from && !declared(scope, ref, false)
+          ? literalKeys(second && (paramOf(second, bindings)?.node ?? second))
+          : null;
       if (keys) {
         const start = members.length;
         const named = typeNames.length;
@@ -491,15 +507,17 @@ export function extractProps(
         const bound: Bindings = new Map();
         if (found.scope.package) return bound;
         const params = ((declaration.typeParameters as Node | undefined)?.params as Node[] | undefined) ?? [];
+        const outer = new Set(seen);
         params.forEach((p, i) => {
           const value = args[i]
-            ? (paramOf(args[i], bindings) ?? { node: args[i], scope, depth, bindings })
+            ? (paramOf(args[i], bindings) ?? { node: args[i], scope, depth, bindings, seen: outer })
             : p.default
               ? (paramOf(p.default as Node, bound) ?? {
                   node: p.default as Node,
                   scope: found.scope,
                   depth: found.depth,
-                  bindings: bound
+                  // a default sees only the parameters before it, as in TypeScript: `<T = T>` stays as written
+                  bindings: new Map(bound)
                 })
               : undefined;
           if (value) bound.set(p.name as string, value);
@@ -507,8 +525,9 @@ export function extractProps(
         return bound;
       };
       if (found.node.type === 'TSTypeAliasDeclaration') {
+        const bound = bind(found.node);
         seen.add(found.node);
-        collect(found.node.typeAnnotation as Node, found.scope, found.depth, bind(found.node));
+        collect(found.node.typeAnnotation as Node, found.scope, found.depth, bound);
         seen.delete(found.node);
       } else {
         // the declarations of an interface declared more than once merge, all of their own members before anything
