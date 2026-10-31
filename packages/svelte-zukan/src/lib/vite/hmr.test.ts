@@ -4,7 +4,7 @@ import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
-import { createServer, type InlineConfig, type Plugin, type ViteDevServer } from 'vite';
+import { createServer, normalizePath, type InlineConfig, type Plugin, type ViteDevServer } from 'vite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { zukan } from './index.js';
 import { findPackage } from './tailwind-load.js';
@@ -187,6 +187,39 @@ it('a component in a groups dir linked through node_modules updates its props', 
   expect(fullReloads()).toBe(0);
   expect(await meta('ui/B')).toContain('"name":"b"');
 });
+
+it(
+  'a props type file outside a groups dir linked through node_modules updates the props',
+  { timeout: 25_000 },
+  async () => {
+    await server.close();
+    await mkdir(join(tmp, 'ui/src/lib'), { recursive: true });
+    const types = join(tmp, 'ui/src/types.ts');
+    writeFileSync(types, 'export type Props = { a: number };');
+    writeFileSync(join(tmp, 'ui/src/lib/B.zukan.svelte'), '<Section title="B"><p>b</p></Section>');
+    writeFileSync(
+      join(tmp, 'ui/src/lib/B.svelte'),
+      '<script lang="ts">\n  import type { Props } from \'../types\';\n  let { a }: Props = $props();\n</script>\n<p>{a}</p>'
+    );
+    await mkdir(join(tmp, 'app/node_modules'), { recursive: true });
+    symlinkSync(join(tmp, 'ui'), join(tmp, 'app/node_modules/ui'), 'junction');
+    await start({ groups: { ui: 'node_modules/ui/src/lib' } });
+    expect(await meta('ui/B')).toContain('"name":"a"');
+    // chokidar registers an added path asynchronously, and a write before that is never reported
+    await expect
+      .poll(() =>
+        Object.entries(server.watcher.getWatched()).some(
+          ([dir, names]) => normalizePath(dir) === normalizePath(join(tmp, 'ui/src')) && names.includes('types.ts')
+        )
+      )
+      .toBe(true);
+    send.mockClear();
+    writeFileSync(types, 'export type Props = { a: number; b?: string };');
+    await waitForReload();
+    expect(fullReloads()).toBe(0);
+    expect(await meta('ui/B')).toContain('"name":"b"');
+  }
+);
 
 it(
   'changing the props of the component updates the metadata; other edits leave it alone',
