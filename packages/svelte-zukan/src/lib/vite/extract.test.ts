@@ -177,6 +177,68 @@ describe('extractSections', () => {
     expect(computed).toContain('const obj');
   });
 
+  it('does not take an imported name, import.meta, a qualified name, an enum member or a label for a variable', () => {
+    const source = `<script lang="ts">
+  import { format as fmt } from './format';
+  import * as NS from './ns';
+  const format = 'unrelated';
+  const meta = 'unrelated';
+  const Type = 'unrelated';
+  const A = 'unrelated';
+  const outer = 'unrelated';
+  const url = import.meta.url;
+  let t: NS.Type;
+  enum E { A }
+  function f() {
+    outer: for (;;) break outer;
+  }
+</script>
+
+<Section title="a"><p>{fmt(url)} {t} {E.A} {f()}</p></Section>`;
+    const [{ code }] = extractSections(source, FILE);
+    expect(code).toContain('import { format as fmt }');
+    expect(code).toContain('enum E { A }');
+    expect(code).toContain('break outer');
+    expect(code).not.toContain("'unrelated'");
+  });
+
+  it('keeps the lines of a template literal as written', () => {
+    const source = `<script>
+  const css = \`
+.a {
+    color: red;
+}
+  \`;
+  const html = \`<p>
+    \${css}
+</p>\`;
+</script>
+
+<Section title="a">
+    <div>
+      <p>{\`one
+  two\`}</p>
+    </div>
+    <Show {css} {html} />
+</Section>`;
+    expect(extractSections(source, FILE)[0].code).toBe(`<script>
+  const css = \`
+.a {
+    color: red;
+}
+  \`;
+  const html = \`<p>
+    \${css}
+</p>\`;
+</script>
+
+<div>
+  <p>{\`one
+  two\`}</p>
+</div>
+<Show {css} {html} />`);
+  });
+
   it('parses a catalog file with SCSS in <style>', () => {
     const source = `<script>
   import Button from './Button.svelte';
@@ -453,9 +515,17 @@ describe('extractSections', () => {
   });
 
   it('throws on nested Section', () => {
-    const nested = '<Section title="a">\n<Section title="b"><A /></Section>\n</Section>';
-    expect(() => extractSections(nested, FILE)).toThrow(/Button\.zukan\.svelte:2 .*import it under another name/);
-    const inIf = '<p></p>\n{#if true}\n<Section title="a"><A /></Section>\n{/if}';
-    expect(() => extractSections(inIf, FILE)).toThrow(/Button\.zukan\.svelte:3/);
+    const nested = '<Section title="a">\n<div><Section title="b"><A /></Section></div>\n</Section>';
+    expect(() => extractSections(nested, FILE)).toThrow(
+      /Button\.zukan\.svelte:2 <Section> must not be nested .*import it under another name/
+    );
+  });
+
+  it.each(['{#if true}', '{#key 1}', '{#each [1] as x}', '<div>'])('throws on a Section inside %s', (open) => {
+    const close = open === '<div>' ? '</div>' : `{/${open.slice(2).split(' ')[0]}}`;
+    const source = `<p></p>\n${open}\n<Section title="a"><A /></Section>\n${close}`;
+    expect(() => extractSections(source, FILE)).toThrow(
+      /Button\.zukan\.svelte:3 <Section> must be at the top level of the file .*import it under another name/
+    );
   });
 });

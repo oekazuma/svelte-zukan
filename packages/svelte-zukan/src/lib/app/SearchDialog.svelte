@@ -390,6 +390,8 @@
   .swatch {
     /* a color sample: forced colors mode would replace it with the system's */
     forced-color-adjust: none;
+    /* the base value, as in the light sample frame: a dark catalog would pick the dark side of `light-dark()` */
+    color-scheme: light;
     flex: none;
     align-self: center;
     width: 14px;

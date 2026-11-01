@@ -15,20 +15,21 @@ function walk(value: unknown, visit: (node: Node) => void) {
   }
 }
 
-function dedent(text: string) {
+/** `kept(i)`: line `i` begins inside a template literal, where its indentation is part of the string */
+function dedent(text: string, kept: (i: number) => boolean, indent: string) {
   const lines = text.split('\n');
   let prefix: string | undefined;
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    const indent = line.match(/^[ \t]*/)![0];
-    if (prefix === undefined) prefix = indent;
+  for (const [i, line] of lines.entries()) {
+    if (!line.trim() || kept(i)) continue;
+    const lead = line.match(/^[ \t]*/)![0];
+    if (prefix === undefined) prefix = lead;
     else {
-      let i = 0;
-      while (i < prefix.length && prefix[i] === indent[i]) i++;
-      prefix = prefix.slice(0, i);
+      let j = 0;
+      while (j < prefix.length && prefix[j] === lead[j]) j++;
+      prefix = prefix.slice(0, j);
     }
   }
-  return lines.map((line) => (line.trim() ? line.slice(prefix!.length) : '')).join('\n');
+  return lines.map((line, i) => (kept(i) ? line : line.trim() ? indent + line.slice(prefix!.length) : '')).join('\n');
 }
 
 /** the names a pattern declares: `x`, `{ a, b: [c] }`, `d = 1`, `...e` */
@@ -117,8 +118,17 @@ function identifiersOf(value: unknown, hidden: ReadonlySet<string> = new Set(), 
   else if (n.type === 'StyleDirective' && n.value === true) add(n.name as string);
   for (const [key, child] of Object.entries(n)) {
     if (key === 'metadata' || key === 'parent') continue;
-    // `obj.label` and `{ label: 1 }` name no variable
+    // `obj.label`, `{ label: 1 }`, `import { format as fmt }`, `import.meta`, `NS.Type`, `enum E { A }` and
+    // `outer: for (…) break outer` name no variable
     if (key === 'property' && n.type === 'MemberExpression' && !n.computed) continue;
+    if (
+      n.type === 'MetaProperty' ||
+      (key === 'imported' && n.type === 'ImportSpecifier') ||
+      (key === 'right' && n.type === 'TSQualifiedName') ||
+      (key === 'id' && n.type === 'TSEnumMember') ||
+      (key === 'label' && ['LabeledStatement', 'BreakStatement', 'ContinueStatement'].includes(n.type))
+    )
+      continue;
     if (
       key === 'key' &&
       ['Property', 'MethodDefinition', 'PropertyDefinition', 'TSPropertySignature', 'TSMethodSignature'].includes(
@@ -174,19 +184,31 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
   const name = sectionName(ast);
   const top = (ast.fragment.nodes as unknown as Node[]).filter((n) => isSection(n, name));
   const topSet = new Set<Node>(top);
+  const hint = `(if this is your own component named "Section", import it under another name)`;
+  walk(
+    top.map((s) => s.fragment),
+    (n) => {
+      if (isSection(n, name)) fail(n.start, `<${name}> must not be nested ${hint}`);
+    }
+  );
   walk(ast.fragment.nodes, (n) => {
-    if (isSection(n, name) && !topSet.has(n))
-      fail(
-        n.start,
-        `<${name}> must not be nested (if this is your own component named "Section", import it under another name)`
-      );
+    if (isSection(n, name) && !topSet.has(n)) fail(n.start, `<${name}> must be at the top level of the file ${hint}`);
   });
   if (!top.length) return [];
 
-  const textOf = (node: Node) => {
+  const quasis: Node[] = [];
+  walk([ast.module, ast.instance, ast.fragment], (n) => {
+    if (n.type === 'TemplateElement') quasis.push(n);
+  });
+  /** `source.slice(start, end)` dedented, except the lines a line break in a template literal starts */
+  const codeOf = (start: number, end: number, indent = '') => {
+    const breaks = [...source.slice(start, end).matchAll(/\n/g)].map((m) => start + m.index);
+    const kept = (i: number) => i > 0 && quasis.some((q) => q.start <= breaks[i - 1] && breaks[i - 1] < q.end);
+    return dedent(source.slice(start, end), kept, indent);
+  };
+  const textOf = (node: Node, indent = '') => {
     const lineStart = source.lastIndexOf('\n', node.start - 1) + 1;
-    const lead = source.slice(lineStart, node.start);
-    return dedent((lead.trim() ? '' : lead) + source.slice(node.start, node.end));
+    return codeOf(source.slice(lineStart, node.start).trim() ? node.start : lineStart, node.end, indent);
   };
   const scriptDefs = (script: typeof ast.instance, kind: 'module' | 'script') =>
     ((script?.content.body ?? []) as unknown as Node[])
@@ -210,7 +232,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
         // as Svelte decides: `$state` is a store only when `state` is not itself declared with a rune
         store: !isRuneDeclaration((node.type === 'ExportNamedDeclaration' ? node.declaration : node) as Node),
         uses: identifiersOf(node),
-        text: textOf(node)
+        text: textOf(node, '  ')
       }));
   const snippetDefs = (ast.fragment.nodes as unknown as Node[])
     .filter((n) => n.type === 'SnippetBlock')
@@ -225,16 +247,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
   const moduleTag = scriptTagOf(ast.module, true, source);
   const scriptTag = scriptTagOf(ast.instance, false, source);
   const block = (tag: string, list: typeof defs) =>
-    list.length
-      ? `${tag}\n${list
-          .map((d) =>
-            d.text
-              .split('\n')
-              .map((l) => (l ? `  ${l}` : l))
-              .join('\n')
-          )
-          .join('\n')}\n</script>`
-      : '';
+    list.length ? `${tag}\n${list.map((d) => d.text).join('\n')}\n</script>` : '';
 
   const titles = new Set<string>();
   return top.map((section) => {
@@ -252,13 +265,9 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
     titles.add(title);
 
     const nodes = (section.fragment as { nodes: Node[] }).nodes;
+    const end = nodes.at(-1)?.end ?? 0;
     const body = nodes.length
-      ? dedent(
-          source
-            .slice(nodes[0].start, nodes.at(-1)!.end)
-            .replace(/^(?:[ \t]*\n)+/, '')
-            .trimEnd()
-        )
+      ? codeOf(nodes[0].start + source.slice(nodes[0].start, end).match(/^(?:[ \t]*\n)*/)![0].length, end).trimEnd()
       : '';
 
     const refs = identifiersOf(nodes);
