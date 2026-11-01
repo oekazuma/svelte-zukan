@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { normalizePath } from 'vite';
 import type { TailwindSource } from '../types.js';
-import { extractTokens, rootVariables, type DesignSystemLike } from './tailwind-tokens.js';
+import { extractTokens, type DesignSystemLike } from './tailwind-tokens.js';
 
 /** `@tailwindcss/node`'s resolver shape; `base` is a directory */
 export type Resolver = (id: string, base: string) => Promise<string | false | undefined>;
@@ -365,10 +365,5 @@ async function loadEntry(
     customJsResolver: resolvers.js
   });
   const defaults = await loadDesignSystem('@import "tailwindcss";', { base, loadStylesheet, loadModule: load });
-  const { prefix, categories, variables, classes } = extractTokens(
-    system,
-    rootVariables(compiled.build([])),
-    defaults.theme
-  );
-  return { ...empty, prefix, categories, variables, css: compiled.build(classes) };
+  return { ...empty, ...extractTokens(system, (classes) => compiled.build(classes), defaults.theme) };
 }

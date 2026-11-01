@@ -48,7 +48,7 @@ A file with no `<Section>` is not an error: its detail page says that there is n
 
 ## Code view
 
-The detail page shows the contents of each section as code, with syntax colors, together with the definitions in `<script>` that the section references. In the example above, the code for "Basic" also shows `label` and `count`. Top-level `{#snippet}` blocks, `<script module>` declarations and TypeScript types that the section uses are shown too. `Section` can be imported under another name, for example `import { Section as Example } from 'svelte-zukan'`.
+The detail page shows the contents of each section as code, with syntax colors, together with the definitions in `<script>` that the section references. In the example above, the code for "Basic" also shows `label` and `count`. Top-level `{#snippet}` blocks, `<script module>` declarations and TypeScript types that the section uses are shown too. `Section` can be imported under another name, for example `import { Section as Example } from 'svelte-zukan'`, or through a namespace import as `<Z.Section>` with `import * as Z from 'svelte-zukan'`.
 
 ## Markdown description
 

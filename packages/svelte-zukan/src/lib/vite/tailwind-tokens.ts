@@ -149,9 +149,10 @@ const unwrapped = (list: string): string[] =>
 /**
  * custom properties declared unconditionally on the root: by a rule whose selector list includes `:root`, `:host` or
  * `html`, alone or in `:where()` / `:is()` (daisyUI's `:where(:root)`), at the top level or inside `@layer`. Of several
- * declarations, the one the cascade layers put last wins (`!important` aside).
+ * declarations, the one the cascade layers put last wins (`!important` aside). With `layer` (`@layer theme`), only the
+ * rules directly in that layer count.
  */
-export function rootVariables(css: string): Record<string, string> {
+export function rootVariables(css: string, layer?: string): Record<string, string> {
   const out: Record<string, string> = {};
   const ranks = new Map<CssRule, number[]>();
   const stored: Record<string, number[]> = {};
@@ -163,6 +164,7 @@ export function rootVariables(css: string): Record<string, string> {
   for (const rule of scanCss(css, ranks)) {
     if (!unwrapped(rule.selector).some((s) => s === ':root' || s === ':host' || s === 'html')) continue;
     if (!rule.atRules.every((a) => /^@layer(\s|$)/.test(a))) continue;
+    if (layer !== undefined && rule.atRules.join(' ') !== layer) continue;
     const rank = ranks.get(rule)!;
     for (const [property, value] of rule.declarations) {
       if (!property.startsWith('--')) continue;
@@ -435,12 +437,15 @@ const SHADOW_VALUE: Record<string, string> = { 'box-shadow': '--tw-shadow', filt
 
 const escapeClass = (name: string) => name.replace(/[^\w-]/g, '\\$&');
 
-/** `defaults` is the theme of a design system loaded from `@import "tailwindcss"` alone */
+/**
+ * `build` is the compiler's `build()`, called once with the token classes; its output is also returned as `css`.
+ * `defaults` is the theme of a design system loaded from `@import "tailwindcss"` alone.
+ */
 export function extractTokens(
   system: DesignSystemLike,
-  known: Record<string, string>,
+  build: (classes: string[]) => string,
   defaults: DesignSystemLike['theme']
-): { prefix: string | null; categories: TailwindCategory[]; variables: Record<string, string>; classes: string[] } {
+): { prefix: string | null; categories: TailwindCategory[]; variables: Record<string, string>; css: string } {
   const prefix = system.theme.prefix;
   // a prefixed design system accepts only `tw:p-4`, while its class list and the stems stay unprefixed
   const classPrefix = prefix ? `${prefix}:` : '';
@@ -466,6 +471,33 @@ export function extractTokens(
   const inline = new Set(
     entries.flatMap(([key, { options }]) => (typeof options === 'number' && options & 1 ? [key] : []))
   );
+  const matches = (name: string, stem: string) => name === stem || name.startsWith(`${stem}-`);
+
+  const stems = CATEGORIES.filter((c) => c.property);
+  const names = system
+    .getClassList()
+    .map(([name]) => name)
+    .filter((name) => stems.some((c) => matches(name, c.stem)));
+  const candidates = system.candidatesToCss(names.map((name) => classPrefix + name));
+  const declarations = new Map<string, [string, string][]>();
+  names.forEach((name, i) => {
+    const selector = `.${escapeClass(classPrefix + name)}`;
+    const rule = scanCss(candidates[i] ?? '').find((r) => r.selector === selector && r.atRules.length === 0);
+    if (rule) declarations.set(name, rule.declarations);
+  });
+  // a `@utility` of the same name adds its declarations before the theme's, and the last one applies
+  const valueOf = (name: string, property: string) => declarations.get(name)?.findLast(([p]) => p === property)?.[1];
+  const classes = names.filter((name) =>
+    stems.some((c) => matches(name, c.stem) && valueOf(name, c.property) !== undefined)
+  );
+
+  // A theme that is not `static` writes only the variables its classes use, and only there are Tailwind's CSS
+  // functions (`--spacing(6)`, `theme(--radius-lg)`) replaced: the entries keep them as written.
+  const css = build(classes.map((name) => classPrefix + name));
+  const known = rootVariables(css);
+  const written = rootVariables(css, '@layer theme');
+  for (const key of Object.keys(variables)) if (Object.hasOwn(written, key)) variables[key] = written[key];
+
   // `@theme reference` and what `@config` and `@plugin` load: listed with the theme, but Tailwind declares none of
   // them. A non-inline one is read as `var(--x, fallback)`, so the project's own root declaration makes it real; an
   // inline one (`@config`, `@plugin`) puts its literal value into the class, which reads the variable only when that
@@ -485,20 +517,6 @@ export function extractTokens(
     )
   );
   const values = { ...variables, ...known };
-  const matches = (name: string, stem: string) => name === stem || name.startsWith(`${stem}-`);
-
-  const stems = CATEGORIES.filter((c) => c.property);
-  const names = system
-    .getClassList()
-    .map(([name]) => name)
-    .filter((name) => stems.some((c) => matches(name, c.stem)));
-  const css = system.candidatesToCss(names.map((name) => classPrefix + name));
-  const declarations = new Map<string, [string, string][]>();
-  names.forEach((name, i) => {
-    const selector = `.${escapeClass(classPrefix + name)}`;
-    const rule = scanCss(css[i] ?? '').find((r) => r.selector === selector && r.atRules.length === 0);
-    if (rule) declarations.set(name, rule.declarations);
-  });
 
   const token = (name: string, own: string | null, others: string[], value: string, shown = value): TailwindToken => {
     const variable = soleVar(value);
@@ -531,10 +549,8 @@ export function extractTokens(
     const tokens: Ordered[] = [];
     for (const name of names) {
       if (!matches(name, stem)) continue;
-      const rule = declarations.get(name);
-      // a `@utility` of the same name adds its declarations before the theme's, and the last one applies
-      const value = rule?.findLast(([p]) => p === property)?.[1];
-      const shown = rule?.findLast(([p]) => p === SHADOW_VALUE[property])?.[1];
+      const value = valueOf(name, property);
+      const shown = valueOf(name, SHADOW_VALUE[property]);
       if (value === undefined) continue;
       const suffix = name.slice(stem.length + 1);
       const own = namespace && suffix ? `${variablePrefix}${namespace}-${suffix}` : null;
@@ -581,6 +597,5 @@ export function extractTokens(
   const categories = CATEGORIES.map(({ id, title }) => ({ id, title, tokens: byCategory.get(id) ?? [] })).filter(
     (c) => c.tokens.length > 0
   );
-  const classes = [...new Set(categories.flatMap((c) => c.tokens.flatMap((t) => (t.class ? [t.class] : []))))];
-  return { prefix, categories, variables, classes };
+  return { prefix, categories, variables, css };
 }

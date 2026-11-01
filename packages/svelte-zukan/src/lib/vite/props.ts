@@ -80,15 +80,52 @@ function jsdocOf(node: Node, comments: Comment[], from: number) {
   return text ? jsdoc.parseInline(resolveLinks(text), { async: false }) : null;
 }
 
-/** the regex literals and template literals in a node, which `collapse` would misread when split around one another */
+/**
+ * the regex literals and template literals in a node, which `collapse` would misread when split around one another, and
+ * its blocks, whose statements need not end in `;` and so must keep their line breaks
+ */
 function verbatimOf(value: unknown, out: Node[] = []): Node[] {
   if (Array.isArray(value)) for (const v of value) verbatimOf(v, out);
   else if (value && typeof value === 'object' && typeof (value as Node).type === 'string') {
     const node = value as Node;
-    if ((node.type === 'Literal' && node.regex) || node.type === 'TemplateLiteral') out.push(node);
-    else for (const [k, v] of Object.entries(node)) if (!k.endsWith('Comments')) verbatimOf(v, out);
+    // a string continued with `\` past a line break is one too, for `blockOf`
+    if (
+      (node.type === 'Literal' && (node.regex || (typeof node.value === 'string' && /\n/.test(node.raw as string)))) ||
+      node.type === 'TemplateLiteral'
+    )
+      out.push(node);
+    else {
+      // and what is in it too, where `blockOf` finds the strings whose lines it must not dedent
+      if (node.type === 'BlockStatement') out.push(node);
+      for (const [k, v] of Object.entries(node)) if (!k.endsWith('Comments')) verbatimOf(v, out);
+    }
   }
   return out;
+}
+
+/** a block as written, its lines after the first without the indentation they share, but for those a string goes on to */
+function blockOf(lf: string, block: Node, verbatim: Node[]) {
+  let at = block.start;
+  const lines = lf
+    .slice(block.start, block.end)
+    .split('\n')
+    .map((text, i) => {
+      const start = at;
+      at += text.length + 1;
+      return {
+        text,
+        kept:
+          !i ||
+          verbatim.some(
+            (t) =>
+              (t.type === 'TemplateLiteral' || (t.type === 'Literal' && !t.regex)) && t.start < start && start < t.end
+          )
+      };
+    });
+  const width = Math.min(
+    ...lines.filter((l) => !l.kept && l.text.trim()).map((l) => l.text.match(/^[ \t]*/)![0].length)
+  );
+  return lines.map((l) => (l.kept ? l.text : l.text.slice(width))).join('\n');
 }
 
 function scopeOf(file: string, lf: string, body: Node[], comments: Comment[], pkg = false): Scope {
@@ -133,11 +170,14 @@ function scopeOf(file: string, lf: string, body: Node[], comments: Comment[], pk
     text: (n, replaced = []) => {
       let out = '';
       let at = n.start;
-      const kept = verbatimOf(n).map((r): [Node, string | null] => [r, null]);
+      const verbatim = verbatimOf(n);
+      const kept = verbatim.map((r): [Node, string | null] => [r, null]);
       for (const [r, s] of [...kept, ...replaced].sort((a, b) => a[0].start - b[0].start)) {
-        // a type parameter inside a template literal type stays as written
+        // a type parameter inside a template literal type stays as written, and so does what is inside a block
         if (r.start < at) continue;
-        out += collapse(lf.slice(at, r.start)) + (s ?? lf.slice(r.start, r.end));
+        out +=
+          collapse(lf.slice(at, r.start)) +
+          (s ?? (r.type === 'BlockStatement' ? blockOf(lf, r, verbatim) : lf.slice(r.start, r.end)));
         at = r.end;
       }
       return (out + collapse(lf.slice(at, n.end))).trim();
@@ -615,9 +655,9 @@ export function extractProps(
       });
     }
 
-  /** `import('svelte').Snippet` reads as `Snippet` */
+  /** `import('svelte').Snippet` reads as `Snippet`; after `typeof`, `import()` is the value itself */
   const typeText = (scope: Scope, n: Node, bindings: Bindings) =>
-    print(scope, n, bindings).replace(/import\((['"])[^'"]*\1\)\./g, '');
+    print(scope, n, bindings).replace(/(?<!\btypeof\s+)import\((['"])[^'"]*\1\)\./g, '');
   // the component's own types first, so that they win over a package's member of the same name
   // ponytail: a package member keeps its type parameters as written (`MouseEventHandler<T>`); substitute the
   // arguments (`HTMLAttributes<HTMLButtonElement>`) if that reads badly in practice
