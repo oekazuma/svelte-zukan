@@ -150,6 +150,8 @@
     {#await entry.meta() then { default: meta }}
       {@const text = summary(meta.doc)}
       {#if text}<p>{text}</p>{/if}
+    {:catch}
+      <!-- no summary then; without a catch the rejection would go unhandled -->
     {/await}
   </div>
 </article>
