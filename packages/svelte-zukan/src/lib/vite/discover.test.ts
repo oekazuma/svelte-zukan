@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -181,6 +190,37 @@ describe('discoverGroups', () => {
         caseInsensitive ? `"ui" is written "${dir}", but is "${dir.toLowerCase()}" on disk` : /directory not found/
       );
   });
+
+  // macOS opens a decomposed name by its composed spelling; Linux and Windows find neither by the other
+  it('a groups dir is matched by case, not by Unicode normalization', () => {
+    const [nfc, nfd] = ['Café', 'Café'.normalize('NFD')];
+    write(`app/src/${nfd}/Card.zukan.svelte`);
+    const app = join(tmp, 'app');
+    const either = existsSync(join(app, 'src', nfc));
+    if (either)
+      expect(discoverGroups(app, { ui: `src/${nfc}` })).toEqual([{ name: 'ui', dirs: [p(`app/src/${nfc}`)] }]);
+    else expect(() => discoverGroups(app, { ui: `src/${nfc}` })).toThrow(/directory not found/);
+    const upper = nfc.toUpperCase();
+    expect(() => discoverGroups(app, { ui: `src/${upper}` })).toThrow(
+      existsSync(join(app, 'src', upper))
+        ? `is written "src/${upper}", but is "src/${nfd}" on disk`
+        : 'directory not found'
+    );
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'a groups dir under a parent that can not be listed is taken as written',
+    () => {
+      write('app/src/lib/Card.zukan.svelte');
+      const src = join(tmp, 'app/src');
+      chmodSync(src, 0o111);
+      try {
+        expect(discoverGroups(join(tmp, 'app'), { ui: 'src/lib' })).toEqual([{ name: 'ui', dirs: [p('app/src/lib')] }]);
+      } finally {
+        chmodSync(src, 0o755);
+      }
+    }
+  );
 
   it('a groups dir reached through a link or by an absolute path is not taken for one in another case', () => {
     write('ui/src/Card.zukan.svelte');

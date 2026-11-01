@@ -27,8 +27,17 @@ const spelledOnDisk = (root: string, rel: string) => {
     .split('/')
     .map((name) => {
       if (name !== '..' && name !== '') {
-        const names = readdirSync(dir);
-        if (!names.includes(name)) name = names.find((n) => n.toLowerCase() === name.toLowerCase()) ?? name;
+        let names: string[] = [];
+        // a parent can let a path through (x) without letting it be listed (r)
+        try {
+          names = readdirSync(dir);
+        } catch {
+          // keep the written name
+        }
+        // macOS also opens a name stored decomposed (NFD) by its composed spelling: only a difference in case counts
+        const key = name.normalize();
+        if (!names.some((n) => n.normalize() === key))
+          name = names.find((n) => n.normalize().toLowerCase() === key.toLowerCase()) ?? name;
       }
       dir = join(dir, name);
       return name;
