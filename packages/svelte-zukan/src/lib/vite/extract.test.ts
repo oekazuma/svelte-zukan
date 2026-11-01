@@ -355,6 +355,40 @@ describe('extractSections', () => {
     );
   });
 
+  it('detects both a named and a namespace import of Section in one file', () => {
+    const source = `<script lang="ts">
+  import { Section } from 'svelte-zukan';
+  import * as Z from 'svelte-zukan';
+</script>
+
+<Section title="A"><p>a</p></Section>
+<Z.Section title="B"><p>b</p></Z.Section>`;
+    expect(extractSections(source, FILE)).toEqual([
+      { title: 'A', code: '<p>a</p>' },
+      { title: 'B', code: '<p>b</p>' }
+    ]);
+    expect(() => extractSections(source.replace('title="B"', 'title="A"'), FILE)).toThrow(
+      /duplicate <Z\.Section> title "A"/
+    );
+    expect(() => extractSections(source.replace('<p>b</p>', '<Section title="C" />'), FILE)).toThrow(
+      /<Section> must not be nested/
+    );
+  });
+
+  it('keeps the lines a string continued with a backslash goes on to', () => {
+    const source = `<script>
+  const text = 'a\\
+ b';
+</script>
+
+<Section title="A"><p title={'c\\
+    d'}>{text}</p>
+</Section>`;
+    expect(extractSections(source, FILE)[0].code).toBe(
+      "<script>\n  const text = 'a\\\n b';\n</script>\n\n<p title={'c\\\n    d'}>{text}</p>"
+    );
+  });
+
   it('dedents content that starts on the <Section> line', () => {
     const source = `<Section title="A"><div>\n    <p>hi</p>\n  </div>\n</Section>`;
     expect(extractSections(source, FILE)[0].code).toBe('<div>\n  <p>hi</p>\n</div>');

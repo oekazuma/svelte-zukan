@@ -88,9 +88,14 @@ function verbatimOf(value: unknown, out: Node[] = []): Node[] {
   if (Array.isArray(value)) for (const v of value) verbatimOf(v, out);
   else if (value && typeof value === 'object' && typeof (value as Node).type === 'string') {
     const node = value as Node;
-    if ((node.type === 'Literal' && node.regex) || node.type === 'TemplateLiteral') out.push(node);
+    // a string continued with `\` past a line break is one too, for `blockOf`
+    if (
+      (node.type === 'Literal' && (node.regex || (typeof node.value === 'string' && /\n/.test(node.raw as string)))) ||
+      node.type === 'TemplateLiteral'
+    )
+      out.push(node);
     else {
-      // and what is in it too, where `blockOf` finds the template literals whose lines it must not dedent
+      // and what is in it too, where `blockOf` finds the strings whose lines it must not dedent
       if (node.type === 'BlockStatement') out.push(node);
       for (const [k, v] of Object.entries(node)) if (!k.endsWith('Comments')) verbatimOf(v, out);
     }
@@ -98,7 +103,7 @@ function verbatimOf(value: unknown, out: Node[] = []): Node[] {
   return out;
 }
 
-/** a block as written, its lines after the first without the indentation they share, but for a template literal's own */
+/** a block as written, its lines after the first without the indentation they share, but for those a string goes on to */
 function blockOf(lf: string, block: Node, verbatim: Node[]) {
   let at = block.start;
   const lines = lf
@@ -109,7 +114,12 @@ function blockOf(lf: string, block: Node, verbatim: Node[]) {
       at += text.length + 1;
       return {
         text,
-        kept: !i || verbatim.some((t) => t.type === 'TemplateLiteral' && t.start < start && start < t.end)
+        kept:
+          !i ||
+          verbatim.some(
+            (t) =>
+              (t.type === 'TemplateLiteral' || (t.type === 'Literal' && !t.regex)) && t.start < start && start < t.end
+          )
       };
     });
   const width = Math.min(

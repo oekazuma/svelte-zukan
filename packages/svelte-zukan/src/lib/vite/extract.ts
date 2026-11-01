@@ -4,7 +4,7 @@ import type { ZukanSection } from '../types.js';
 type Node = { type: string; start: number; end: number } & Record<string, unknown>;
 type Ast = AST.Root;
 
-const isSection = (n: Node, name: string) => n.type === 'Component' && n.name === name;
+const isSection = (n: Node, names: ReadonlySet<string>) => n.type === 'Component' && names.has(n.name as string);
 
 function walk(value: unknown, visit: (node: Node) => void) {
   if (Array.isArray(value)) return value.forEach((v) => walk(v, visit));
@@ -16,7 +16,7 @@ function walk(value: unknown, visit: (node: Node) => void) {
 }
 
 /**
- * `kept(i)`: line `i` begins inside a template literal, where its indentation is part of the string. `midLine`: the
+ * `kept(i)`: line `i` begins inside a string, where its indentation is part of the string. `midLine`: the
  * text starts after other code on its first line, so that line has no indentation to compare
  */
 function dedent(text: string, kept: (i: number) => boolean, indent: string, midLine: boolean) {
@@ -166,14 +166,15 @@ function isRuneDeclaration(node: Node) {
 }
 
 // `import { Section as Example } from 'svelte-zukan'` names the tag `Example`, `import * as Z` names it `Z.Section`
-function sectionName(ast: Ast) {
+function sectionNames(ast: Ast) {
+  const names = new Set<string>();
   for (const n of [...(ast.module?.content.body ?? []), ...(ast.instance?.content.body ?? [])] as unknown as Node[]) {
     if (n.type !== 'ImportDeclaration' || (n.source as { value: string }).value !== 'svelte-zukan') continue;
     for (const s of n.specifiers as { type: string; imported?: { name?: string }; local: { name: string } }[])
-      if (s.type === 'ImportSpecifier' && s.imported?.name === 'Section') return s.local.name;
-      else if (s.type === 'ImportNamespaceSpecifier') return `${s.local.name}.Section`;
+      if (s.type === 'ImportSpecifier' && s.imported?.name === 'Section') names.add(s.local.name);
+      else if (s.type === 'ImportNamespaceSpecifier') names.add(`${s.local.name}.Section`);
   }
-  return 'Section';
+  return names.size ? names : new Set(['Section']);
 }
 
 function scriptTagOf(script: { attributes: unknown[] } | null | undefined, module: boolean, source: string) {
@@ -193,35 +194,37 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
   const fail = (pos: number, message: string): never => {
     throw new Error(`${filename}:${lineOf(source, pos)} ${message}`);
   };
-  const name = sectionName(ast);
-  const top = (ast.fragment.nodes as unknown as Node[]).filter((n) => isSection(n, name));
+  const names = sectionNames(ast);
+  const top = (ast.fragment.nodes as unknown as Node[]).filter((n) => isSection(n, names));
   const topSet = new Set<Node>(top);
   const hint = `(if this is your own component named "Section", import it under another name)`;
   walk(
     top.map((s) => s.fragment),
     (n) => {
-      if (isSection(n, name)) fail(n.start, `<${name}> must not be nested ${hint}`);
+      if (isSection(n, names)) fail(n.start, `<${n.name}> must not be nested ${hint}`);
     }
   );
   walk(ast.fragment.nodes, (n) => {
-    if (isSection(n, name) && !topSet.has(n)) fail(n.start, `<${name}> must be at the top level of the file ${hint}`);
+    if (isSection(n, names) && !topSet.has(n))
+      fail(n.start, `<${n.name}> must be at the top level of the file ${hint}`);
   });
   if (!top.length) return [];
 
-  const quasis: Node[] = [];
+  // a template literal and a string continued with `\` past a line break, whose next line's indentation is in the string
+  const strings: Node[] = [];
   walk([ast.module, ast.instance, ast.fragment], (n) => {
-    if (n.type === 'TemplateElement') quasis.push(n);
+    if (n.type === 'TemplateElement' || (n.type === 'Literal' && typeof n.value === 'string')) strings.push(n);
   });
   const lineStartOf = (pos: number) => source.lastIndexOf('\n', pos - 1) + 1;
   /**
-   * `source.slice(start, end)` dedented, except the lines a line break in a template literal starts; from the start of
-   * the line when only indentation precedes `start` there
+   * `source.slice(start, end)` dedented, except the lines a line break in a string starts; from the start of the line
+   * when only indentation precedes `start` there
    */
   const codeOf = (start: number, end: number, indent = '') => {
     const midLine = !!source.slice(lineStartOf(start), start).trim();
     if (!midLine) start = lineStartOf(start);
     const breaks = [...source.slice(start, end).matchAll(/\n/g)].map((m) => start + m.index);
-    const kept = (i: number) => i > 0 && quasis.some((q) => q.start <= breaks[i - 1] && breaks[i - 1] < q.end);
+    const kept = (i: number) => i > 0 && strings.some((q) => q.start <= breaks[i - 1] && breaks[i - 1] < q.end);
     return dedent(source.slice(start, end), kept, indent, midLine);
   };
   const scriptDefs = (script: typeof ast.instance, kind: 'module' | 'script') => {
@@ -270,6 +273,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
 
   const titles = new Set<string>();
   return top.map((section) => {
+    const name = section.name as string;
     const attr = (section.attributes as Node[]).find((a) => a.name === 'title');
     const value = attr?.value as Node[] | true | undefined;
     if (!attr) fail(section.start, `<${name}> needs a title`);

@@ -323,6 +323,17 @@ describe('extractProps', () => {
     expect(found?.props[0].default).toBe('(n: number) => {\n  const s = n.toFixed(2)\n  return `${s}\n  units`\n}');
   });
 
+  it('keeps the lines a string continued with a backslash goes on to in a block default', () => {
+    const found = extractProps(
+      ts(`  let { label = () => {
+    return 'a\\
+  b'
+  } }: { label?: () => string } = $props();`),
+      'L.svelte'
+    );
+    expect(found?.props[0].default).toBe("() => {\n  return 'a\\\n  b'\n}");
+  });
+
   it('keeps import() after typeof', () => {
     const found = extractProps(
       ts(
