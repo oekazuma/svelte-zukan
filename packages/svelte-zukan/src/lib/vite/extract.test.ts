@@ -345,6 +345,29 @@ describe('extractSections', () => {
     expect(() => extractSections(source, FILE)).toThrow(/<Example> needs a title/);
   });
 
+  it('detects Section through a namespace import, with the same rules', () => {
+    const source = (body: string) =>
+      `<script lang="ts">\n  import * as Z from 'svelte-zukan';\n</script>\n\n<Z.Section title="A">\n  ${body}\n</Z.Section>\n`;
+    expect(extractSections(source('<p>hi</p>'), FILE)).toEqual([{ title: 'A', code: '<p>hi</p>' }]);
+    expect(() => extractSections(source('<Z.Section title="B" />'), FILE)).toThrow(/<Z\.Section> must not be nested/);
+    expect(() => extractSections(source('<p>hi</p>') + '<Z.Section title="A" />', FILE)).toThrow(
+      /duplicate <Z\.Section> title "A"/
+    );
+  });
+
+  it('dedents content that starts on the <Section> line', () => {
+    const source = `<Section title="A"><div>\n    <p>hi</p>\n  </div>\n</Section>`;
+    expect(extractSections(source, FILE)[0].code).toBe('<div>\n  <p>hi</p>\n</div>');
+  });
+
+  it('indents the script definitions of a tab-indented file with tabs', () => {
+    const source =
+      '<script lang="ts">\n\timport { Section } from \'svelte-zukan\';\n\tfunction greet(name: string) {\n\t\treturn name;\n\t}\n</script>\n\n<Section title="A">\n\t<button onclick={() => greet(\'x\')}>Hi</button>\n</Section>\n';
+    expect(extractSections(source, FILE)[0].code).toBe(
+      '<script lang="ts">\n\tfunction greet(name: string) {\n\t\treturn name;\n\t}\n</script>\n\n<button onclick={() => greet(\'x\')}>Hi</button>'
+    );
+  });
+
   it('gives the same code for CRLF line endings', () => {
     const lf = `<script>
   import { Section } from 'svelte-zukan';
@@ -425,6 +448,34 @@ describe('extractSections', () => {
       },
       { title: 'b', code: '<Other />' }
     ]);
+  });
+
+  it('does not take a snippet the section declares for a top-level snippet or import of the same name', () => {
+    const source = `<script lang="ts">
+  import Card from './Card.svelte';
+  import icon from './star.svg';
+</script>
+
+{#snippet header()}
+  <h2>Default</h2>
+{/snippet}
+
+<Section title="Shared">
+  <Card {header}><img src={icon} alt="" /></Card>
+</Section>
+
+<Section title="Custom">
+  <Card>
+    {#snippet header()}<h2>Custom</h2>{/snippet}
+    {#snippet icon()}★{/snippet}
+  </Card>
+</Section>`;
+    const code = Object.fromEntries(extractSections(source, FILE).map((s) => [s.title, s.code]));
+    expect(code.Shared).toContain('<h2>Default</h2>');
+    expect(code.Shared).toContain("import icon from './star.svg';");
+    expect(code.Custom).toBe(
+      `<script lang="ts">\n  import Card from './Card.svelte';\n</script>\n\n<Card>\n  {#snippet header()}<h2>Custom</h2>{/snippet}\n  {#snippet icon()}★{/snippet}\n</Card>`
+    );
   });
 
   it('does not take a name the template declares for the script variable it shadows', () => {

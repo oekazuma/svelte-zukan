@@ -311,6 +311,28 @@ describe('extractProps', () => {
     expect(template?.props[0].default).toBe("`https://a.b/${/x/.test('x')}`");
   });
 
+  it('keeps the lines of a block default, dedented, but for a template literal in it', () => {
+    const found = extractProps(
+      ts(`  let { format = (n: number) => {
+    const s = n.toFixed(2)
+    return \`\${s}
+  units\`
+  } }: { format?: (n: number) => string } = $props();`),
+      'F.svelte'
+    );
+    expect(found?.props[0].default).toBe('(n: number) => {\n  const s = n.toFixed(2)\n  return `${s}\n  units`\n}');
+  });
+
+  it('keeps import() after typeof', () => {
+    const found = extractProps(
+      ts(
+        "  let { config, children }: { config?: typeof import('./config').default; children?: import('svelte').Snippet } = $props();"
+      ),
+      'C.svelte'
+    );
+    expect(found?.props.map((p) => p.type)).toEqual(["typeof import('./config').default", 'Snippet']);
+  });
+
   it('merges the declarations of an interface declared twice', () => {
     const found = extractProps(
       ts(`  interface Props { a: string }

@@ -48,7 +48,7 @@ Svelte のコンパイラーが出すエラーや解決できない import な�
 
 ## コード表示
 
-詳細ページは各セクションの中身を構文ごとに色分けしたコードで示し、そのセクションが参照している `<script>` 内の定義も合わせて載せます。上の例では「Basic」のコードに `label` と `count` も出ます。セクションが使うトップレベルの `{#snippet}`、`<script module>` 内の宣言、TypeScript の型も載せます。`Section` は `import { Section as Example } from 'svelte-zukan'` のように別名で import しても使えます。
+詳細ページは各セクションの中身を構文ごとに色分けしたコードで示し、そのセクションが参照している `<script>` 内の定義も合わせて載せます。上の例では「Basic」のコードに `label` と `count` も出ます。セクションが使うトップレベルの `{#snippet}`、`<script module>` 内の宣言、TypeScript の型も載せます。`Section` は `import { Section as Example } from 'svelte-zukan'` のように別名で import しても、`import * as Z from 'svelte-zukan'` で名前空間ごと import して `<Z.Section>` と書いても使えます。
 
 ## Markdown の説明
 
