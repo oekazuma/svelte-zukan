@@ -1,5 +1,5 @@
-import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { existsSync, globSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { normalizePath, searchForWorkspaceRoot } from 'vite';
 import type { CatalogGroup, CatalogItem } from '../types.js';
 
@@ -11,6 +11,12 @@ const checkGroupName = (name: string) => {
 };
 
 const isDir = (p: string) => existsSync(p) && statSync(p).isDirectory();
+
+/**
+ * Whether `file` exists under exactly this name. `existsSync` alone also finds `Button.Zukan.md` for `Button.zukan.md`
+ * on macOS and Windows, where catalog files themselves are matched by case
+ */
+export const existsExactly = (file: string) => existsSync(file) && readdirSync(dirname(file)).includes(basename(file));
 
 const readPackage = (dir: string): { name?: string; dependencies?: object; devDependencies?: object } => {
   const file = join(dir, 'package.json');

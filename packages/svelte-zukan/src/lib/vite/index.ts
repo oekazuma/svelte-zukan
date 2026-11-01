@@ -18,7 +18,7 @@ import {
   type ViteDevServer
 } from 'vite';
 import type { CatalogGroup, CatalogItem, TailwindSource } from '../types.js';
-import { discoverGroups, isComponentFile, listCatalog, listUncataloged } from './discover.js';
+import { discoverGroups, existsExactly, isComponentFile, listCatalog, listUncataloged } from './discover.js';
 import { catalogJson } from './catalog-json.js';
 import { extractSections, normalizeSource } from './extract.js';
 import { extractProps } from './props.js';
@@ -189,7 +189,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   const readProps = (component: string) => {
     for (const [dep, readers] of propsDeps) if (readers.delete(component) && !readers.size) propsDeps.delete(dep);
     // deleted or renamed since it was served; an edit of a file it imported its type from still arrives
-    if (!existsSync(component)) {
+    if (!existsExactly(component)) {
       servedProps.delete(component);
       return null;
     }
@@ -522,6 +522,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           return;
         }
 
+        // a listing error (a duplicate ID, a reserved group name) must fail the build before the previous catalog is gone
+        relist();
         // `build.write: false` writes no file, and creates no outDir to write into
         const write = env.config.build.write !== false;
         // only what this plugin writes: the outDir may be shared with other files
@@ -568,7 +570,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         this.addWatchFile(item.file);
         const docPath = docFileOf(item.file);
         let doc: string | null = null;
-        if (existsSync(docPath)) {
+        if (existsExactly(docPath)) {
           this.addWatchFile(docPath);
           doc = marked.parse(normalizeSource(readFileSync(docPath, 'utf-8')), { async: false });
         }
@@ -586,7 +588,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         let found = null;
         // not `addWatchFile`: the component would become an import of the meta module, and deleting it would end in
         // `full-reload`; `hotUpdate` compares its props itself, and the scanned directories are watched
-        if (existsSync(component)) found = readProps(normalizePath(component));
+        if (existsExactly(component)) found = readProps(normalizePath(component));
         const meta = {
           sections,
           doc,
@@ -605,7 +607,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         const edit = serving
           ? (file: string) => {
               const component = componentFileOf(file);
-              return { file, component: existsSync(component) ? normalizePath(component) : null };
+              return { file, component: existsExactly(component) ? normalizePath(component) : null };
             }
           : undefined;
         return generateCatalogModule(items, rel, edit, listError);

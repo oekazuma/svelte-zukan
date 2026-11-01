@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-Put `<Name>.zukan.svelte` next to the component. `<Name>.zukan.md` is optional. No dedicated directory such as `zukan/` is needed. File names are matched case-sensitively on every platform, so `Button.Zukan.svelte` is not a catalog file.
+Put `<Name>.zukan.svelte` next to the component. `<Name>.zukan.md` is optional. No dedicated directory such as `zukan/` is needed. File names are matched case-sensitively on every platform, so `Button.Zukan.svelte` is not a catalog file, and `Button.Zukan.md` and `button.svelte` do not belong to `Button.zukan.svelte`.
 
 ```text
 src/lib/Button/

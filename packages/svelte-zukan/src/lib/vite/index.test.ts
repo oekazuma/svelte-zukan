@@ -296,6 +296,17 @@ describe('metadata modules', () => {
     expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/A.zukan.md`);
   });
 
+  // a case-insensitive filesystem finds both by the catalog file's own spelling
+  it('reads neither an .md nor a component whose name differs only in case', async () => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/A.Zukan.md'), '# A');
+    await writeFile(path.join(root, 'src/a.svelte'), '<script lang="ts">let { x }: { x: string } = $props();</script>');
+    const { p } = boot(root);
+    const code = p.load.call({ addWatchFile: vi.fn() }, meta('app/A'));
+    expect(code).toContain('"doc":null');
+    expect(code).toContain('"props":null');
+  });
+
   it('renders an .md that starts with a byte order mark', async () => {
     const { root } = await makeApp();
     await writeFile(path.join(root, 'src/A.zukan.md'), '\uFEFF# A\r\n\r\ntext');
@@ -1245,6 +1256,39 @@ describe('build', () => {
     await p.buildApp.handler(builder);
     expect(builder.build).toHaveBeenCalledWith(zukanEnv);
     expect(existsSync(`${root}/zukan-dist`)).toBe(false);
+  });
+
+  it('leaves the previous catalog unchanged with build.write: false', async () => {
+    const { root } = await makeApp();
+    const outDir = `${root}/zukan-dist`;
+    mkdirSync(`${outDir}/_zukan`, { recursive: true });
+    await writeFile(`${outDir}/_zukan/old.js`, 'old js');
+    await writeFile(`${outDir}/index.html`, 'old');
+    const { p } = await bootBuild(root, { build: true });
+    const { builder, zukanEnv } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
+    zukanEnv.config!.build.write = false;
+    await p.buildApp.handler(builder);
+    expect(readFileSync(`${outDir}/_zukan/old.js`, 'utf-8')).toBe('old js');
+    expect(readFileSync(`${outDir}/index.html`, 'utf-8')).toBe('old');
+    expect(existsSync(`${outDir}/catalog.json`)).toBe(false);
+  });
+
+  it('fails on a reserved group name before removing the previous catalog', async () => {
+    const { tmp, root } = await makeApp();
+    await writeFile(`${root}/package.json`, JSON.stringify({ name: 'app', dependencies: { preview: 'workspace:*' } }));
+    mkdirSync(`${tmp}/preview/src`, { recursive: true });
+    await writeFile(`${tmp}/preview/package.json`, JSON.stringify({ name: 'preview' }));
+    await writeFile(`${tmp}/preview/src/P.zukan.svelte`, source);
+    mkdirSync(`${root}/node_modules`);
+    symlinkSync(`${tmp}/preview`, `${root}/node_modules/preview`, 'junction');
+    const outDir = `${root}/zukan-dist`;
+    mkdirSync(outDir);
+    await writeFile(`${outDir}/index.html`, 'old');
+    const { p } = await bootBuild(root, { build: true });
+    const { builder, zukanEnv } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
+    await expect(p.buildApp.handler(builder)).rejects.toThrow(/group name "preview" is reserved/);
+    expect(builder.build).not.toHaveBeenCalledWith(zukanEnv);
+    expect(readFileSync(`${outDir}/index.html`, 'utf-8')).toBe('old');
   });
 
   it.each([
