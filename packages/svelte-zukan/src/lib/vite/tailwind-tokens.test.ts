@@ -510,6 +510,11 @@ export default plugin.withOptions(
     expect(padding.indexOf('p-gutter')).toBeLessThan(padding.indexOf('p-7'));
     expect(padding.indexOf('p-gutter')).toBeGreaterThan(padding.indexOf('p-5'));
 
+    // a project's own `:root` declaration is what the class reads, but the theme's value stays in Full config
+    const overridden = await load(`@import "tailwindcss";\n@theme {${theme}\n}\n:root { --radius-card: 1px; }`);
+    expect(overridden.token('border-radius', 'rounded-card')?.value).toBe('1px');
+    expect(overridden.result.variables['--radius-card']).toBe('0.5rem');
+
     // `static` writes every variable, so the values are the same
     const fixed = await load(`@import "tailwindcss";\n@theme static {${theme}\n}`);
     expect(fixed.result.variables['--spacing-gutter']).toBe('calc(var(--spacing) * 6)');
