@@ -5,6 +5,10 @@ import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
 import { buildTools, fetchCatalog, registerTools, type WebMcpTool } from './webmcp.js';
 
+/** the URL the catalog gives for axe-core's script, here a stand-in's */
+const scriptUrl = (source: string) =>
+  Promise.resolve(URL.createObjectURL(new Blob([source], { type: 'text/javascript' })));
+
 const catalog = {
   components: [
     {
@@ -122,7 +126,7 @@ describe('WebMCP tools', () => {
         page,
         currentTheme: () => 'dark',
         axe: () =>
-          Promise.resolve(`window.axe = { run: async () => ({ violations: [{ id: 'image-alt', impact: 'critical',
+          scriptUrl(`window.axe = { run: async () => ({ violations: [{ id: 'image-alt', impact: 'critical',
             help: 'Images must have alternative text', helpUrl: 'https://example.com/image-alt',
             nodes: [{ target: ['img'] }] }], incomplete: [{ id: 'color-contrast', impact: 'serious',
             help: 'Elements must meet minimum color contrast ratio thresholds',

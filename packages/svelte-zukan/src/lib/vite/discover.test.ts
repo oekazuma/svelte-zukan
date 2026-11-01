@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -169,6 +169,27 @@ describe('discoverGroups', () => {
   it('missing groups dir throws', () => {
     mkdirSync(join(tmp, 'app'));
     expect(() => discoverGroups(join(tmp, 'app'), { ui: 'nope' })).toThrow(/"ui".*nope/);
+  });
+
+  // macOS and Windows find the directory under either case, but the watcher reports only the one on disk
+  it('a groups dir written in another case than on disk throws on every platform', () => {
+    write('app/src/lib/Card.zukan.svelte');
+    write('ui/src/Card.zukan.svelte');
+    const caseInsensitive = existsSync(join(tmp, 'APP'));
+    for (const dir of ['src/Lib', 'SRC/lib', '../UI/src'])
+      expect(() => discoverGroups(join(tmp, 'app'), { ui: dir })).toThrow(
+        caseInsensitive ? `"ui" is written "${dir}", but is "${dir.toLowerCase()}" on disk` : /directory not found/
+      );
+  });
+
+  it('a groups dir reached through a link or by an absolute path is not taken for one in another case', () => {
+    write('ui/src/Card.zukan.svelte');
+    mkdirSync(join(tmp, 'app/node_modules'), { recursive: true });
+    symlinkSync(join(tmp, 'ui'), join(tmp, 'app/node_modules/Linked'), 'junction');
+    expect(discoverGroups(join(tmp, 'app'), { a: 'node_modules/Linked/src', b: join(tmp, 'ui/src') })).toEqual([
+      { name: 'a', dirs: [p('app/node_modules/Linked/src')] },
+      { name: 'b', dirs: [p('ui/src')] }
+    ]);
   });
 
   it('reserved group names throw', () => {

@@ -1,5 +1,5 @@
 import { existsSync, globSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { normalizePath, searchForWorkspaceRoot } from 'vite';
 import type { CatalogGroup, CatalogItem } from '../types.js';
 
@@ -17,6 +17,24 @@ const isDir = (p: string) => existsSync(p) && statSync(p).isDirectory();
  * on macOS and Windows, where catalog files themselves are matched by case
  */
 export const existsExactly = (file: string) => existsSync(file) && readdirSync(dirname(file)).includes(basename(file));
+
+/** `rel`, a path relative to `root`, as the directories on disk spell it: macOS and Windows also find it in another case */
+const spelledOnDisk = (root: string, rel: string) => {
+  // on another drive
+  if (isAbsolute(rel)) return rel;
+  let dir = root;
+  return rel
+    .split('/')
+    .map((name) => {
+      if (name !== '..' && name !== '') {
+        const names = readdirSync(dir);
+        if (!names.includes(name)) name = names.find((n) => n.toLowerCase() === name.toLowerCase()) ?? name;
+      }
+      dir = join(dir, name);
+      return name;
+    })
+    .join('/');
+};
 
 const readPackage = (dir: string): { name?: string; dependencies?: object; devDependencies?: object } => {
   const file = join(dir, 'package.json');
@@ -42,6 +60,13 @@ export function discoverGroups(root: string, groups?: Record<string, string | st
         const abs = resolve(root, d);
         if (!isDir(abs))
           throw new Error(`svelte-zukan: directory not found for group "${name}": ${normalizePath(abs)}`);
+        const written = normalizePath(relative(root, abs));
+        const onDisk = spelledOnDisk(root, written);
+        // the watcher reports the spelling on disk, which a dir written in another case never matches: no HMR
+        if (onDisk !== written)
+          throw new Error(
+            `svelte-zukan: directory for group "${name}" is written "${written}", but is "${onDisk}" on disk; directories are matched by case`
+          );
         const real = realpathSync(abs);
         if (!seen.has(real)) seen.set(real, normalizePath(abs));
       }

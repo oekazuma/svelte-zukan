@@ -3,7 +3,7 @@ import type { CatalogItem, TailwindSource } from '../types.js';
 export const ENTRY = 'virtual:svelte-zukan/entry';
 export const CATALOG = 'virtual:svelte-zukan/catalog';
 export const META = 'virtual:svelte-zukan/meta/';
-/** the source of axe-core as a string, injected into a preview page when its check runs */
+/** the URL of axe-core's script, loaded into a preview page when its check runs */
 export const AXE = 'virtual:svelte-zukan/axe';
 /** the Tailwind CSS entries, each one's data and sample CSS in `TAILWIND_SOURCE + id`: JS strings, never a CSS import */
 export const TAILWIND = 'virtual:svelte-zukan/tailwind';

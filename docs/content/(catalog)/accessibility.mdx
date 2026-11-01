@@ -32,4 +32,4 @@ The accessibility button runs [axe-core](https://github.com/dequelabs/axe-core) 
 - With `locale: 'ja'`, axe-core's messages are in Japanese too
 - A section that fails to load, or whose component throws while rendering, is reported as the error instead of being checked
 
-axe-core is loaded only when a check runs. The rule about landmarks around all page content is off, since a component on its own has none.
+axe-core is loaded only when a check runs, as a script file of the catalog (`/__zukan/axe.js` on the dev server, a file under `_zukan/` in the [static export](/static-export)), so a Content-Security-Policy of `script-src 'self'` allows it. The rule about landmarks around all page content is off, since a component on its own has none.
