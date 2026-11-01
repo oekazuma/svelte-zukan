@@ -12,3 +12,4 @@ fix: catalog UI accessibility and layout fixes.
 - The Tailwind CSS link in the sidebar is marked current for an unknown `source`, as the page shows the first entry.
 - The expand button is no longer announced as pressed on top of its changing name.
 - The WebMCP `check_accessibility` tool gives separate errors for an unknown ID and a missing section, listing the component's sections.
+- A component whose metadata fails to load no longer hides the section titles of the others from the sidebar search, and leaves no unhandled rejection on the top page.
