@@ -468,10 +468,15 @@ export function extractTokens(
   );
   // `@theme reference` and what `@config` and `@plugin` load: listed with the theme, but Tailwind declares none of
   // them. A non-inline one is read as `var(--x, fallback)`, so the project's own root declaration makes it real; an
-  // inline one (`@config`, `@plugin`) puts its literal value into the class, which never reads the variable.
+  // inline one (`@config`, `@plugin`) puts its literal value into the class, which reads the variable only when that
+  // value is `var()` of the variable itself, as daisyUI's `base-100: var(--color-base-100)` is.
   const reference = new Set(
-    entries.flatMap(([key, { options }]) =>
-      typeof options === 'number' && options & 2 && (options & 1 || !Object.hasOwn(known, key)) ? [key] : []
+    entries.flatMap(([key, { value, options }]) =>
+      typeof options === 'number' &&
+      options & 2 &&
+      !(Object.hasOwn(known, key) && (!(options & 1) || soleVar(collapse(value)) === key))
+        ? [key]
+        : []
     )
   );
   const values = { ...variables, ...known };

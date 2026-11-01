@@ -647,6 +647,34 @@ describe('the Tailwind CSS page', () => {
     await expect.element(screen.getByText('No matching tokens')).toBeInTheDocument();
   });
 
+  it('draws the light value of a light-dark() colour in the swatches of a dark catalog, as the samples do', async () => {
+    const adaptive: TailwindSource = {
+      ...source,
+      categories: [
+        {
+          id: 'background-color',
+          title: 'Background Color',
+          tokens: [{ class: 'bg-adaptive', cssVariable: '--color-adaptive', value: 'light-dark(#00aa00, #aa0000)' }]
+        }
+      ],
+      variables: { '--color-adaptive': 'light-dark(#00aa00, #aa0000)' }
+    };
+    localStorage.setItem('svelte-zukan:theme', 'dark');
+    // the catalog page sets it from its theme; here App is rendered into a container, which that rule does not match
+    document.documentElement.style.colorScheme = 'dark';
+    try {
+      const screen = await render(App, { props: props('#/tailwind?category=full-config', [item(adaptive)]) });
+      await expect.poll(() => screen.container.querySelector('.swatch')).toBeTruthy();
+      expect(getComputedStyle(screen.container.querySelector('.swatch')!).backgroundColor).toBe('rgb(0, 170, 0)');
+      screen.unmount();
+      const list = await render(App, { props: props('', [item(adaptive)]) });
+      await expect.poll(() => list.container.querySelector('.thumb span')).toBeTruthy();
+      expect(getComputedStyle(list.container.querySelector('.thumb span')!).backgroundColor).toBe('rgb(0, 170, 0)');
+    } finally {
+      document.documentElement.style.colorScheme = '';
+    }
+  });
+
   it('copies a variable from Full config and shows a failure', async () => {
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
     try {

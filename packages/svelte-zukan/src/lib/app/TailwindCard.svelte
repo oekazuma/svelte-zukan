@@ -94,6 +94,8 @@
 
   .thumb span {
     flex: 1;
+    /* the base value, as in the light sample frame: a dark catalog would pick the dark side of `light-dark()` */
+    color-scheme: light;
   }
 
   .text {
