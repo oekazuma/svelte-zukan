@@ -34,8 +34,9 @@ function cssFiles(dirs: string[]): string[] {
   const found = new Set<string>();
   for (const dir of dirs) {
     if (!existsSync(dir)) continue;
+    // globSync ignores case on macOS and Windows, where Linux and the check of a created .css file in hotUpdate do not
     for (const file of globSync('**/*.css', { cwd: dir, exclude: ['**/node_modules/**'] })) {
-      found.add(normalizePath(path.join(dir, file)));
+      if (file.endsWith('.css')) found.add(normalizePath(path.join(dir, file)));
     }
   }
   return [...found].sort();

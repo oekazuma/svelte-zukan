@@ -136,6 +136,12 @@ describe('findTailwindEntries', () => {
     expect(await findTailwindEntries([src], noResolver)).toEqual([normalizePath(join(src, 'theme.css'))]);
   });
 
+  it('matches the .css extension by case on every platform', async () => {
+    const { src } = fixture('body { margin: 0; }');
+    write(join(src, 'Theme.CSS'), '@theme { --color-brand: red; }');
+    expect(await findTailwindEntries([src], noResolver)).toEqual([]);
+  });
+
   it('skips node_modules', async () => {
     const { src } = fixture('body { margin: 0; }');
     write(join(src, 'node_modules/pkg/index.css'), '@import "tailwindcss";');
