@@ -36,7 +36,8 @@ beforeAll(async () => {
     root: app,
     configFile: false,
     customLogger: logger,
-    server: { port: 0 },
+    // the accessibility check loads axe-core as a script of its own, which this policy allows, not inline
+    server: { port: 0, headers: { 'Content-Security-Policy': "script-src 'self'" } },
     plugins: [zukan({ build: true }), svelte()]
   });
   await server.listen();

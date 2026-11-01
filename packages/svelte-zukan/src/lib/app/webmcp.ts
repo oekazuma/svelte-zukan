@@ -59,7 +59,7 @@ export async function fetchCatalog(url: URL): Promise<CatalogJson> {
 export function buildTools(opts: {
   /** `catalog.json` next to the catalog page */
   fetchCatalog: () => Promise<CatalogJson>;
-  /** the source of axe-core */
+  /** the URL of axe-core's script */
   axe?: () => Promise<string>;
   /** the catalog page's path, for preview URLs */
   page: string;

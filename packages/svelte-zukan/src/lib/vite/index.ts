@@ -9,6 +9,7 @@ import {
   createIdResolver,
   type Connect,
   normalizePath,
+  parseSync,
   type Environment,
   type EnvironmentModuleNode,
   type FSWatcher,
@@ -47,6 +48,8 @@ const ENTRY_SRC = '/@id/__x00__' + ENTRY;
 const OUT_PREFIX = '_zukan/';
 /** the catalog as data, next to index.html: `/__zukan/catalog.json` in dev */
 const CATALOG_JSON = 'catalog.json';
+/** axe-core, served at `/__zukan/axe.js` in dev and written under `_zukan/` by the build */
+const AXE_FILE = 'axe.js';
 /** Node resolves symlinks, so a workspace link to this package does not count */
 const installed = libDir.split('/').includes('node_modules');
 /** the types of what the catalog build writes; anything else is served as octet-stream, which browsers refuse for module scripts */
@@ -103,6 +106,30 @@ const realPath = (file: string): string => {
     const dir = dirname(file);
     return dir === file ? file : posix.join(realPath(dir), posix.basename(file));
   }
+};
+
+/** the names the importers of these modules, as last served, import from them by name */
+const importedNames = (mods: Iterable<EnvironmentModuleNode>, base: string) => {
+  const names = new Set<string>();
+  for (const mod of mods) {
+    const url = mod.url.split('?')[0];
+    for (const importer of mod.importers) {
+      const code = importer.transformResult?.code;
+      if (!code) continue;
+      for (const node of parseSync('importer.js', code).program.body) {
+        if ((node.type !== 'ImportDeclaration' && node.type !== 'ExportNamedDeclaration') || !node.source) continue;
+        const from = node.source.value.split('?')[0];
+        if (from !== url && from !== base.slice(0, -1) + url) continue;
+        for (const spec of node.specifiers) {
+          const name =
+            spec.type === 'ImportSpecifier' ? spec.imported : spec.type === 'ExportSpecifier' ? spec.local : null;
+          if (name) names.add('name' in name ? name.name : String(name.value));
+        }
+      }
+    }
+  }
+  names.delete('default');
+  return [...names];
 };
 
 /** Vite adds these to its own responses; the catalog's responses are the same pages */
@@ -227,12 +254,27 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   const failed = new Set<string>();
   /** a message for the dev server's catalog, with the paths relative to the root as catalog.json gives them */
   const messageOf = (e: unknown) => {
-    let message = (e instanceof Error ? e.message : String(e)).replaceAll(root + '/', '');
+    let message = e instanceof Error ? e.message : String(e);
+    // Oxc names a file relative to the working directory; only at the start of a path, where `app/` is not `src/app/`
+    const fromCwd = relative(process.cwd(), root).split(/[\\/]/).filter(Boolean);
+    if (fromCwd.length) {
+      const path = fromCwd.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[\\\\/]').join('');
+      message = message.replace(new RegExp(`(?<=^|[\\s"'(\\[])${path}`, 'g'), '');
+    }
+    message = message.replaceAll(root + '/', '');
     for (const dir of scanned())
       if (!isInside(dir, root)) message = message.replaceAll(dir + '/', normalizePath(relative(root, dir)) + '/');
     return message;
   };
   const scanned = () => groups.flatMap((g) => g.dirs);
+  // read from this package's own dependency, so the catalog's client never imports a CommonJS module
+  const axeSource = () => {
+    const read = (file: string) => readFileSync(createRequire(import.meta.url).resolve(`axe-core/${file}`), 'utf-8');
+    // axe's own translation, so its messages follow the catalog's `locale`
+    const locale =
+      resolved.locale === 'en' ? '' : `\naxe.configure({ locale: ${read(`locales/${resolved.locale}.json`)} });`;
+    return read('axe.min.js') + locale;
+  };
   // the watcher reports a file of a dir reached through a symlink (a `groups` dir under a `node_modules` link) by its
   // real path, and Vite's watcher ignores node_modules
   let realDirs: [real: string, dir: string][] = [];
@@ -455,14 +497,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       // `emptyOutDir: false` also because Kit sets it for the whole build; buildApp removes only the catalog's own files
       // `cssCodeSplit`: index.html is written without Vite's HTML transform, which is the only thing that links merged CSS
       // `cssTarget`: lowered `light-dark()` follows prefers-color-scheme, not the theme the catalog sets on each preview
-      // `chunkSizeWarningLimit`: axe-core (about 650 kB) is one chunk, loaded only when an accessibility check runs
       Object.assign(config.build, {
         ssr: false,
         lib: false,
         emptyOutDir: false,
         cssCodeSplit: true,
-        cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
-        chunkSizeWarningLimit: 1000
+        cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5']
       });
       // `external`: the catalog is loaded as it is, with nothing to provide an externalized import (library mode)
       config.build.rolldownOptions = { ...config.build.rolldownOptions, input: { zukan: ENTRY }, external: undefined };
@@ -624,14 +664,11 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           return `export default ${JSON.stringify(source)};\n`;
         });
       }
-      // read from this package's own dependency, so the catalog's client never imports a CommonJS module
+      // the URL of a script of its own, not its source: a page injecting it inline is blocked by `script-src 'self'`
       if (id === '\0' + AXE) {
-        const read = (file: string) =>
-          readFileSync(createRequire(import.meta.url).resolve(`axe-core/${file}`), 'utf-8');
-        // axe's own translation, so its messages follow the catalog's `locale`
-        const locale =
-          resolved.locale === 'en' ? '' : `\naxe.configure({ locale: ${read(`locales/${resolved.locale}.json`)} });`;
-        return `export default ${JSON.stringify(read('axe.min.js') + locale)};\n`;
+        if (serving) return `export default ${JSON.stringify(`${this.environment.config.base}__zukan/${AXE_FILE}`)};\n`;
+        const ref = this.emitFile({ type: 'asset', name: AXE_FILE, source: axeSource() });
+        return `export default import.meta.ROLLUP_FILE_URL_${ref};\n`;
       }
       if (id === '\0' + ENTRY) {
         // relative, so that absolute paths do not end up in the static build
@@ -683,6 +720,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
             });
           return;
         }
+        if (path === `${base}__zukan/${AXE_FILE}`) {
+          setHeaders(res, server.config.server.headers);
+          res.setHeader('content-type', CONTENT_TYPES['.js']);
+          res.end(axeSource());
+          return;
+        }
         if (path !== `${base}__zukan/`) return next();
         const icon = readFileSync(appFile('icon.svg'), 'utf-8');
         const html = renderHtml({
@@ -720,9 +763,13 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         res.setHeader('content-type', CONTENT_TYPES['.js']);
         res.setHeader('cache-control', 'no-cache');
         // a module that throws, not a 500, after which the browser rejects the import with no reason: the preview
-        // shows the import's error. The default export keeps a component's importer from failing to link first
+        // shows the import's error. Its exports keep an importer from failing to link first, with an error of its own
+        const names = importedNames(mods, server.config.base);
         res.end(
-          `throw new Error(${JSON.stringify(messageOf(stripVTControlCharacters(err.message)))});\nexport default null;\n`
+          `throw new Error(${JSON.stringify(messageOf(stripVTControlCharacters(err.message)))});\nexport default null;\n` +
+            (names.length
+              ? `let ${names.map((_, i) => `_${i}`).join(', ')};\nexport { ${names.map((n, i) => `_${i} as ${JSON.stringify(n)}`).join(', ')} };\n`
+              : '')
         );
       };
       // after Vite's transform middleware, which hands its errors on, and ahead of Vite's error handler, which would

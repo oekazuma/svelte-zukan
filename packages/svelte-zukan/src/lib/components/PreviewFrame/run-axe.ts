@@ -51,22 +51,26 @@ export function findTarget(doc: Document, target: string) {
 /** the last run in each preview page: axe-core throws "Axe is already running" when a run starts before it ends */
 const runs = new WeakMap<Window, Promise<unknown>>();
 
-/** Runs axe-core inside a preview page, or throws the preview's own error when it failed to load, injecting its source on the first run. A run waits for the one before it in the same page. */
-export function runAxe(doc: Document, source: () => Promise<string>): Promise<AxeResult> {
+/** Runs axe-core inside a preview page, or throws the preview's own error when it failed to load, loading the script at the URL `src` gives on the first run. A run waits for the one before it in the same page. */
+export function runAxe(doc: Document, src: () => Promise<string>): Promise<AxeResult> {
   const win = doc.defaultView!;
-  const run = (runs.get(win) ?? Promise.resolve()).catch(() => {}).then(() => runOnce(doc, source));
+  const run = (runs.get(win) ?? Promise.resolve()).catch(() => {}).then(() => runOnce(doc, src));
   runs.set(win, run);
   return run;
 }
 
-async function runOnce(doc: Document, source: () => Promise<string>): Promise<AxeResult> {
+async function runOnce(doc: Document, src: () => Promise<string>): Promise<AxeResult> {
   const failed = doc.querySelector('[data-zukan-error]');
   if (failed) throw new Error(failed.textContent ?? '');
   const win = doc.defaultView as AxeWindow;
   if (!win.axe) {
     const script = doc.createElement('script');
-    script.textContent = await source();
-    doc.head.append(script);
+    script.src = await src();
+    await new Promise((resolve, reject) => {
+      script.onload = resolve;
+      script.onerror = () => reject(new Error(`axe-core could not be loaded from ${script.src}`));
+      doc.head.append(script);
+    });
   }
   // `region` asks for landmarks around all content, which a component on its own never has
   const found = await win.axe!.run(doc.querySelector('[data-zukan-preview]') ?? doc.body, {

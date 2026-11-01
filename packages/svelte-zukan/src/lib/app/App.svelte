@@ -38,7 +38,7 @@
     listError?: string | null;
     /** the Tailwind CSS entries; empty without Tailwind */
     tailwind?: TailwindListItem[];
-    /** the source of axe-core, loaded on the first accessibility check */
+    /** the URL of axe-core's script, loaded on the first accessibility check */
     axe?: () => Promise<string>;
   } = $props();
 
