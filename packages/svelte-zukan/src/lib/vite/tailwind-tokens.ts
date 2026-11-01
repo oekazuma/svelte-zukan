@@ -468,10 +468,20 @@ export function extractTokens(
   );
   // `@theme reference` and what `@config` and `@plugin` load: listed with the theme, but Tailwind declares none of
   // them. A non-inline one is read as `var(--x, fallback)`, so the project's own root declaration makes it real; an
-  // inline one (`@config`, `@plugin`) puts its literal value into the class, which never reads the variable.
+  // inline one (`@config`, `@plugin`) puts its literal value into the class, which reads the variable only when that
+  // value is `var()` of the variable itself, as daisyUI's `base-100: var(--color-base-100)` is. A prefix renames the
+  // theme's key (`--tw-color-base-100`) but not the variable the value reads, so that root name is the one shown.
+  const rootName = new Map<string, string>();
+  for (const [key, { value, options }] of entries) {
+    if (typeof options !== 'number' || (options & 3) !== 3) continue;
+    const read = soleVar(collapse(value));
+    if (read && Object.hasOwn(known, read) && variablePrefix + read.slice(2) === key) rootName.set(key, read);
+  }
   const reference = new Set(
     entries.flatMap(([key, { options }]) =>
-      typeof options === 'number' && options & 2 && (options & 1 || !Object.hasOwn(known, key)) ? [key] : []
+      typeof options === 'number' && options & 2 && !rootName.has(key) && (options & 1 || !Object.hasOwn(known, key))
+        ? [key]
+        : []
     )
   );
   const values = { ...variables, ...known };
@@ -510,6 +520,7 @@ export function extractTokens(
     // value is a coincidence (`border-2` is `2px` like `--radius-2`)
     cssVariable ??= others.find((key) => inline.has(key) && variables[key] === value) ?? null;
     if (cssVariable && reference.has(cssVariable)) cssVariable = null;
+    else if (cssVariable) cssVariable = rootName.get(cssVariable) ?? cssVariable;
     // `drop-shadow-none` sets `--tw-drop-shadow` to nothing, which a blank cell would not explain
     return { class: classPrefix + name, cssVariable, value: resolveValue(shown, values) || 'none' };
   };

@@ -297,6 +297,40 @@ describe('Tailwind CSS in the search dialog', () => {
     ).toBeNull();
   });
 
+  it('draws the light value of a light-dark() colour in a dark catalog, as the samples do', async () => {
+    const { props } = setup();
+    const value = 'light-dark(#00aa00, #aa0000)';
+    const adaptive: TailwindSource = {
+      ...tailwindSource,
+      categories: [
+        {
+          id: 'background-color',
+          title: 'Background Color',
+          tokens: [{ class: 'bg-adaptive', cssVariable: '--color-adaptive', value }]
+        }
+      ],
+      variables: { '--color-adaptive': value }
+    };
+    const tailwind: TailwindListItem[] = [
+      { id: 'app', file: 'src/app.css', error: null, load: () => Promise.resolve({ default: adaptive }) }
+    ];
+    localStorage.setItem('svelte-zukan:theme', 'dark');
+    // the catalog page sets it from its theme; here App is rendered into a container, which that rule does not match
+    document.documentElement.style.colorScheme = 'dark';
+    try {
+      const screen = await render(App, { props: { ...props, tailwind } });
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+      await openSearch();
+      await screen.getByRole('combobox').fill('bg-adaptive');
+      const option = screen.getByRole('option', { name: /bg-adaptive/ });
+      await expect.element(option).toBeInTheDocument();
+      const swatch = option.element().querySelector<HTMLElement>('.swatch');
+      expect(swatch && getComputedStyle(swatch).backgroundColor).toBe('rgb(0, 170, 0)');
+    } finally {
+      document.documentElement.style.colorScheme = '';
+    }
+  });
+
   it('finds a category by its title in the catalog language and opens it unfiltered', async () => {
     const { props } = setupTailwind(undefined, 'ja');
     const screen = await render(App, { props });
