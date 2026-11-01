@@ -441,6 +441,11 @@ describe('App', () => {
     await userEvent.keyboard('j');
     await userEvent.keyboard('k');
     expect(location.hash).toBe('#/tailwind');
+    // an unknown source shows the first entry too
+    await setHash('#/tailwind?source=nope');
+    await expect
+      .element(two.getByRole('link', { name: 'Tailwind CSS (src/app.css)' }))
+      .toHaveAttribute('aria-current', 'page');
   });
 
   it('T switches the theme and F expands the preview in view', async () => {
@@ -785,6 +790,22 @@ describe('App', () => {
     await expect.element(nav.getByText('No matches')).not.toBeInTheDocument();
     await screen.getByRole('searchbox', { name: 'Search' }).fill('x');
     await expect.element(nav.getByText('No matches')).toBeInTheDocument();
+  });
+
+  it('the initial tile keeps white text above 3:1 at the yellow hue, where the contrast is lowest', async () => {
+    // axe-core skips the tile: it sits in the inert thumbnail
+    const { props } = setup('');
+    const screen = await render(App, { props });
+    await expect.poll(() => screen.container.querySelector('.thumb .mark')).toBeTruthy();
+    const mark = screen.container.querySelector<HTMLElement>('.thumb .mark')!;
+    expect(mark.style.getPropertyValue('--hue')).toBe('59');
+    const [r, g, b] = getComputedStyle(mark)
+      .backgroundColor.match(/\d+/g)!
+      .map((c) => {
+        const v = Number(c) / 255;
+        return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      });
+    expect(1.05 / (0.2126 * r + 0.7152 * g + 0.0722 * b + 0.05)).toBeGreaterThanOrEqual(3);
   });
 
   it('a name starting with an emoji shows the whole emoji as its initial', async () => {
@@ -1450,6 +1471,43 @@ describe('App', () => {
     await expect.element(nav.getByText('No matches')).toBeInTheDocument();
   });
 
+  it('the search says No matches only once the section titles are in, and announces the count', async () => {
+    const { props } = setup('');
+    let resolve!: (m: { default: ZukanMeta }) => void;
+    props.catalog[0].meta = () => new Promise((r) => (resolve = r));
+    const screen = await render(App, { props });
+    const nav = screen.getByRole('navigation', { name: 'Components' });
+    const status = screen.getByRole('banner').getByRole('status');
+    await screen.getByRole('searchbox', { name: 'Search' }).fill('nothing');
+    // a section title still loading may match
+    await expect.element(nav.getByText('No matches')).not.toBeInTheDocument();
+    await expect.element(status).toHaveTextContent('');
+    resolve({ default: { sections: [], doc: null } });
+    await expect.element(nav.getByText('No matches')).toBeInTheDocument();
+    await expect.element(status).toHaveTextContent('No matches');
+    await screen.getByRole('searchbox', { name: 'Search' }).fill('card');
+    await expect.element(status).toHaveTextContent('Results: 1');
+  });
+
+  it('the search still finds the section titles of the other entries when one fails to load', async () => {
+    const { props } = setup('');
+    props.catalog[0].meta = () =>
+      Promise.resolve({ default: { sections: [{ title: 'Dismissible', code: '' }], doc: null } });
+    props.catalog.push({
+      group: 'ui',
+      name: 'Broken',
+      dir: '',
+      path: 'ui/Broken',
+      load,
+      meta: () => Promise.reject(new Error('broken'))
+    });
+    const screen = await render(App, { props });
+    const nav = screen.getByRole('navigation', { name: 'Components' });
+    await screen.getByRole('searchbox', { name: 'Search' }).fill('dismiss');
+    await expect.element(nav.getByRole('link', { name: 'Dismissible' })).toBeInTheDocument();
+    await expect.element(screen.getByRole('banner').getByRole('status')).toHaveTextContent('Results: 1');
+  });
+
   it('the search also finds section titles and links to them', async () => {
     const { props } = setup('');
     props.catalog[0].meta = () =>
@@ -1643,6 +1701,29 @@ describe('App', () => {
     await screen.getByRole('navigation', { name: 'Components' }).getByRole('link', { name: 'Card' }).click();
     await expect.element(menu).toHaveAttribute('aria-expanded', 'false');
     await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+  });
+
+  it('on a narrow screen a link followed by keyboard leaves the focus on the main content, not the body', async () => {
+    await page.viewport(400, 800);
+    const { props } = setup('');
+    const screen = await render(App, { props });
+    await screen.getByRole('button', { name: 'Menu' }).click();
+    const link = screen.getByRole('navigation', { name: 'Components' }).getByRole('link', { name: 'Card' });
+    (link.element() as HTMLElement).focus();
+    await userEvent.keyboard('{Enter}');
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    await expect.element(screen.getByRole('main')).toHaveFocus();
+  });
+
+  it('on a narrow screen long names wrap instead of scrolling the page sideways', async () => {
+    await page.viewport(375, 800);
+    const { props } = setup('#/ui/data-table/DataTableColumnHeaderSortButton');
+    for (const name of ['DataTableColumnHeaderSortButton', 'DataTableColumnHeaderFilterPopover'])
+      props.catalog.push({ group: 'ui', name, dir: 'data-table', path: `ui/data-table/${name}`, load, meta });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /SortButton/ })).toBeInTheDocument();
+    await expect.element(screen.getByRole('link', { name: /FilterPopover/ })).toBeInTheDocument();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(document.documentElement.clientWidth);
   });
 
   it('on a narrow screen a folder opens and closes without closing the menu', async () => {

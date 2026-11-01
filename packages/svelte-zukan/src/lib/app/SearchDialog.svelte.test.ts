@@ -137,6 +137,32 @@ describe('the search dialog', () => {
     await expect.element(screen.getByRole('option', { name: /Broken/ })).toBeInTheDocument();
   });
 
+  it('announces the number of results, or that there are none, once the metadata is in', async () => {
+    const { props } = setup();
+    const screen = await render(App, { props });
+    await openSearch();
+    const status = screen.getByRole('dialog').getByRole('status');
+    await screen.getByRole('combobox').fill('broken');
+    await expect.element(status).toHaveTextContent('Results: 1');
+    await screen.getByRole('combobox').fill('zzz');
+    await expect.element(status).toHaveTextContent('No matches');
+  });
+
+  it('wraps a long name on a narrow screen, keeping its group and directory in view', async () => {
+    await page.viewport(375, 800);
+    const { catalog, props } = setup();
+    const name = 'DataTableColumnHeaderSortButtonWithTooltip';
+    catalog.push({ ...catalog[1], group: 'ui', name, dir: 'data-table', path: `ui/data-table/${name}` });
+    const screen = await render(App, { props });
+    await openSearch();
+    await screen.getByRole('combobox').fill('tooltip');
+    const option = screen.getByRole('option', { name: new RegExp(name) });
+    await expect.element(option).toBeInTheDocument();
+    const box = option.element().getBoundingClientRect();
+    for (const part of option.element().querySelectorAll('.name, .group'))
+      expect(part.getBoundingClientRect().right).toBeLessThanOrEqual(box.right);
+  });
+
   it('the group filter narrows the results', async () => {
     const { props } = setup();
     const screen = await render(App, { props });
@@ -295,6 +321,32 @@ describe('Tailwind CSS in the search dialog', () => {
         .element()
         .querySelector('.swatch')
     ).toBeNull();
+  });
+
+  it('says No matches for a Tailwind CSS query only once the Tailwind CSS entries are in', async () => {
+    const { tailwind, props } = setupTailwind();
+    let resolve!: (m: { default: TailwindSource }) => void;
+    tailwind[0].load = () => new Promise((r) => (resolve = r));
+    const screen = await render(App, { props });
+    await openSearch();
+    const dialog = screen.getByRole('dialog');
+    await screen.getByRole('combobox').fill('brand');
+    // the components' metadata is in, and none of them matches
+    await expect.element(dialog.getByText('No matches', { exact: true }).first()).not.toBeInTheDocument();
+    await expect.element(dialog.getByRole('status')).toHaveTextContent('');
+    resolve({ default: tailwindSource });
+    await expect.element(dialog.getByRole('status')).toHaveTextContent('Results: 2');
+  });
+
+  it('a component group says No matches without waiting for the Tailwind CSS entries', async () => {
+    const { tailwind, props } = setupTailwind();
+    tailwind[0].load = () => new Promise(() => {});
+    const screen = await render(App, { props });
+    await openSearch();
+    const dialog = screen.getByRole('dialog');
+    await dialog.getByRole('group', { name: 'Groups' }).getByRole('button', { name: 'ui' }).click();
+    await screen.getByRole('combobox').fill('nothing-matches');
+    await expect.element(dialog.getByRole('status')).toHaveTextContent('No matches');
   });
 
   it('draws the light value of a light-dark() colour in a dark catalog, as the samples do', async () => {

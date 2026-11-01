@@ -105,6 +105,11 @@ describe('WebMCP tools', () => {
     });
     const result = await tool(withAxe, 'check_accessibility').execute({ id: 'ui/Button', section: 'Nope' });
     expect(result.isError).toBe(true);
+    expect(body(result)).toBe('No section "Nope" in "ui/Button". The sections of "ui/Button": "Primary", "Disabled".');
+    const missing = await tool(withAxe, 'check_accessibility').execute({ id: 'ui/Button' });
+    expect(body(missing)).toBe('A section is required. The sections of "ui/Button": "Primary", "Disabled".');
+    const unknown = await tool(withAxe, 'check_accessibility').execute({ id: 'ui/Nope', section: 'Primary' });
+    expect(body(unknown)).toBe('No component with the ID "ui/Nope".');
     expect(document.querySelectorAll('iframe').length).toBe(0);
   });
 

@@ -339,7 +339,13 @@
         <span class="passed">{labels.a11yPassed}</span>
       {/if}
     </p>
-    <button type="button" class="action" disabled={result.status === 'running'} onclick={() => check()}>
+    <!-- aria-disabled, not disabled: a focused button that becomes disabled drops the focus to the body -->
+    <button
+      type="button"
+      class="action"
+      aria-disabled={result.status === 'running'}
+      onclick={() => result.status !== 'running' && check()}
+    >
       {@render icon(RERUN_ICON)}{labels.a11yRerun}
     </button>
     <button type="button" class="close" aria-label={labels.a11yClose} title={labels.a11yClose} onclick={onclose}>
@@ -523,6 +529,11 @@
     color: var(--_text);
     font: inherit;
     cursor: pointer;
+  }
+
+  .head button[aria-disabled='true'] {
+    color: var(--_muted);
+    cursor: default;
   }
 
   ul {

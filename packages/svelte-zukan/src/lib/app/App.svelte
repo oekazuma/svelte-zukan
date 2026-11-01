@@ -264,7 +264,9 @@
       onshortcuts={() => shortcuts?.showModal()}
       onsearch={() => searchDialog?.open()}
       {tailwind}
-      currentTailwind={route.view === 'tailwind' ? (route.source ?? tailwind[0]?.id) : undefined}
+      currentTailwind={route.view === 'tailwind'
+        ? (tailwind.find((s) => s.id === route.source) ?? tailwind[0])?.id
+        : undefined}
       {t}
     />
     <main id="zukan-main" tabindex="-1" bind:this={main}>

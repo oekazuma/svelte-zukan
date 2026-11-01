@@ -37,7 +37,7 @@
   type Meta = Pick<SearchItem, 'sections' | 'doc' | 'props'>;
   // loaded on the first open only, so the catalog page does not import every metadata module up front
   let metas = $state.raw<Map<string, Meta>>();
-  let sources = $state.raw<TailwindSource[]>([]);
+  let sources = $state.raw<TailwindSource[]>();
   let loading = false;
 
   // DOMParser documents are inert: no scripts run and no images load
@@ -85,7 +85,7 @@
     }))
   );
   const tailwindItems = $derived(
-    sources.flatMap((data): TailwindSearchItem[] => [
+    (sources ?? []).flatMap((data): TailwindSearchItem[] => [
       ...data.categories.map((c) => ({
         source: data.id,
         category: c.id,
@@ -115,6 +115,8 @@
     ['tailwind', t.tailwind]
   ]);
   // already in the order of `kinds`, so ↑ and ↓ move down the list as shown
+  // what the selected group searches, or a Tailwind CSS query would say No matches before its tokens are in
+  const loaded = $derived(group === TAILWIND ? !!sources : typeof group === 'string' ? !!metas : !!(metas && sources));
   const hits = $derived(
     search(
       group === TAILWIND ? [] : items,
@@ -245,9 +247,14 @@
         {/if}
       {/each}
     </div>
-    {#if query.trim() && !hits.length && metas}
+    {#if query.trim() && !hits.length && loaded}
       <p class="empty">{t.noMatches}</p>
     {/if}
+    <div class="sr-only" role="status">
+      {#if query.trim() && loaded}
+        {hits.length ? `${t.searchResults}: ${hits.length}` : t.noMatches}
+      {/if}
+    </div>
   </div>
 </dialog>
 
@@ -359,13 +366,16 @@
 
   .line {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: 8px;
     min-width: 0;
   }
 
   .name {
+    min-width: 0;
     font-weight: 600;
+    overflow-wrap: anywhere;
   }
 
   .label {
@@ -394,9 +404,11 @@
   }
 
   .group {
+    min-width: 0;
     margin-left: auto;
     color: var(--_muted);
     font-size: 12px;
+    overflow-wrap: anywhere;
   }
 
   .snippet {
@@ -411,5 +423,14 @@
     margin: 0 8px 4px;
     color: var(--_muted);
     font-size: 14px;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 </style>
