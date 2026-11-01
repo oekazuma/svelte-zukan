@@ -1,7 +1,9 @@
 import { __unstable__loadDesignSystem, compile } from '@tailwindcss/node';
 import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { normalizePath } from 'vite';
 import { describe, expect, it } from 'vitest';
 import type { TailwindCategoryId } from '../types.js';
@@ -228,6 +230,52 @@ describe('extractTokens', () => {
       value: '#123456'
     });
   });
+
+  it.each([
+    ['', ''],
+    [' prefix(tw)', 'tw:']
+  ])(
+    'names the variable of a @plugin value that reads a root variable of its own name, as daisyUI does%s',
+    async (prefix, cls) => {
+      const dir = normalizePath(realpathSync(mkdtempSync(join(tmpdir(), 'zukan-tailwind-tokens-'))));
+      // daisyUI 5's shape: `theme.extend` maps each name to `var()` of its own theme variable, and `addBase` declares
+      // the values of the default theme on `:where(:root)`
+      writeFileSync(
+        join(dir, 'daisy.mjs'),
+        `import plugin from ${JSON.stringify(pathToFileURL(createRequire(import.meta.url).resolve('tailwindcss/plugin')).href)};
+export default plugin.withOptions(
+  () => ({ addBase }) => addBase({
+    ':where(:root),:root:has(input.theme-controller[value=light]:checked),[data-theme=light]': {
+      'color-scheme': 'light', '--color-base-100': 'oklch(100% 0 0)', '--radius-box': '0.5rem'
+    },
+    '@media (prefers-color-scheme: dark)': { ':root:not([data-theme])': { '--color-base-100': 'oklch(25% 0 0)' } }
+  }),
+  () => ({ theme: { extend: {
+    colors: { 'base-100': 'var(--color-base-100)', primary: 'var(--color-primary)' },
+    borderRadius: { box: 'var(--radius-box)' }
+  } } })
+);`
+      );
+      const { token } = await load(`@import "tailwindcss"${prefix};\n@plugin "${dir}/daisy.mjs";`);
+      // a prefix renames the theme's keys, not the variables the plugin's values read and declares
+      expect(token('background-color', `${cls}bg-base-100`)).toEqual({
+        class: `${cls}bg-base-100`,
+        cssVariable: '--color-base-100',
+        value: 'oklch(100% 0 0)'
+      });
+      expect(token('border-radius', `${cls}rounded-box`)).toEqual({
+        class: `${cls}rounded-box`,
+        cssVariable: '--radius-box',
+        value: '0.5rem'
+      });
+      // nothing declares it, so there is still nothing to copy
+      expect(token('background-color', `${cls}bg-primary`)).toEqual({
+        class: `${cls}bg-primary`,
+        cssVariable: null,
+        value: 'var(--color-primary)'
+      });
+    }
+  );
 
   it('reads the last declaration of the property', async () => {
     const { token } = await load(

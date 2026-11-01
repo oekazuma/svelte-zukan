@@ -16,9 +16,10 @@ zukan({ build: true });
 - 出力のパスは相対パスなので、どのサブパス（例: `/docs/zukan/`）に置いても動きます。サーバー側の書き換え設定は要りません
 - `build` を有効にすると、`vite build` は Vite の builder モード（Environment API）で動き、全環境が 1 回の実行でビルドされます
 - カタログの CSS はアプリの `build.cssTarget` にかかわらず、`light-dark()` に対応したブラウザー（Chrome と Edge 123、Firefox 120、Safari 17.5）向けに出力します。そのため、コンポーネントの `light-dark()` もカタログのテーマボタンに従います
-- `vite preview` でも、書き出したカタログを `/__zukan/`（`base` を設定していればその下）で開けるので、公開する前に確かめられます
+- `vite preview` でも、書き出したカタログを `/__zukan/`（`base` を設定していればその下）で開けるので、公開する前に確かめられます。`preview.headers` も送りますが、プレビューはどれも `index.html` のフレームなので、`index.html` では `X-Frame-Options: DENY` を `SAMEORIGIN` に変え、Content-Security-Policy の `frame-ancestors` に `'self'` を足します。カタログを公開するホストでも、同じオリジンのフレームを許可してください
 - 再デプロイの前から開いたままのカタログのタブは、前のビルドのファイルを読みにいきます。そのファイルがもう無いときは、カタログを 1 回だけ読み込み直して新しいビルドに切り替えます（10 秒に 1 回まで。それ以上はプレビューにエラーを表示します）
 - `vite build --watch` ではカタログを書き出しません。警告を出して飛ばします
+- Vite の設定が `build.write: false` のときは、カタログをビルドしますが、ファイルの書き出しも削除もしません
 - 出力先は Vite の root そのものや root を含むディレクトリにできません。アプリの `build.outDir`（既定は `dist`）、カタログ以外の各環境の `build.outDir`、SvelteKit の `outDir`（`.svelte-kit`）と重なってもいけません。アプリの `publicDir`（`public`、SvelteKit では `static`）の中にも置けません。アプリはカタログを書き出す前に `publicDir` をコピーするからです。どれもビルドエラーになります
 - カタログを書き出すのは `vite build`（Vite の JavaScript API なら `createBuilder().buildApp()`）です。`vite build --ssr` と Vite の `build()` 関数は 1 つの環境だけをビルドするので、カタログは書き出しません
 - `index.html` の隣に `catalog.json` も書き出します。全コンポーネントのセクション、コード、props、`.md` と、カタログファイルのない `.svelte` ファイルをまとめたもので、ツールや AI エージェント向けです。dev サーバーでは同じ内容を `/__zukan/catalog.json` で返します
