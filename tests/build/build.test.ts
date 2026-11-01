@@ -99,8 +99,11 @@ test('kit monorepo build', { timeout: 120_000 }, () => {
   for (const text of ['Long title', 'A card from']) expect(all).toContain(text);
   expect(unloadedCss(dir)).toEqual([]);
   expect(withLocalPaths(dir)).toEqual([]);
+  const catalog = JSON.parse(readFileSync(join(dir, 'zukan-dist/catalog.json'), 'utf8'));
   // no Tailwind CSS in the app: no page for it
-  expect(JSON.parse(readFileSync(join(dir, 'zukan-dist/catalog.json'), 'utf8')).tailwind).toBeNull();
+  expect(catalog.tailwind).toBeNull();
+  // one metadata chunk per entry, not named after its ID
+  expect(globSync('zukan-dist/_zukan/meta-*.js', { cwd: dir })).toHaveLength(catalog.components.length);
 });
 
 test('kit monorepo build under paths.base', { timeout: 180_000 }, async () => {

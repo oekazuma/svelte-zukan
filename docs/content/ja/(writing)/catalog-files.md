@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-コンポーネントの隣に `<Name>.zukan.svelte` を置きます。`<Name>.zukan.md` は任意です。`zukan/` のような専用のディレクトリは要りません。
+コンポーネントの隣に `<Name>.zukan.svelte` を置きます。`<Name>.zukan.md` は任意です。`zukan/` のような専用のディレクトリは要りません。ファイル名はどのプラットフォームでも大文字と小文字を区別して照合するので、`Button.Zukan.svelte` はカタログファイルになりません。
 
 ```text
 src/lib/Button/

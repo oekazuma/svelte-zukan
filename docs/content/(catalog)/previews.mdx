@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-Each section previews in its own frame, with a toolbar above it.
+Each section previews in its own frame, with a toolbar above it. The frame is the catalog page itself, on the same origin. The dev server sends the catalog page with `server.headers`, except that `X-Frame-Options: DENY` becomes `SAMEORIGIN` and a Content-Security-Policy `frame-ancestors` also allows `'self'`, so the frames can load.
 
 <img
   className="shot-light"

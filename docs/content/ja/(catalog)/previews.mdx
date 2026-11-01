@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-セクションごとにプレビューの枠があり、その上にツールバーが付きます。
+セクションごとにプレビューの枠があり、その上にツールバーが付きます。枠は同じオリジンのカタログのページそのものです。dev サーバーはカタログのページに `server.headers` を付けて返しますが、枠を読み込めるように、`X-Frame-Options: DENY` は `SAMEORIGIN` に変え、Content-Security-Policy の `frame-ancestors` には `'self'` を足します。
 
 <img
   className="shot-light"

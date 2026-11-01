@@ -110,6 +110,28 @@ const setHeaders = (res: ServerResponse, headers: OutgoingHttpHeaders | undefine
   for (const [name, value] of Object.entries(headers ?? {})) if (value !== undefined) res.setHeader(name, value);
 };
 
+/** a Content-Security-Policy value, one or more policies, whose `frame-ancestors` also allow the same origin */
+const allowSelfFrame = (csp: string) =>
+  csp.replace(/((?:^|[;,])\s*frame-ancestors(?=[\s;,]|$))([^;,]*)/gi, (_, directive: string, sources: string) =>
+    /'self'/i.test(sources) ? directive + sources : `${directive}${sources.replace(/'none'/gi, '').trimEnd()} 'self'`
+  );
+
+/**
+ * The headers of a catalog page. Its previews are frames of the same page, so a policy against every frame
+ * (`X-Frame-Options: DENY`, `frame-ancestors 'none'`) would leave every preview blank, so both allow the same origin.
+ */
+const pageHeaders = (headers: OutgoingHttpHeaders | undefined) =>
+  Object.fromEntries(
+    Object.entries(headers ?? {}).map(([name, value]) => {
+      const key = name.toLowerCase();
+      if (key === 'x-frame-options' && typeof value === 'string' && value.trim().toLowerCase() === 'deny')
+        return [name, 'SAMEORIGIN'];
+      if (key === 'content-security-policy' && typeof value === 'string') return [name, allowSelfFrame(value)];
+      if (key === 'content-security-policy' && Array.isArray(value)) return [name, value.map(allowSelfFrame)];
+      return [name, value];
+    })
+  );
+
 /** whether only the catalog's own modules import `mod`, directly or through other modules */
 const catalogOnly = (mod: EnvironmentModuleNode, seen = new Set<EnvironmentModuleNode>()): boolean => {
   if (seen.has(mod)) return true;
@@ -412,7 +434,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
                   input: { zukan: ENTRY },
                   output: {
                     entryFileNames: `${OUT_PREFIX}[name]-[hash].js`,
-                    chunkFileNames: `${OUT_PREFIX}[name]-[hash].js`,
+                    // a metadata chunk is named after its module, the hex of the ID: a long ID would exceed the
+                    // 255 bytes a file name may have
+                    chunkFileNames: (chunk) =>
+                      chunk.facadeModuleId?.startsWith('\0' + META)
+                        ? `${OUT_PREFIX}meta-[hash].js`
+                        : `${OUT_PREFIX}[name]-[hash].js`,
                     assetFileNames: `${OUT_PREFIX}[name]-[hash][extname]`
                   }
                 }
@@ -495,15 +522,20 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           return;
         }
 
+        // `build.write: false` writes no file, and creates no outDir to write into
+        const write = env.config.build.write !== false;
         // only what this plugin writes: the outDir may be shared with other files
-        rmSync(join(resolved.build, OUT_PREFIX), { recursive: true, force: true });
-        rmSync(join(resolved.build, 'index.html'), { force: true });
-        rmSync(join(resolved.build, CATALOG_JSON), { force: true });
+        if (write) {
+          rmSync(join(resolved.build, OUT_PREFIX), { recursive: true, force: true });
+          rmSync(join(resolved.build, 'index.html'), { force: true });
+          rmSync(join(resolved.build, CATALOG_JSON), { force: true });
+        }
         const out = await builder.build(env);
         const entry = (Array.isArray(out) ? out : [out])
           .flatMap((o) => ('output' in o ? o.output : []))
           .find((c) => c.type === 'chunk' && c.name === 'zukan');
         if (!entry) throw new Error('svelte-zukan: the catalog entry was not built');
+        if (!write) return;
         const icon = readFileSync(appFile('icon.svg'), 'utf-8');
         const html = renderHtml({
           title: resolved.title,
@@ -661,7 +693,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         server
           .transformIndexHtml(path, html)
           .then((out) => {
-            setHeaders(res, server.config.server.headers);
+            setHeaders(res, pageHeaders(server.config.server.headers));
             res.setHeader('content-type', 'text/html');
             res.end(out);
           })
@@ -721,7 +753,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         }
         const file = normalizePath(resolve(out, rel));
         if (!isInside(file, out) || !existsSync(file) || !statSync(file).isFile()) return next();
-        setHeaders(res, server.config.preview.headers);
+        const { headers } = server.config.preview;
+        setHeaders(res, extname(file) === '.html' ? pageHeaders(headers) : headers);
         res.setHeader('content-type', CONTENT_TYPES[extname(file)] ?? 'application/octet-stream');
         res.end(readFileSync(file));
       });
