@@ -115,6 +115,8 @@
     ['tailwind', t.tailwind]
   ]);
   // already in the order of `kinds`, so ↑ and ↓ move down the list as shown
+  // what the selected group searches, or a Tailwind CSS query would say No matches before its tokens are in
+  const loaded = $derived(group === TAILWIND ? !!sources : typeof group === 'string' ? !!metas : !!(metas && sources));
   const hits = $derived(
     search(
       group === TAILWIND ? [] : items,
@@ -245,12 +247,11 @@
         {/if}
       {/each}
     </div>
-    <!-- both, or a Tailwind CSS query would say No matches before its tokens are in -->
-    {#if query.trim() && !hits.length && metas && sources}
+    {#if query.trim() && !hits.length && loaded}
       <p class="empty">{t.noMatches}</p>
     {/if}
     <div class="sr-only" role="status">
-      {#if query.trim() && metas && sources}
+      {#if query.trim() && loaded}
         {hits.length ? `${t.searchResults}: ${hits.length}` : t.noMatches}
       {/if}
     </div>

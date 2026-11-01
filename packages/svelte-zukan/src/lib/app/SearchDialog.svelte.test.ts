@@ -338,6 +338,17 @@ describe('Tailwind CSS in the search dialog', () => {
     await expect.element(dialog.getByRole('status')).toHaveTextContent('Results: 2');
   });
 
+  it('a component group says No matches without waiting for the Tailwind CSS entries', async () => {
+    const { tailwind, props } = setupTailwind();
+    tailwind[0].load = () => new Promise(() => {});
+    const screen = await render(App, { props });
+    await openSearch();
+    const dialog = screen.getByRole('dialog');
+    await dialog.getByRole('group', { name: 'Groups' }).getByRole('button', { name: 'ui' }).click();
+    await screen.getByRole('combobox').fill('nothing-matches');
+    await expect.element(dialog.getByRole('status')).toHaveTextContent('No matches');
+  });
+
   it('draws the light value of a light-dark() colour in a dark catalog, as the samples do', async () => {
     const { props } = setup();
     const value = 'light-dark(#00aa00, #aa0000)';
