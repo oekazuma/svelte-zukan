@@ -231,13 +231,18 @@ describe('extractTokens', () => {
     });
   });
 
-  it('names the variable of a @plugin value that reads a root variable of its own name, as daisyUI does', async () => {
-    const dir = normalizePath(realpathSync(mkdtempSync(join(tmpdir(), 'zukan-tailwind-tokens-'))));
-    // daisyUI 5's shape: `theme.extend` maps each name to `var()` of its own theme variable, and `addBase` declares
-    // the values of the default theme on `:where(:root)`
-    writeFileSync(
-      join(dir, 'daisy.mjs'),
-      `import plugin from ${JSON.stringify(pathToFileURL(createRequire(import.meta.url).resolve('tailwindcss/plugin')).href)};
+  it.each([
+    ['', ''],
+    [' prefix(tw)', 'tw:']
+  ])(
+    'names the variable of a @plugin value that reads a root variable of its own name, as daisyUI does%s',
+    async (prefix, cls) => {
+      const dir = normalizePath(realpathSync(mkdtempSync(join(tmpdir(), 'zukan-tailwind-tokens-'))));
+      // daisyUI 5's shape: `theme.extend` maps each name to `var()` of its own theme variable, and `addBase` declares
+      // the values of the default theme on `:where(:root)`
+      writeFileSync(
+        join(dir, 'daisy.mjs'),
+        `import plugin from ${JSON.stringify(pathToFileURL(createRequire(import.meta.url).resolve('tailwindcss/plugin')).href)};
 export default plugin.withOptions(
   () => ({ addBase }) => addBase({
     ':where(:root),:root:has(input.theme-controller[value=light]:checked),[data-theme=light]': {
@@ -250,25 +255,27 @@ export default plugin.withOptions(
     borderRadius: { box: 'var(--radius-box)' }
   } } })
 );`
-    );
-    const { token } = await load(`@import "tailwindcss";\n@plugin "${dir}/daisy.mjs";`);
-    expect(token('background-color', 'bg-base-100')).toEqual({
-      class: 'bg-base-100',
-      cssVariable: '--color-base-100',
-      value: 'oklch(100% 0 0)'
-    });
-    expect(token('border-radius', 'rounded-box')).toEqual({
-      class: 'rounded-box',
-      cssVariable: '--radius-box',
-      value: '0.5rem'
-    });
-    // nothing declares it, so there is still nothing to copy
-    expect(token('background-color', 'bg-primary')).toEqual({
-      class: 'bg-primary',
-      cssVariable: null,
-      value: 'var(--color-primary)'
-    });
-  });
+      );
+      const { token } = await load(`@import "tailwindcss"${prefix};\n@plugin "${dir}/daisy.mjs";`);
+      // a prefix renames the theme's keys, not the variables the plugin's values read and declares
+      expect(token('background-color', `${cls}bg-base-100`)).toEqual({
+        class: `${cls}bg-base-100`,
+        cssVariable: '--color-base-100',
+        value: 'oklch(100% 0 0)'
+      });
+      expect(token('border-radius', `${cls}rounded-box`)).toEqual({
+        class: `${cls}rounded-box`,
+        cssVariable: '--radius-box',
+        value: '0.5rem'
+      });
+      // nothing declares it, so there is still nothing to copy
+      expect(token('background-color', `${cls}bg-primary`)).toEqual({
+        class: `${cls}bg-primary`,
+        cssVariable: null,
+        value: 'var(--color-primary)'
+      });
+    }
+  );
 
   it('reads the last declaration of the property', async () => {
     const { token } = await load(
