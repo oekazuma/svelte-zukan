@@ -296,6 +296,17 @@ describe('metadata modules', () => {
     expect(addWatchFile).toHaveBeenCalledWith(`${root}/src/A.zukan.md`);
   });
 
+  // a case-insensitive filesystem finds both by the catalog file's own spelling
+  it('reads neither an .md nor a component whose name differs only in case', async () => {
+    const { root } = await makeApp();
+    await writeFile(path.join(root, 'src/A.Zukan.md'), '# A');
+    await writeFile(path.join(root, 'src/a.svelte'), '<script lang="ts">let { x }: { x: string } = $props();</script>');
+    const { p } = boot(root);
+    const code = p.load.call({ addWatchFile: vi.fn() }, meta('app/A'));
+    expect(code).toContain('"doc":null');
+    expect(code).toContain('"props":null');
+  });
+
   it('renders an .md that starts with a byte order mark', async () => {
     const { root } = await makeApp();
     await writeFile(path.join(root, 'src/A.zukan.md'), '\uFEFF# A\r\n\r\ntext');
@@ -564,6 +575,28 @@ describe('configureServer', () => {
     expect(res.headers).toEqual({ 'cross-origin-embedder-policy': 'require-corp', 'x-test': ['a', 'b'] });
   });
 
+  it('lets the catalog page frame itself, its previews, under the configured server.headers', async () => {
+    const { root } = await makeApp();
+    const csp = [
+      "default-src 'self'; script-src 'none'; frame-ancestors https://a.example, frame-ancestors 'SELF' https://b.example",
+      "Frame-Ancestors 'none'; img-src *",
+      "default-src 'none'"
+    ];
+    const server = fakeServer(root, '/', { 'X-Frame-Options': 'DENY', 'content-security-policy': csp });
+    boot(root).p.configureServer(server);
+    const mw = server.middlewares.use.mock.calls[0][0];
+    expect((await request(mw, '/__zukan/')).headers).toEqual({
+      'x-frame-options': 'SAMEORIGIN',
+      'content-security-policy': [
+        "default-src 'self'; script-src 'none'; frame-ancestors https://a.example 'self', frame-ancestors 'SELF' https://b.example",
+        "Frame-Ancestors 'self'; img-src *",
+        "default-src 'none'"
+      ]
+    });
+    // only the page is framed
+    expect((await request(mw, '/__zukan/catalog.json')).headers).toMatchObject({ 'x-frame-options': 'DENY' });
+  });
+
   it('follows base', async () => {
     const { root } = await makeApp();
     const server = fakeServer(root, '/app/');
@@ -659,12 +692,17 @@ describe('configurePreviewServer', () => {
     expect((await request(mw, `/__zukan/_zukan/${name}`)).type).toBe(type);
   });
 
-  it('sends the configured preview.headers', async () => {
-    const { mw } = await setup('/', { build: true }, { 'x-frame-options': 'DENY' });
-    expect((await request(mw, '/__zukan/')).headers).toEqual({ 'x-frame-options': 'DENY' });
+  it('sends the configured preview.headers, letting the catalog page frame itself', async () => {
+    const headers = { 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'", 'x-test': 'a' };
+    const { mw } = await setup('/', { build: true }, headers);
+    expect((await request(mw, '/__zukan/')).headers).toEqual({
+      'x-frame-options': 'SAMEORIGIN',
+      'content-security-policy': "frame-ancestors 'self'",
+      'x-test': 'a'
+    });
     const js = await request(mw, '/__zukan/_zukan/zukan-abc.js');
     expect(js.type).toMatch(/javascript/);
-    expect(js.headers).toEqual({ 'x-frame-options': 'DENY' });
+    expect(js.headers).toEqual(headers);
   });
 
   it('redirects /__zukan to /__zukan/', async () => {
@@ -939,7 +977,7 @@ describe('build', () => {
     expect((await bootBuild(root, { build: { outDir: '.svelte-kit/zukan' } })).added).toBeDefined();
   });
 
-  type Env = { isBuilt: boolean; config?: { build: { outDir: string } } };
+  type Env = { isBuilt: boolean; config?: { build: { outDir: string; write?: boolean } } };
 
   it('runs the config hook after the other plugins', () => {
     // so that a `builder` or a `renderBuiltUrl` set by another plugin is seen
@@ -973,13 +1011,24 @@ describe('build', () => {
           input: { zukan: 'virtual:svelte-zukan/entry' },
           output: {
             entryFileNames: '_zukan/[name]-[hash].js',
-            chunkFileNames: '_zukan/[name]-[hash].js',
+            chunkFileNames: expect.any(Function),
             assetFileNames: '_zukan/[name]-[hash][extname]'
           }
         }
       }
     });
     expect((await bootBuild(root, { build: true })).added.environments.zukan.build.outDir).toBe(`${root}/zukan-dist`);
+  });
+
+  it('names a metadata chunk without its ID, which can be longer than a file name may be', async () => {
+    const { root } = await makeApp();
+    const { added } = await bootBuild(root, { build: true });
+    const { chunkFileNames } = added.environments.zukan.build.rolldownOptions.output;
+    expect(chunkFileNames({ facadeModuleId: '\0' + metaId('ui/' + 'ボタン'.repeat(50)) })).toBe(
+      '_zukan/meta-[hash].js'
+    );
+    expect(chunkFileNames({ facadeModuleId: `${root}/src/Foo.zukan.svelte` })).toBe('_zukan/[name]-[hash].js');
+    expect(chunkFileNames({ facadeModuleId: null })).toBe('_zukan/[name]-[hash].js');
   });
 
   it('defines the SvelteKit globals only with SvelteKit', async () => {
@@ -1199,6 +1248,49 @@ describe('build', () => {
     expect(readFileSync(`${outDir}/index.html`, 'utf-8')).toContain('./_zukan/zukan-abc.js');
   });
 
+  it('builds the catalog but writes and removes nothing with build.write: false', async () => {
+    const { root } = await makeApp();
+    const { p } = await bootBuild(root, { build: true });
+    const { builder, zukanEnv } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
+    zukanEnv.config!.build.write = false;
+    await p.buildApp.handler(builder);
+    expect(builder.build).toHaveBeenCalledWith(zukanEnv);
+    expect(existsSync(`${root}/zukan-dist`)).toBe(false);
+  });
+
+  it('leaves the previous catalog unchanged with build.write: false', async () => {
+    const { root } = await makeApp();
+    const outDir = `${root}/zukan-dist`;
+    mkdirSync(`${outDir}/_zukan`, { recursive: true });
+    await writeFile(`${outDir}/_zukan/old.js`, 'old js');
+    await writeFile(`${outDir}/index.html`, 'old');
+    const { p } = await bootBuild(root, { build: true });
+    const { builder, zukanEnv } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
+    zukanEnv.config!.build.write = false;
+    await p.buildApp.handler(builder);
+    expect(readFileSync(`${outDir}/_zukan/old.js`, 'utf-8')).toBe('old js');
+    expect(readFileSync(`${outDir}/index.html`, 'utf-8')).toBe('old');
+    expect(existsSync(`${outDir}/catalog.json`)).toBe(false);
+  });
+
+  it('fails on a reserved group name before removing the previous catalog', async () => {
+    const { tmp, root } = await makeApp();
+    await writeFile(`${root}/package.json`, JSON.stringify({ name: 'app', dependencies: { preview: 'workspace:*' } }));
+    mkdirSync(`${tmp}/preview/src`, { recursive: true });
+    await writeFile(`${tmp}/preview/package.json`, JSON.stringify({ name: 'preview' }));
+    await writeFile(`${tmp}/preview/src/P.zukan.svelte`, source);
+    mkdirSync(`${root}/node_modules`);
+    symlinkSync(`${tmp}/preview`, `${root}/node_modules/preview`, 'junction');
+    const outDir = `${root}/zukan-dist`;
+    mkdirSync(outDir);
+    await writeFile(`${outDir}/index.html`, 'old');
+    const { p } = await bootBuild(root, { build: true });
+    const { builder, zukanEnv } = fakeBuilder('_zukan/zukan-abc.js', { client: { isBuilt: true } });
+    await expect(p.buildApp.handler(builder)).rejects.toThrow(/group name "preview" is reserved/);
+    expect(builder.build).not.toHaveBeenCalledWith(zukanEnv);
+    expect(readFileSync(`${outDir}/index.html`, 'utf-8')).toBe('old');
+  });
+
   it.each([
     ['build', true],
     ['build/zukan', true],
@@ -1322,7 +1414,10 @@ describe('Tailwind CSS', () => {
     const { p } = await bootBuild(root, { build: true });
     const builder = {
       config: { build: { watch: null }, logger: { warn: vi.fn() } },
-      environments: { client: { isBuilt: true, config: { build: { outDir: 'dist' } } }, zukan: { isBuilt: false } },
+      environments: {
+        client: { isBuilt: true, config: { build: { outDir: 'dist' } } },
+        zukan: { isBuilt: false, config: { build: {} } }
+      },
       build: vi.fn(async () => ({ output: [{ type: 'chunk', name: 'zukan', fileName: '_zukan/zukan-1.js' }] }))
     };
     await p.buildApp.handler(builder);

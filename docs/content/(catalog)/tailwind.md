@@ -11,7 +11,7 @@ When your app uses Tailwind CSS v4, the catalog shows the theme your components 
 A "Tailwind CSS" link appears in the sidebar, below the components, and a card for each entry at the top of the catalog's top page, when both of these hold:
 
 - **Tailwind CSS 4.1.0 or later is installed with one of its build integrations**: `@tailwindcss/vite`, `@tailwindcss/postcss` or `@tailwindcss/cli`. svelte-zukan loads Tailwind through the same copy that builds your app's CSS, so the catalog and the app always agree. It looks in the `node_modules` of the entry's folder and the folders above it, then in those of Vite's root
-- **A Tailwind CSS entry exists**: a CSS file that has `@import "tailwindcss"` (or an import of a `tailwindcss/…` file), or that has `@theme`. They are searched in the directories svelte-zukan already scans for catalog files (see [`groups`](/options) and [monorepos](/monorepo)) and in Vite's root `src`, even when `groups` leaves it out, because a SvelteKit app usually keeps `src/app.css` while its `groups` point at `src/lib`
+- **A Tailwind CSS entry exists**: a CSS file (its name ends in `.css`, in lowercase on every platform) that has `@import "tailwindcss"` (or an import of a `tailwindcss/…` file), or that has `@theme`. They are searched in the directories svelte-zukan already scans for catalog files (see [`groups`](/options) and [monorepos](/monorepo)) and in Vite's root `src`, even when `groups` leaves it out, because a SvelteKit app usually keeps `src/app.css` while its `groups` point at `src/lib`
 
 A CSS file that another entry imports, directly or through other CSS files, is a partial, not an entry. `@reference` does not count as an import.
 

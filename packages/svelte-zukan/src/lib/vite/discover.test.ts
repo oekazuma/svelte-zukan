@@ -179,6 +179,18 @@ describe('discoverGroups', () => {
     expect(discoverGroups(tmp, { previews: 'app', 'x/preview': 'app' })).toHaveLength(2);
   });
 
+  it('a workspace dependency named preview is reserved only once it has a catalog file', () => {
+    pkg('app', { name: 'app', dependencies: { preview: 'workspace:*' } });
+    pkg('preview', { name: 'preview' });
+    mkdirSync(join(tmp, 'app/node_modules'), { recursive: true });
+    symlinkSync(join(tmp, 'preview'), join(tmp, 'app/node_modules/preview'), 'dir');
+    write('app/src/a.zukan.svelte');
+    write('preview/src/X.svelte');
+    expect(paths(join(tmp, 'app'))).toEqual(['app/a']);
+    write('preview/src/X.zukan.svelte');
+    expect(() => paths(join(tmp, 'app'))).toThrow(/group name "preview" is reserved/);
+  });
+
   it('an empty group name or directory list throws', () => {
     mkdirSync(join(tmp, 'app'));
     for (const name of ['', ' '])
@@ -336,6 +348,17 @@ describe('listCatalog empties', () => {
     write('app/src/x.svelte');
     expect(paths(join(tmp, 'app'))).toEqual([]);
   });
+});
+
+// globSync ignores case on macOS and Windows only
+it('matches file names by case on every platform', () => {
+  pkg('app', { name: 'app' });
+  write('app/src/A.Zukan.svelte');
+  write('app/src/b.zukan.svelte');
+  write('app/src/C.SVELTE');
+  const groups = discoverGroups(join(tmp, 'app'));
+  expect(listCatalog(groups, 'zukan').map((i) => i.path)).toEqual(['app/b']);
+  expect(listUncataloged(groups, 'zukan', new Set())).toEqual([{ group: 'app', file: p('app/src/A.Zukan.svelte') }]);
 });
 
 describe('listUncataloged', () => {

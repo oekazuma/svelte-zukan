@@ -57,3 +57,21 @@ it('gives the .md without a byte order mark or CRLF', () => {
   });
   expect(components[0].doc).toBe('# A\n\ntext');
 });
+
+it('takes neither an .md nor a component whose name differs only in case', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'zukan-catalog-json-'));
+  const file = join(dir, 'A.zukan.svelte');
+  writeFileSync(file, '<Section title="a">x</Section>\n');
+  writeFileSync(join(dir, 'A.Zukan.md'), '# A');
+  writeFileSync(join(dir, 'a.svelte'), '<script lang="ts">let { x }: { x: string } = $props();</script>');
+  const { components } = catalogJson({
+    root: dir,
+    title: 't',
+    items: [{ group: 'ui', name: 'A', dir: '', path: 'ui/A', file }],
+    uncataloged: [],
+    docFileOf: (f) => f.replace('.svelte', '.md'),
+    componentFileOf: (f) => f.replace('.zukan', ''),
+    tailwind: []
+  });
+  expect(components[0]).toMatchObject({ doc: null, component: null, props: null });
+});

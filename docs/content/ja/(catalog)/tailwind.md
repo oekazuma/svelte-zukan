@@ -11,7 +11,7 @@ sidebar:
 次の 2 つがそろうと、サイドバーのコンポーネントの下に「Tailwind CSS」のリンクが現れ、カタログのトップページにはエントリーごとのカードが並びます。
 
 - **Tailwind CSS 4.1.0 以降と、そのビルド用の連携パッケージが入っている。** `@tailwindcss/vite`、`@tailwindcss/postcss`、`@tailwindcss/cli` のどれかです。svelte-zukan はアプリの CSS をビルドするのと同じ Tailwind を読み込むので、カタログとアプリで内容がずれません。探す場所は、エントリーのあるフォルダーとその親フォルダーの `node_modules`、そのあとで Vite の root の `node_modules` です
-- **Tailwind CSS のエントリーがある。** `@import "tailwindcss"`（または `tailwindcss/…` の import）を持つか、`@theme` を持つ CSS ファイルです。探すのは、svelte-zukan がカタログファイルを探すディレクトリ（[`groups`](/ja/options) と[モノレポ](/ja/monorepo)を参照）と、Vite の root の `src` です。`groups` に含まれていなくても root の `src` は探します。SvelteKit のアプリは `src/app.css` を置き、`groups` は `src/lib` を指すのがふつうだからです
+- **Tailwind CSS のエントリーがある。** `@import "tailwindcss"`（または `tailwindcss/…` の import）を持つか、`@theme` を持つ CSS ファイル（どのプラットフォームでも、名前が小文字の `.css` で終わるもの）です。探すのは、svelte-zukan がカタログファイルを探すディレクトリ（[`groups`](/ja/options) と[モノレポ](/ja/monorepo)を参照）と、Vite の root の `src` です。`groups` に含まれていなくても root の `src` は探します。SvelteKit のアプリは `src/app.css` を置き、`groups` は `src/lib` を指すのがふつうだからです
 
 別のエントリーから直接、またはほかの CSS ファイルを経由して import されている CSS ファイルは、エントリーではなく部品として扱います。`@reference` は import に数えません。
 
