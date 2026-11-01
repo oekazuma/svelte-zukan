@@ -20,11 +20,11 @@ const base = import.meta.dirname;
 
 async function load(css: string) {
   const system = (await __unstable__loadDesignSystem(css, { base })) as unknown as DesignSystemLike;
-  const built = (await compile(css, { base, onDependency() {} })).build([]);
+  const compiled = await compile(css, { base, onDependency() {} });
   const defaults = (await __unstable__loadDesignSystem('@import "tailwindcss";', {
     base
   })) as unknown as DesignSystemLike;
-  const result = extractTokens(system, rootVariables(built), defaults.theme);
+  const result = extractTokens(system, (classes) => compiled.build(classes), defaults.theme);
   const token = (id: TailwindCategoryId, cls: string | null) =>
     result.categories.find((c) => c.id === id)?.tokens.find((t) => t.class === cls);
   const classesOf = (cls: string) =>
@@ -476,9 +476,54 @@ export default plugin.withOptions(
     expect(token('padding', 'tw:p-4')?.value).toBe('calc(0.25rem * 4)');
     expect(token('breakpoints', null)).toEqual({ class: null, cssVariable: '--tw-breakpoint-sm', value: '40rem' });
     expect(result.categories.find((c) => c.id === 'spacing')?.tokens[0].cssVariable).toBe('--tw-spacing');
-    expect(result.classes).toContain('tw:bg-red-500');
-    expect(result.classes).not.toContain('bg-red-500');
+    expect(result.css).toContain('.tw\\:bg-red-500 {');
+    expect(result.css).not.toMatch(/^\s*\.bg-red-500 \{/m);
     expect(result.variables).not.toHaveProperty('--tw-blur');
+  });
+
+  it('shows the values Tailwind writes for theme values that use its CSS functions', async () => {
+    const theme = `
+      --color-brand: oklch(0.6 0.2 250);
+      --color-brand-soft: --alpha(var(--color-brand) / 50%);
+      --spacing-gutter: --spacing(6);
+      --spacing-wide: calc(--spacing(2) + 1px);
+      --radius-card: theme(--radius-lg);
+      --radius-pill: --theme(--radius-xl);`;
+    const { result, token } = await load(`@import "tailwindcss";\n@theme {${theme}\n}`);
+    expect(token('padding', 'p-gutter')).toEqual({
+      class: 'p-gutter',
+      cssVariable: '--spacing-gutter',
+      value: 'calc(0.25rem * 6)'
+    });
+    expect(token('padding', 'p-wide')?.value).toBe('calc(calc(0.25rem * 2) + 1px)');
+    expect(token('border-radius', 'rounded-card')?.value).toBe('0.5rem');
+    expect(token('border-radius', 'rounded-pill')?.value).toBe('0.75rem');
+    expect(token('background-color', 'bg-brand-soft')?.value).toBe(
+      'color-mix(in srgb, oklch(0.6 0.2 250) 50%, transparent)'
+    );
+    expect(result.variables).toMatchObject({
+      '--spacing-gutter': 'calc(var(--spacing) * 6)',
+      '--radius-card': '0.5rem',
+      '--color-brand-soft': 'color-mix(in srgb, oklch(0.6 0.2 250) 50%, transparent)'
+    });
+    const padding = result.categories.find((c) => c.id === 'padding')!.tokens.map((t) => t.class);
+    expect(padding.indexOf('p-gutter')).toBeLessThan(padding.indexOf('p-7'));
+    expect(padding.indexOf('p-gutter')).toBeGreaterThan(padding.indexOf('p-5'));
+
+    // `static` writes every variable, so the values are the same
+    const fixed = await load(`@import "tailwindcss";\n@theme static {${theme}\n}`);
+    expect(fixed.result.variables['--spacing-gutter']).toBe('calc(var(--spacing) * 6)');
+    expect(fixed.token('padding', 'p-gutter')?.value).toBe('calc(0.25rem * 6)');
+  });
+
+  it('keeps an @theme inline value with a CSS function out of the variables Tailwind writes', async () => {
+    const { result, token } = await load('@import "tailwindcss";\n@theme inline { --spacing-gutter: --spacing(6); }');
+    expect(token('padding', 'p-gutter')).toEqual({
+      class: 'p-gutter',
+      cssVariable: null,
+      value: 'calc(0.25rem * 6)'
+    });
+    expect(result.variables['--spacing-gutter']).toBe('--spacing(6)');
   });
 });
 
