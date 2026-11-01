@@ -230,6 +230,20 @@ describe('loadTailwind', () => {
     expect(watch).toContain(entry);
   });
 
+  it('resolves theme values written with Tailwind CSS functions', async () => {
+    const { root, src } = fixture(
+      '@import "tailwindcss";\n@theme { --spacing-gutter: --spacing(6); --radius-card: theme(--radius-lg); }'
+    );
+    const [s] = (await loadTailwind(root, [src])).sources;
+    expect(s.error).toBeUndefined();
+    const value = (id: string, cls: string) =>
+      s.categories.find((c) => c.id === id)?.tokens.find((t) => t.class === cls)?.value;
+    expect(value('padding', 'p-gutter')).toBe('calc(0.25rem * 6)');
+    expect(value('border-radius', 'rounded-card')).toBe('0.5rem');
+    expect(s.variables['--spacing-gutter']).toBe('calc(var(--spacing) * 6)');
+    expect(s.css).toContain('.p-gutter');
+  });
+
   it('adds the defaults to an @theme-only entry', async () => {
     const { root, src } = fixture('@theme { --color-brand-500: #ff3e00; }');
     const [s] = (await loadTailwind(root, [src])).sources;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupVariables } from './tailwind-filter.js';
+import { countTokens, groupVariables } from './tailwind-filter.js';
 
 describe('groupVariables', () => {
   it('groups by namespace in Tailwind order, the longest namespace first, unknown ones last', () => {
@@ -37,5 +37,17 @@ describe('groupVariables', () => {
         'tw'
       ).map((g) => g.title)
     ).toEqual(['--tw-color-*', null]);
+  });
+});
+
+describe('countTokens', () => {
+  it('counts a token that two categories list once', () => {
+    const p4 = { class: 'p-4', cssVariable: null, value: '1rem' };
+    expect(
+      countTokens([
+        { id: 'spacing', title: 'Spacing', tokens: [{ class: null, cssVariable: '--spacing', value: '0.25rem' }, p4] },
+        { id: 'padding', title: 'Padding', tokens: [p4, { class: 'p-5', cssVariable: null, value: '1.25rem' }] }
+      ])
+    ).toBe(3);
   });
 });
