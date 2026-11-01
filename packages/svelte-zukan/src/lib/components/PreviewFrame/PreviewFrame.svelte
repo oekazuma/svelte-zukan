@@ -659,7 +659,10 @@
     background: var(--_text);
     color: var(--_bg);
     font: 12px/1.4 var(--_font);
-    white-space: nowrap;
+    /* max-content, not the popover's fit-content, whose width would depend on the left the tip was last placed at */
+    box-sizing: border-box;
+    width: max-content;
+    max-width: calc(100vw - 12px);
     pointer-events: none;
   }
 

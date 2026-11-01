@@ -1739,4 +1739,92 @@ describe('App', () => {
     await expect.element(menu).toHaveAttribute('aria-expanded', 'true');
     expect(document.activeElement).toBe(folder.element().closest('summary'));
   });
+
+  /** how far the page scrolls sideways */
+  const pageOverflow = () => document.documentElement.scrollWidth - document.documentElement.clientWidth;
+
+  it.each([
+    [
+      'inline code in the doc',
+      { doc: '<p>See <code>src/lib/components/forms/TextField/TextField.zukan.svelte</code>.</p>' }
+    ],
+    [
+      'a link in the doc',
+      { doc: '<p><a href="#/">https://example.com/a/very/long/path/to/some/documentation/page</a></p>' }
+    ],
+    ['the props type', { propsType: 'HTMLButtonAttributesWithoutChildrenAndVariantProps' }],
+    ['a section title', { sections: [{ title: 'WithAVeryLongSectionTitleThatHasNoSpaces', code: '' }] }]
+  ] as [string, Partial<ZukanMeta>][])(
+    'on a 320px screen %s wraps instead of scrolling the page sideways',
+    async (_, m) => {
+      await page.viewport(320, 800);
+      const { props } = setup('#/ui/Card');
+      props.catalog[0].meta = () => Promise.resolve({ default: { sections: [], doc: null, ...m } });
+      const screen = await render(App, { props });
+      // the page's last part to render: the sections, or the line saying there are none
+      if (m.sections) await expect.element(screen.getByRole('link', { name: m.sections[0].title })).toBeInTheDocument();
+      else
+        await expect
+          .element(screen.getByText('This file has no <Section>, so there is nothing to preview.'))
+          .toBeInTheDocument();
+      expect(pageOverflow()).toBe(0);
+    }
+  );
+
+  it('on a 320px screen a wide table in the doc scrolls in its own box, which the keyboard can reach', async () => {
+    await page.viewport(320, 800);
+    const { props } = setup('#/ui/Card');
+    const doc =
+      '<table><tr><th>Variant</th><th>When</th><th>Color</th><th>Example</th><th>Notes</th></tr>' +
+      '<tr><td>primary</td><td>main action</td><td>accent</td><td>Save</td><td>one per view</td></tr></table>';
+    props.catalog[0].meta = () => Promise.resolve({ default: { sections: [], doc } });
+    const screen = await render(App, { props });
+    const table = screen.getByRole('table');
+    await expect.element(table).toBeInTheDocument();
+    const box = table.element().parentElement!;
+    expect(box.className).toBe('table');
+    expect(box.scrollWidth).toBeGreaterThan(box.clientWidth);
+    expect(pageOverflow()).toBe(0);
+    expect((table.element() as HTMLElement).tabIndex).toBe(0);
+  });
+
+  it.each([
+    ['a long one-word title', { title: 'AcmeDesignSystem' }],
+    ['a title just too wide for the buttons', { title: 'Components' }],
+    [
+      'a wide logo',
+      {
+        logo:
+          'data:image/svg+xml,' +
+          encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="32"><rect width="160" height="32"/></svg>'
+          )
+      }
+    ]
+  ])('the sidebar header keeps its buttons inside the sidebar with %s', async (_, p) => {
+    const { props } = setup('');
+    const screen = await render(App, { props: { ...props, ...p } });
+    await expect.element(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+    if ('logo' in p)
+      await expect.poll(() => document.querySelector<HTMLImageElement>('.sidebar img')?.complete).toBe(true);
+    const sidebar = document.querySelector('.sidebar')!;
+    const right = sidebar.getBoundingClientRect().right;
+    const buttons = [...sidebar.querySelectorAll('.actions button')].filter((b) => b.checkVisibility());
+    expect(buttons.length).toBeGreaterThan(0);
+    expect(buttons.filter((b) => b.getBoundingClientRect().right > right)).toEqual([]);
+    expect(sidebar.scrollWidth - sidebar.clientWidth).toBe(0);
+  });
+
+  it('on a 320px screen the shortcuts fit', async () => {
+    await page.viewport(320, 800);
+    const { props } = setup('');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+    await userEvent.keyboard('?');
+    const dialog = screen.getByRole('dialog', { name: 'Keyboard shortcuts' });
+    await expect.element(dialog).toBeVisible();
+    const { left, right } = dialog.element().getBoundingClientRect();
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(right).toBeLessThanOrEqual(innerWidth);
+  });
 });

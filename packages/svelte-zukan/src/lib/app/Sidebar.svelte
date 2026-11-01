@@ -266,15 +266,20 @@
 
   .logo {
     display: block;
+    min-width: 0;
     color: var(--_text);
     font-size: 20px;
     font-weight: 600;
     text-decoration: none;
+    overflow-wrap: anywhere;
   }
 
   img {
     display: block;
+    max-width: 100%;
     height: 32px;
+    object-fit: contain;
+    object-position: left;
   }
 
   .actions {

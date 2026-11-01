@@ -193,6 +193,22 @@
     apply(unmatched);
     return { update: apply };
   }
+
+  /**
+   * A table wider than the page scrolls in a box of its own, as the props do. A wrapper rather than `display: block`
+   * on the table, which drops its table semantics in some screen readers; the HTML is never re-rendered in place, as
+   * `meta` does not change while the block is shown, so moving its nodes is safe
+   */
+  function scrollTables(node: HTMLElement) {
+    for (const table of node.querySelectorAll('table')) {
+      const box = document.createElement('div');
+      box.className = 'table';
+      table.before(box);
+      box.append(table);
+      // focusable, so a keyboard can scroll the box: arrow keys scroll the focused element's scroll container
+      table.tabIndex = 0;
+    }
+  }
 </script>
 
 <!-- what the reader does to scroll, in a preview too, which forwards these to its iframe; a scroll event alone would
@@ -241,7 +257,7 @@
         {#if meta.doc}
           <!-- the HTML comes from the user's own .md file, rendered by the plugin -->
           <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-          <div class="doc">{@html meta.doc}</div>
+          <div class="doc" use:scrollTables>{@html meta.doc}</div>
         {/if}
         {#if hasProps}
           <h2 id="zukan-props" tabindex="-1" use:track={PROPS} use:reveal={section === PROPS ? PROPS : null}>
@@ -420,6 +436,7 @@
   h2 {
     margin: 32px 0 10px;
     font-size: 18px;
+    overflow-wrap: anywhere;
   }
 
   /* focused only to move the keyboard's starting point, like main */
@@ -457,9 +474,10 @@
   .doc {
     max-width: 72ch;
     line-height: 1.7;
+    overflow-wrap: anywhere;
   }
 
-  .doc :global(:is(p, ul, ol, pre, table, blockquote)) {
+  .doc :global(:is(p, ul, ol, pre, .table, blockquote)) {
     margin: 0 0 12px;
   }
 
@@ -506,8 +524,19 @@
     color: var(--_muted);
   }
 
+  .doc :global(.table) {
+    overflow-x: auto;
+  }
+
+  /* keeps its columns' natural widths and scrolls, rather than breaking every word */
   .doc :global(table) {
     border-collapse: collapse;
+    overflow-wrap: normal;
+  }
+
+  /* inside, as the scroll box clips what is drawn outside the table */
+  .doc :global(table:focus-visible) {
+    outline-offset: -2px;
   }
 
   .doc :global(:is(th, td)) {
@@ -635,6 +664,7 @@
     margin: 0 0 8px;
     color: var(--_muted);
     font-size: 14px;
+    overflow-wrap: anywhere;
   }
 
   .page {

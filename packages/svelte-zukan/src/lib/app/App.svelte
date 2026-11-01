@@ -480,7 +480,8 @@
   }
 
   .shortcuts {
-    min-width: 280px;
+    box-sizing: border-box;
+    min-width: min(280px, 100%);
     padding: 20px 24px;
     border: 1px solid var(--_border);
     border-radius: 12px;

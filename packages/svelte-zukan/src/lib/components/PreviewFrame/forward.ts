@@ -22,7 +22,9 @@ export function forwardEvents(view: Window, frame: HTMLIFrameElement) {
         : target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
     // Escape closes a dialog or a popover open in the frame first, which must not leave the expanded view too
     const closes = e.key === 'Escape' && view.document.querySelector('dialog[open], :popover-open');
-    if (e.defaultPrevented || e.isComposing || typing || closes) return;
+    // as on the catalog's own page, a key in a dialog is the dialog's, but ⌘K still opens the search
+    const inDialog = !e.metaKey && !e.ctrlKey && target.closest('dialog');
+    if (e.defaultPrevented || e.isComposing || typing || closes || inDialog) return;
     const { key, code, location, repeat, ctrlKey, shiftKey, altKey, metaKey } = e;
     const copy = { key, code, location, repeat, ctrlKey, shiftKey, altKey, metaKey, bubbles: true, cancelable: true };
     // a shortcut the catalog handled (⌘K) must not also do what the browser does with it
