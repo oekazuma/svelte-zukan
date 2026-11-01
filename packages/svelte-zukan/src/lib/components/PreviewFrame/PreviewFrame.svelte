@@ -282,6 +282,7 @@
   }
 
   let a11yOpen = $state(false);
+  let a11yButton: HTMLButtonElement | undefined = $state();
   let iframe: HTMLIFrameElement | undefined = $state();
 
   $effect(() => {
@@ -511,6 +512,7 @@
       </button>
       {#if axe}
         <button
+          bind:this={a11yButton}
           type="button"
           class="icon"
           aria-label={labels.checkA11y}
@@ -542,9 +544,8 @@
       <button
         bind:this={expandButton}
         type="button"
-        class="icon"
+        class={['icon', { on: expanded }]}
         aria-label={expanded ? labels.collapse : labels.expand}
-        aria-pressed={expanded}
         onclick={toggleExpanded}
       >
         {@render icon(expanded ? COLLAPSE_ICON : EXPAND_ICON)}
@@ -621,7 +622,18 @@
   <div class="tip" popover="manual" aria-hidden="true" bind:this={tip}>{tipText}</div>
   {#if a11yOpen && axe && doc}
     {#key doc}
-      <A11yPanel {doc} {axe} {theme} width={current} {labels} onclose={() => (a11yOpen = false)} />
+      <!-- the Close button goes away with the panel, which would leave the focus on the body -->
+      <A11yPanel
+        {doc}
+        {axe}
+        {theme}
+        width={current}
+        {labels}
+        onclose={() => {
+          a11yOpen = false;
+          a11yButton?.focus();
+        }}
+      />
     {/key}
   {/if}
 </div>
@@ -774,7 +786,9 @@
     color: var(--_text);
   }
 
-  .icon[aria-pressed='true'] {
+  /* the expand button says its state in its name, so it has no aria-pressed to style */
+  .icon[aria-pressed='true'],
+  .icon.on {
     border-color: color-mix(in srgb, var(--_accent) 40%, transparent);
     background: color-mix(in srgb, var(--_accent) 12%, var(--_bg));
     color: var(--_accent);

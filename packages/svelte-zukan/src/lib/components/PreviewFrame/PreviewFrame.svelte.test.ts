@@ -467,6 +467,29 @@ describe('PreviewFrame resizing', () => {
     expect(axe).toHaveBeenCalledTimes(1);
     await screen.getByRole('button', { name: 'Close the accessibility check' }).click();
     await expect.element(screen.getByText('Accessibility issues (1)')).not.toBeInTheDocument();
+    await expect.element(screen.getByRole('button', { name: 'Check accessibility' })).toHaveFocus();
+  });
+
+  it('keeps the focus on Check again while it runs, and ignores a click meanwhile', async () => {
+    const source = `window.runs = 0; window.axe = { run: async () => {
+      window.runs++;
+      await new Promise((r) => setTimeout(r, 300));
+      return { violations: [] };
+    } };`;
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect.element(screen.getByText('No accessibility issues found')).toBeInTheDocument();
+    const again = screen.getByRole('button', { name: 'Check again' });
+    await again.click();
+    await expect.element(again).toHaveAttribute('aria-disabled', 'true');
+    await expect.element(again).toHaveFocus();
+    // Playwright will not click an aria-disabled button, so the click goes straight to the element
+    (again.element() as HTMLElement).click();
+    await expect.element(screen.getByText('No accessibility issues found')).toBeInTheDocument();
+    await expect.element(again).toHaveFocus();
+    expect((frame.contentWindow as Window & { runs: number }).runs).toBe(2);
   });
 
   it('highlights the reported elements, thicker when picked, and simulates vision', async () => {
@@ -1009,9 +1032,10 @@ describe('PreviewFrame tools', () => {
     const preview = screen.container.querySelector('.preview')!;
     await screen.getByRole('button', { name: 'Expand' }).click();
     expect(preview.classList.contains('expanded')).toBe(true);
+    // the name says the state already; aria-pressed as well would be read as "Exit expanded view, pressed"
     await expect
       .element(screen.getByRole('button', { name: 'Exit expanded view (Esc)' }))
-      .toHaveAttribute('aria-pressed', 'true');
+      .not.toHaveAttribute('aria-pressed');
     await userEvent.keyboard('{Escape}');
     await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
     await expect.element(screen.getByRole('button', { name: 'Expand' })).toHaveFocus();

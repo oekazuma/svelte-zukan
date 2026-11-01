@@ -191,14 +191,25 @@
       aria-label={t.search}
       autocomplete="off"
     />
+    <!-- once the section titles are in, so the count is said once -->
+    <div class="sr-only" role="status">
+      {#if query.trim() && titles}
+        {matches.entries.length ? `${t.searchResults}: ${matches.entries.length}` : t.noMatches}
+      {/if}
+    </div>
     <!-- following a link closes the panel on narrow screens, also one to the page shown, which fires no hashchange;
          a folder keeps it open. The links themselves handle the keyboard -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <nav
       aria-label={t.nav}
-      onclick={(e) => {
+      onclick={async (e) => {
         const link = (e.target as Element).closest('a[href]');
-        if (link instanceof HTMLAnchorElement && followsHere(e, link)) open = false;
+        if (!(link instanceof HTMLAnchorElement && followsHere(e, link))) return;
+        open = false;
+        await tick();
+        // the folded panel hides the focused link, which would leave the focus on the body
+        if (document.activeElement === link && !link.checkVisibility())
+          document.getElementById('zukan-main')?.focus({ preventScroll: true });
       }}
       onkeydown={moveInTree}
     >
@@ -207,7 +218,7 @@
         {#key !!query.trim()}
           <EntryList entries={matches.entries} hits={matches.hits} {current} />
         {/key}
-      {:else if query.trim()}
+      {:else if query.trim() && titles}
         <p>{t.noMatches}</p>
       {/if}
       {#if tailwind.length}

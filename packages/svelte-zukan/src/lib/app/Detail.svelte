@@ -382,6 +382,7 @@
     gap: 8px;
     margin: 0 0 8px;
     font-size: 24px;
+    overflow-wrap: anywhere;
   }
 
   .edit {
@@ -413,6 +414,7 @@
     color: var(--_muted);
     font-size: 14px;
     font-weight: normal;
+    overflow-wrap: anywhere;
   }
 
   h2 {
@@ -698,7 +700,7 @@
 
   .pager {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
     margin-top: 40px;
   }
@@ -711,6 +713,7 @@
     border-radius: 10px;
     color: var(--_text);
     text-decoration: none;
+    overflow-wrap: anywhere;
   }
 
   .pager a:hover {

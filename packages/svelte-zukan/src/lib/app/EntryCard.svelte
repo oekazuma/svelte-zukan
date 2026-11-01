@@ -202,8 +202,8 @@
     width: 48px;
     height: 48px;
     border-radius: 12px;
-    /* dark enough for white text at every hue */
-    background: hsl(var(--hue) 60% 42%);
+    /* white text on it stays above 3:1 (large text) at every hue; yellow (60) is the lowest, at 3.44:1 */
+    background: hsl(var(--hue) 60% 35%);
     color: #fff;
     font-size: 22px;
     font-weight: 700;

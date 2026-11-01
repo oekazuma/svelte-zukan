@@ -152,8 +152,13 @@ export function buildTools(opts: {
         const id = str(input.id);
         const section = str(input.section);
         const component = await find(id);
-        if (!component || !component.sections.some((s) => s.title === section))
-          return text(`No section "${String(input.section)}" in "${String(input.id)}".`, true);
+        if (!component) return text(`No component with the ID "${String(input.id)}".`, true);
+        if (!component.sections.some((s) => s.title === section)) {
+          const titles = component.sections.map((s) => JSON.stringify(s.title)).join(', ') || 'none';
+          const problem =
+            section === undefined ? 'A section is required' : `No section "${String(input.section)}" in "${id}"`;
+          return text(`${problem}. The sections of "${id}": ${titles}.`, true);
+        }
         const frame = document.createElement('iframe');
         frame.setAttribute('aria-hidden', 'true');
         frame.tabIndex = -1;
