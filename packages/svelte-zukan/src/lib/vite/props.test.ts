@@ -377,6 +377,81 @@ describe('extractProps', () => {
     expect(found?.props.map((p) => [p.type, p.default])).toEqual([['string', "'hi'"]]);
   });
 
+  it('drops the leading | or & of a type broken over lines', () => {
+    const found = extractProps(
+      ts(`  type Base = { id: string };
+  let { size, sizes, both }:
+    | {
+        size?:
+          | 'small'
+          | 'medium';
+        sizes?: Array<
+          | 'x'
+          | 'y'
+        >;
+        both?: (
+          | 'x'
+          | 'y'
+        )[];
+      }
+    | Base = $props();`),
+      'A.svelte'
+    )!;
+    expect(found.typeName).toBe(
+      "{ size?: 'small' | 'medium'; sizes?: Array<'x' | 'y'>; both?: ('x' | 'y')[]; } | Base"
+    );
+    const inner = extractProps(
+      ts(`  let { size, both }: {
+    size?:
+      | 'small'
+      | 'medium';
+    both?: (
+      & { a: 1 }
+      & { b: 2 }
+    )[];
+  } = $props();`),
+      'A.svelte'
+    )!;
+    expect(inner.props.map((p) => p.type)).toEqual(["'small' | 'medium'", '({ a: 1 } & { b: 2 })[]']);
+  });
+
+  it('reads a JSDoc written on the line of the member before', () => {
+    const descriptions = (script: string) =>
+      extractProps(ts(script), 'A.svelte')!.props.map((p) => [p.name, p.description]);
+    expect(descriptions('  let { a, b }: { /** a */ a: string, /** b */ b: number } = $props();')).toEqual([
+      ['a', 'a'],
+      ['b', 'b']
+    ]);
+    expect(descriptions('  let { a, b }: {\n    a: string; /** b */\n    b: number;\n  } = $props();')).toEqual([
+      ['a', null],
+      ['b', 'b']
+    ]);
+    expect(descriptions('  let { a, b }: {\n    a: string, // note\n    b: number\n  } = $props();')).toEqual([
+      ['a', null],
+      ['b', null]
+    ]);
+    expect(descriptions('  let { /** a */ a, /** b */ b }: { a: string; b: number } = $props();')).toEqual([
+      ['a', 'a'],
+      ['b', 'b']
+    ]);
+    expect(
+      descriptions('  interface Props { /** a */ a: string; /** b */ b: number }\n  let { a, b }: Props = $props();')
+    ).toEqual([
+      ['a', 'a'],
+      ['b', 'b']
+    ]);
+  });
+
+  it('drops the language of a fenced code block in JSDoc', () => {
+    const found = extractProps(
+      ts(
+        '  let { a }: {\n    /**\n     * use:\n     * ```svelte\n     * <A />\n     * ```\n     */\n    a: string;\n  } = $props();'
+      ),
+      'A.svelte'
+    )!;
+    expect(found.props[0].description).toBe('use:\n<code>&lt;A /&gt;</code>');
+  });
+
   it('does not take a <style> in an attribute for a style block', () => {
     const source = ts('  let { a }: { a: number } = $props();', '<p data-x="<style>">x</p>\n<style>p{}</style>');
     expect(extractProps(source, 'Y.svelte')?.props[0].type).toBe('number');
@@ -742,6 +817,18 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
     write('lib/types/index.ts', "export * from '../first';\nexport * from '../second';\n");
     const file = component("  import type { Props } from './types';\n  let { right }: Props = $props();");
     expect(read(file)!.props.map((p) => p.name)).toEqual(['right']);
+  });
+
+  it('takes through `export *` a component the file declares', () => {
+    write('lib/lib/index.ts', "export * from './button';\n");
+    write(
+      'lib/lib/button.ts',
+      "import type { Component } from 'svelte';\nexport declare const Button: Component<{ label: string }>;\n"
+    );
+    const file = component(
+      "  import type { ComponentProps } from 'svelte';\n  import { Button } from './lib';\n  let { label }: ComponentProps<typeof Button> = $props();"
+    );
+    expect(read(file)!.props.map((p) => [p.name, p.type])).toEqual([['label', 'string']]);
   });
 
   it('reads @types/<name> for a package without types of its own, installed or not', () => {

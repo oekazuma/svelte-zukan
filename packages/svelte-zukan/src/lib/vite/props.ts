@@ -11,6 +11,7 @@ type Node = { type: string; start: number; end: number } & Record<string, unknow
 /** the declarations and imports of one file, with its source for slicing text */
 type Scope = {
   file: string;
+  source: string;
   /** `replaced` gives the text of some nodes inside `n` */
   text: (n: Node, replaced?: [Node, string][]) => string;
   declarations: Node[];
@@ -22,6 +23,8 @@ type Scope = {
   exported: Map<string, string>;
   /** the sources of `export * from './button'` */
   stars: string[];
+  /** the comments of the file, for `jsdocOf` */
+  comments: Comment[];
   /** a file of a package, reached through a bare import such as `svelte/elements` */
   package: boolean;
 };
@@ -50,10 +53,16 @@ const resolveLinks = (text: string) =>
     return kind === 'plain' ? target : `\`${target}\``;
   });
 
-/** the text of a `/** … *\/` comment without its stars, up to the first block tag */
-function jsdocOf(node: Node) {
-  const comment = (node.leadingComments as { type: string; value: string }[] | undefined)
-    ?.filter((c) => c.type === 'Block' && c.value.startsWith('*'))
+type Comment = { type: string; value: string; start: number; end: number };
+
+/**
+ * the text of the last `/** … *\/` comment between `from` (the end of the member before, or the start of the list) and
+ * `node`, without its stars, up to the first block tag. By position, as TypeScript reads it: Svelte's parser attaches a
+ * comment that follows a member on the same line (`a: string, /** b *\/ b: number`) to that member instead
+ */
+function jsdocOf(node: Node, comments: Comment[], from: number) {
+  const comment = comments
+    .filter((c) => c.type === 'Block' && c.value.startsWith('*') && c.start >= from && c.end <= node.start)
     .at(-1);
   if (!comment) return null;
   const lines = comment.value
@@ -63,7 +72,11 @@ function jsdocOf(node: Node) {
     // otherwise text (`/** **bold** */`)
     .map((l, i) => l.replace(i ? /^\s*\* ?/ : /^\s*\*(\s|$)/, '').trimEnd());
   const tag = lines.findIndex((l) => l.trimStart().startsWith('@'));
-  const text = (tag === -1 ? lines : lines.slice(0, tag)).join('\n').trim();
+  const text = (tag === -1 ? lines : lines.slice(0, tag))
+    .join('\n')
+    .trim()
+    // inline Markdown reads a fence as a code span, which would start with its language (```svelte)
+    .replace(/^([ \t]*`{3,})[^`\n]+$/gm, '$1');
   return text ? jsdoc.parseInline(resolveLinks(text), { async: false }) : null;
 }
 
@@ -78,7 +91,7 @@ function verbatimOf(value: unknown, out: Node[] = []): Node[] {
   return out;
 }
 
-function scopeOf(file: string, lf: string, body: Node[], pkg = false): Scope {
+function scopeOf(file: string, lf: string, body: Node[], comments: Comment[], pkg = false): Scope {
   const imports = new Map<string, { from: string; name: string }>();
   const reexports = new Map<string, { from: string; name: string }>();
   const exported = new Map<string, string>();
@@ -89,6 +102,10 @@ function scopeOf(file: string, lf: string, body: Node[], pkg = false): Scope {
     if (n.type === 'ExportNamedDeclaration') {
       const id = declaration?.id as Node | undefined;
       if (id?.type === 'Identifier') exported.set(id.name as string, id.name as string);
+      // `export declare const Button: Component<…>`, which `export *` passes on as well
+      if (declaration?.type === 'VariableDeclaration')
+        for (const d of declaration.declarations as { id: Node }[])
+          if (d.id.type === 'Identifier') exported.set(d.id.name as string, d.id.name as string);
       for (const s of n.specifiers as { local: Node; exported: Node }[])
         if (from === undefined) exported.set(keyName(s.exported), keyName(s.local));
         else reexports.set(keyName(s.exported), { from, name: keyName(s.local) });
@@ -110,6 +127,7 @@ function scopeOf(file: string, lf: string, body: Node[], pkg = false): Scope {
     s.replace(/(['"`])(?:\\[\s\S]|(?!\1)[^\\])*\1|(?:\s|\/\/.*|\/\*[\s\S]*?\*\/)+/g, (m, quote) => (quote ? m : ' '));
   return {
     file,
+    source: lf,
     // a regex or template literal is kept as the parser found it: a `//`, `/*` or quote in it starts neither a comment
     // nor a string
     text: (n, replaced = []) => {
@@ -133,6 +151,7 @@ function scopeOf(file: string, lf: string, body: Node[], pkg = false): Scope {
     reexports,
     exported,
     stars,
+    comments,
     package: pkg
   };
 }
@@ -250,6 +269,7 @@ function readScope(file: string, pkg: boolean): Scope | null {
       file,
       lf,
       [...(ast.module?.content.body ?? []), ...(ast.instance?.content.body ?? [])] as unknown as Node[],
+      ast.comments as Comment[],
       pkg
     );
   } catch {
@@ -311,11 +331,20 @@ function print(scope: Scope, n: Node, bindings: Bindings): string {
           ((key === 'checkType' && loose === 0) || (key === 'extendsType' && bound.node.type === 'TSConditionalType')));
       return void replaced.push([node, wrap ? `(${text})` : text]);
     }
+    // the leading `|` of a union as Prettier breaks it (`(\n  | 'sm'\n  | 'md'\n)`), and the `&` of an intersection,
+    // with the line breaks inside the brackets around it
+    const first = (node.types as Node[] | undefined)?.[0];
+    if ((node.type === 'TSUnionType' || node.type === 'TSIntersectionType') && first && first.start > node.start) {
+      const open = scope.source.slice(n.start, node.start).match(/[(<[](\s*)$/)?.[1].length ?? 0;
+      const close = scope.source.slice(node.end, n.end).match(/^(\s*)[)>\]]/)?.[1].length;
+      replaced.push([{ type: '', start: node.start - open, end: first.start }, '']);
+      if (close) replaced.push([{ type: '', start: node.end, end: node.end + close }, '']);
+    }
     const own = ownParams(node);
     if (own.length) bindings = new Map([...bindings].filter(([k]) => !own.includes(k)));
     for (const [k, v] of Object.entries(node)) if (!k.endsWith('Comments')) visit(v, node, k, bindings);
   };
-  if (bindings.size) visit(n, n, '', bindings);
+  visit(n, n, '', bindings);
   return scope.text(n, replaced);
 }
 
@@ -343,10 +372,12 @@ export function extractProps(
   } catch {
     return null;
   }
-  const own = scopeOf(normalizePath(filename), lf, [
-    ...(ast.module?.content.body ?? []),
-    ...(ast.instance?.content.body ?? [])
-  ] as unknown as Node[]);
+  const own = scopeOf(
+    normalizePath(filename),
+    lf,
+    [...(ast.module?.content.body ?? []), ...(ast.instance?.content.body ?? [])] as unknown as Node[],
+    ast.comments as Comment[]
+  );
 
   const declarator = ((ast.instance?.content.body ?? []) as unknown as Node[])
     .filter((n) => n.type === 'VariableDeclaration')
@@ -355,7 +386,10 @@ export function extractProps(
   if (!declarator) return null;
   const id = declarator.id as Node;
 
-  const members: { node: Node; scope: Scope; bindings: Bindings }[] = [];
+  /** `from`: where the comments that may describe the member start (see `jsdocOf`) */
+  const members: { node: Node; scope: Scope; bindings: Bindings; from: number }[] = [];
+  const listOf = (list: Node[], start: number, scope: Scope, bindings: Bindings) =>
+    list.map((node, i) => ({ node, scope, bindings, from: i ? list[i - 1].end : start }));
   const files = new Set<string>();
   const scopes = new Map<string, Scope | null>();
   /** may repeat: an `Omit` that can not be read takes back the names its type added */
@@ -428,7 +462,7 @@ export function extractProps(
     if (!type) return;
     if (type.type === 'TSParenthesizedType') collect(type.typeAnnotation as Node, scope, depth, bindings);
     else if (type.type === 'TSTypeLiteral')
-      members.push(...(type.members as Node[]).map((node) => ({ node, scope, bindings })));
+      members.push(...listOf(type.members as Node[], type.start, scope, bindings));
     else if (type.type === 'TSIntersectionType')
       for (const t of type.types as Node[]) collect(t, scope, depth, bindings);
     else if (type.type === 'TSTypeReference') {
@@ -538,13 +572,8 @@ export function extractProps(
         const bound = new Map(merged.map((node) => [node, bind(node)]));
         for (const node of merged) {
           seen.add(node);
-          members.push(
-            ...((node.body as Node).body as Node[]).map((m) => ({
-              node: m,
-              scope: found.scope,
-              bindings: bound.get(node)!
-            }))
-          );
+          const body = node.body as Node;
+          members.push(...listOf(body.body as Node[], body.start, found.scope, bound.get(node)!));
         }
         for (const node of merged)
           for (const h of (node.extends as Node[] | undefined) ?? [])
@@ -570,7 +599,7 @@ export function extractProps(
   /** a comment on the destructured prop describes it when its type has none, as a package's member mostly does */
   const defaults = new Map<string, { value: string | null; bindable: boolean; description: string | null }>();
   if (id.type === 'ObjectPattern')
-    for (const p of id.properties as Node[]) {
+    for (const [i, p] of (id.properties as Node[]).entries()) {
       if (p.type !== 'Property' || p.computed) continue;
       const value = p.value as Node;
       let right = value.type === 'AssignmentPattern' ? (value.right as Node) : null;
@@ -582,7 +611,7 @@ export function extractProps(
       defaults.set(keyName(p.key as Node), {
         value: right ? own.text(right) : null,
         bindable,
-        description: jsdocOf(p)
+        description: jsdocOf(p, own.comments, i ? (id.properties as Node[])[i - 1].end : id.start)
       });
     }
 
@@ -596,7 +625,7 @@ export function extractProps(
   // first one read, an interface's own member before the one it extends
   const props: ZukanProp[] = [];
   const listed = new Set<string>();
-  for (const { node: m, scope, bindings } of [
+  for (const { node: m, scope, bindings, from } of [
     ...members.filter((m) => !m.scope.package),
     ...members.filter((m) => m.scope.package)
   ]) {
@@ -618,7 +647,7 @@ export function extractProps(
       default: d?.value ?? null,
       required: !m.optional && d?.value == null,
       bindable: d?.bindable ?? false,
-      description: jsdocOf(m) ?? d?.description ?? null
+      description: jsdocOf(m, scope.comments, from) ?? d?.description ?? null
     });
   }
   for (const [name, d] of defaults)
