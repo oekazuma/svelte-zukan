@@ -7,6 +7,7 @@ import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
 import Wrapper from './Wrapper.test.svelte';
 import { modifier } from './SearchDialog.svelte';
+import bundledLogo from './logo.svg?url';
 
 // a negative assertion needs the hashchange to have been handled first
 async function setHash(hash: string) {
@@ -1788,31 +1789,62 @@ describe('App', () => {
     expect((table.element() as HTMLElement).tabIndex).toBe(0);
   });
 
-  it.each([
-    ['a long one-word title', { title: 'AcmeDesignSystem' }],
-    ['a title just too wide for the buttons', { title: 'Components' }],
-    [
-      'a wide logo',
-      {
-        logo:
-          'data:image/svg+xml,' +
-          encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="32"><rect width="160" height="32"/></svg>'
-          )
-      }
-    ]
-  ])('the sidebar header keeps its buttons inside the sidebar with %s', async (_, p) => {
-    const { props } = setup('');
-    const screen = await render(App, { props: { ...props, ...p } });
-    await expect.element(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
-    if ('logo' in p)
-      await expect.poll(() => document.querySelector<HTMLImageElement>('.sidebar img')?.complete).toBe(true);
+  it('a new doc for the entry shown gets its tables wrapped too, and the old ones are gone', async () => {
+    const { props } = setup('#/ui/Card');
+    const doc = (name: string) => `<p>${name}</p><table><tr><td>${name}</td></tr></table>`;
+    props.catalog[0].meta = () => Promise.resolve({ default: { sections: [], doc: doc('first') } });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('cell', { name: 'first' })).toBeInTheDocument();
+    const meta = () => Promise.resolve({ default: { sections: [], doc: doc('second') } });
+    await screen.rerender({ catalog: [{ ...props.catalog[0], meta }] });
+    await expect.element(screen.getByRole('cell', { name: 'second' })).toBeInTheDocument();
+    expect(document.querySelectorAll('.doc table')).toHaveLength(1);
+    expect(document.querySelector('.doc table')!.parentElement!.className).toBe('table');
+    expect(document.querySelector('.doc')!.textContent).not.toContain('first');
+  });
+
+  /** the buttons in the sidebar's header, and whether the header puts them on the row of the logo or title */
+  async function sidebarHeader() {
+    await expect.element(page.getByRole('heading', { level: 1 })).toBeInTheDocument();
+    await expect.poll(() => document.querySelector<HTMLImageElement>('.sidebar img')?.complete ?? true).toBe(true);
     const sidebar = document.querySelector('.sidebar')!;
-    const right = sidebar.getBoundingClientRect().right;
+    const logo = sidebar.querySelector('.logo')!.getBoundingClientRect();
     const buttons = [...sidebar.querySelectorAll('.actions button')].filter((b) => b.checkVisibility());
     expect(buttons.length).toBeGreaterThan(0);
-    expect(buttons.filter((b) => b.getBoundingClientRect().right > right)).toEqual([]);
+    expect(buttons.filter((b) => b.getBoundingClientRect().right > sidebar.getBoundingClientRect().right)).toEqual([]);
     expect(sidebar.scrollWidth - sidebar.clientWidth).toBe(0);
+    return { sameRow: buttons.every((b) => b.getBoundingClientRect().top < logo.bottom) };
+  }
+
+  it.each(['AcmeDesignSystem', 'Components'])(
+    'the sidebar header moves its buttons below the title %s, which stays on one line',
+    async (title) => {
+      const { props } = setup('');
+      await render(App, { props: { ...props, title } });
+      expect(await sidebarHeader()).toEqual({ sameRow: false });
+      const text = document.createRange();
+      text.selectNodeContents(document.querySelector('.sidebar .logo')!);
+      expect(text.getClientRects()).toHaveLength(1);
+    }
+  );
+
+  it('the sidebar header moves its buttons below a wide logo', async () => {
+    const { props } = setup('');
+    const logo =
+      'data:image/svg+xml,' +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="32"><rect width="160" height="32"/></svg>'
+      );
+    await render(App, { props: { ...props, logo } });
+    expect(await sidebarHeader()).toEqual({ sameRow: false });
+    expect(document.querySelector('.sidebar img')!.getBoundingClientRect().width).toBe(160);
+  });
+
+  it.each([1280, 375])('at %ipx the bundled logo keeps the buttons on its row', async (width) => {
+    await page.viewport(width, 800);
+    const { props } = setup('');
+    await render(App, { props: { ...props, logo: bundledLogo } });
+    expect(await sidebarHeader()).toEqual({ sameRow: true });
   });
 
   it('on a 320px screen the shortcuts fit', async () => {

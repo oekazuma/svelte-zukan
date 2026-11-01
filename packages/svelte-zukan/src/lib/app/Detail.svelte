@@ -196,8 +196,8 @@
 
   /**
    * A table wider than the page scrolls in a box of its own, as the props do. A wrapper rather than `display: block`
-   * on the table, which drops its table semantics in some screen readers; the HTML is never re-rendered in place, as
-   * `meta` does not change while the block is shown, so moving its nodes is safe
+   * on the table, which drops its table semantics in some screen readers. The `{#key}` around it gives each new HTML a
+   * new element, so this runs for it and `{@html}` never has to remove nodes moved here
    */
   function scrollTables(node: HTMLElement) {
     for (const table of node.querySelectorAll('table')) {
@@ -255,9 +255,11 @@
     <div class={['layout', { toc }]}>
       <div class="content">
         {#if meta.doc}
-          <!-- the HTML comes from the user's own .md file, rendered by the plugin -->
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-          <div class="doc" use:scrollTables>{@html meta.doc}</div>
+          {#key meta.doc}
+            <!-- the HTML comes from the user's own .md file, rendered by the plugin -->
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+            <div class="doc" use:scrollTables>{@html meta.doc}</div>
+          {/key}
         {/if}
         {#if hasProps}
           <h2 id="zukan-props" tabindex="-1" use:track={PROPS} use:reveal={section === PROPS ? PROPS : null}>

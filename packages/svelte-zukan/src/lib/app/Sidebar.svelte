@@ -256,14 +256,18 @@
     border-right: 1px solid var(--_border);
   }
 
+  /* the buttons move below a title too wide to share the row, rather than the title breaking inside a word */
   .header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    /* the bundled logo (103px) and the three buttons (96px) fill the 203px exactly */
+    gap: 8px 4px;
     margin: 0 10px 16px;
   }
 
+  /* only a single word or a logo wider than the whole header breaks or shrinks */
   .logo {
     display: block;
     min-width: 0;
