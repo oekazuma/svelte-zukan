@@ -4,7 +4,7 @@ import type { ZukanSection } from '../types.js';
 type Node = { type: string; start: number; end: number } & Record<string, unknown>;
 type Ast = AST.Root;
 
-const isSection = (n: Node, name: string) => n.type === 'Component' && n.name === name;
+const isSection = (n: Node, names: ReadonlySet<string>) => n.type === 'Component' && names.has(n.name as string);
 
 function walk(value: unknown, visit: (node: Node) => void) {
   if (Array.isArray(value)) return value.forEach((v) => walk(v, visit));
@@ -15,12 +15,15 @@ function walk(value: unknown, visit: (node: Node) => void) {
   }
 }
 
-/** `kept(i)`: line `i` begins inside a template literal, where its indentation is part of the string */
-function dedent(text: string, kept: (i: number) => boolean, indent: string) {
+/**
+ * `kept(i)`: line `i` begins inside a string, where its indentation is part of the string. `midLine`: the
+ * text starts after other code on its first line, so that line has no indentation to compare
+ */
+function dedent(text: string, kept: (i: number) => boolean, indent: string, midLine: boolean) {
   const lines = text.split('\n');
   let prefix: string | undefined;
   for (const [i, line] of lines.entries()) {
-    if (!line.trim() || kept(i)) continue;
+    if (!line.trim() || kept(i) || (midLine && !i)) continue;
     const lead = line.match(/^[ \t]*/)![0];
     if (prefix === undefined) prefix = lead;
     else {
@@ -29,7 +32,11 @@ function dedent(text: string, kept: (i: number) => boolean, indent: string) {
       prefix = prefix.slice(0, j);
     }
   }
-  return lines.map((line, i) => (kept(i) ? line : line.trim() ? indent + line.slice(prefix!.length) : '')).join('\n');
+  return lines
+    .map((line, i) =>
+      kept(i) ? line : !line.trim() ? '' : indent + (midLine && !i ? line.trimStart() : line.slice(prefix!.length))
+    )
+    .join('\n');
 }
 
 /** the names a pattern declares: `x`, `{ a, b: [c] }`, `d = 1`, `...e` */
@@ -98,9 +105,11 @@ function identifiersOf(value: unknown, hidden: ReadonlySet<string> = new Set(), 
     const local = (value as (Node | null)[]).flatMap((n) =>
       n?.type === 'ConstTag'
         ? declaredNames(n.declaration as Node)
-        : n && ['VariableDeclaration', 'FunctionDeclaration', 'ClassDeclaration'].includes(n.type)
-          ? declaredNames(n)
-          : []
+        : n?.type === 'SnippetBlock'
+          ? [(n.expression as Node).name as string]
+          : n && ['VariableDeclaration', 'FunctionDeclaration', 'ClassDeclaration'].includes(n.type)
+            ? declaredNames(n)
+            : []
     );
     const inner = local.length ? new Set([...hidden, ...local]) : hidden;
     for (const v of value) identifiersOf(v, inner, names);
@@ -121,6 +130,8 @@ function identifiersOf(value: unknown, hidden: ReadonlySet<string> = new Set(), 
     // `obj.label`, `{ label: 1 }`, `import { format as fmt }`, `import.meta`, `NS.Type`, `enum E { A }` and
     // `outer: for (…) break outer` name no variable
     if (key === 'property' && n.type === 'MemberExpression' && !n.computed) continue;
+    // a snippet's name declares it, and the list around it sees that name
+    if (key === 'expression' && n.type === 'SnippetBlock') continue;
     if (
       n.type === 'MetaProperty' ||
       (key === 'imported' && n.type === 'ImportSpecifier') ||
@@ -154,14 +165,16 @@ function isRuneDeclaration(node: Node) {
   });
 }
 
-// `import { Section as Example } from 'svelte-zukan'` names the tag `Example`
-function sectionName(ast: Ast) {
+// `import { Section as Example } from 'svelte-zukan'` names the tag `Example`, `import * as Z` names it `Z.Section`
+function sectionNames(ast: Ast) {
+  const names = new Set<string>();
   for (const n of [...(ast.module?.content.body ?? []), ...(ast.instance?.content.body ?? [])] as unknown as Node[]) {
     if (n.type !== 'ImportDeclaration' || (n.source as { value: string }).value !== 'svelte-zukan') continue;
     for (const s of n.specifiers as { type: string; imported?: { name?: string }; local: { name: string } }[])
-      if (s.type === 'ImportSpecifier' && s.imported?.name === 'Section') return s.local.name;
+      if (s.type === 'ImportSpecifier' && s.imported?.name === 'Section') names.add(s.local.name);
+      else if (s.type === 'ImportNamespaceSpecifier') names.add(`${s.local.name}.Section`);
   }
-  return 'Section';
+  return names.size ? names : new Set(['Section']);
 }
 
 function scriptTagOf(script: { attributes: unknown[] } | null | undefined, module: boolean, source: string) {
@@ -181,37 +194,45 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
   const fail = (pos: number, message: string): never => {
     throw new Error(`${filename}:${lineOf(source, pos)} ${message}`);
   };
-  const name = sectionName(ast);
-  const top = (ast.fragment.nodes as unknown as Node[]).filter((n) => isSection(n, name));
+  const names = sectionNames(ast);
+  const top = (ast.fragment.nodes as unknown as Node[]).filter((n) => isSection(n, names));
   const topSet = new Set<Node>(top);
   const hint = `(if this is your own component named "Section", import it under another name)`;
   walk(
     top.map((s) => s.fragment),
     (n) => {
-      if (isSection(n, name)) fail(n.start, `<${name}> must not be nested ${hint}`);
+      if (isSection(n, names)) fail(n.start, `<${n.name}> must not be nested ${hint}`);
     }
   );
   walk(ast.fragment.nodes, (n) => {
-    if (isSection(n, name) && !topSet.has(n)) fail(n.start, `<${name}> must be at the top level of the file ${hint}`);
+    if (isSection(n, names) && !topSet.has(n))
+      fail(n.start, `<${n.name}> must be at the top level of the file ${hint}`);
   });
   if (!top.length) return [];
 
-  const quasis: Node[] = [];
+  // a template literal and a string continued with `\` past a line break, whose next line's indentation is in the string
+  const strings: Node[] = [];
   walk([ast.module, ast.instance, ast.fragment], (n) => {
-    if (n.type === 'TemplateElement') quasis.push(n);
+    if (n.type === 'TemplateElement' || (n.type === 'Literal' && typeof n.value === 'string')) strings.push(n);
   });
-  /** `source.slice(start, end)` dedented, except the lines a line break in a template literal starts */
+  const lineStartOf = (pos: number) => source.lastIndexOf('\n', pos - 1) + 1;
+  /**
+   * `source.slice(start, end)` dedented, except the lines a line break in a string starts; from the start of the line
+   * when only indentation precedes `start` there
+   */
   const codeOf = (start: number, end: number, indent = '') => {
+    const midLine = !!source.slice(lineStartOf(start), start).trim();
+    if (!midLine) start = lineStartOf(start);
     const breaks = [...source.slice(start, end).matchAll(/\n/g)].map((m) => start + m.index);
-    const kept = (i: number) => i > 0 && quasis.some((q) => q.start <= breaks[i - 1] && breaks[i - 1] < q.end);
-    return dedent(source.slice(start, end), kept, indent);
+    const kept = (i: number) => i > 0 && strings.some((q) => q.start <= breaks[i - 1] && breaks[i - 1] < q.end);
+    return dedent(source.slice(start, end), kept, indent, midLine);
   };
-  const textOf = (node: Node, indent = '') => {
-    const lineStart = source.lastIndexOf('\n', node.start - 1) + 1;
-    return codeOf(source.slice(lineStart, node.start).trim() ? node.start : lineStart, node.end, indent);
-  };
-  const scriptDefs = (script: typeof ast.instance, kind: 'module' | 'script') =>
-    ((script?.content.body ?? []) as unknown as Node[])
+  const scriptDefs = (script: typeof ast.instance, kind: 'module' | 'script') => {
+    // a tab-indented script gets tabs in the code view too, never spaces mixed with its own tabs
+    const content = script?.content as unknown as Node | undefined;
+    const lead = content && source.slice(content.start, content.end).match(/^[ \t]+(?=\S)/m)?.[0];
+    const indent = lead?.startsWith('\t') ? '\t' : '  ';
+    return ((script?.content.body ?? []) as unknown as Node[])
       .filter(
         (n) =>
           (n.type === 'ImportDeclaration' && (n.source as { value: string }).value !== 'svelte-zukan') ||
@@ -232,8 +253,9 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
         // as Svelte decides: `$state` is a store only when `state` is not itself declared with a rune
         store: !isRuneDeclaration((node.type === 'ExportNamedDeclaration' ? node.declaration : node) as Node),
         uses: identifiersOf(node),
-        text: textOf(node, '  ')
+        text: codeOf(node.start, node.end, indent)
       }));
+  };
   const snippetDefs = (ast.fragment.nodes as unknown as Node[])
     .filter((n) => n.type === 'SnippetBlock')
     .map((node) => ({
@@ -241,7 +263,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
       names: [(node.expression as { name: string }).name],
       store: false,
       uses: identifiersOf(node),
-      text: textOf(node)
+      text: codeOf(node.start, node.end)
     }));
   const defs = [...scriptDefs(ast.module, 'module'), ...scriptDefs(ast.instance, 'script'), ...snippetDefs];
   const moduleTag = scriptTagOf(ast.module, true, source);
@@ -251,6 +273,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
 
   const titles = new Set<string>();
   return top.map((section) => {
+    const name = section.name as string;
     const attr = (section.attributes as Node[]).find((a) => a.name === 'title');
     const value = attr?.value as Node[] | true | undefined;
     if (!attr) fail(section.start, `<${name}> needs a title`);
