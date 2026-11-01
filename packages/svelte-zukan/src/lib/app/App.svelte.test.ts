@@ -1489,6 +1489,25 @@ describe('App', () => {
     await expect.element(status).toHaveTextContent('Results: 1');
   });
 
+  it('the search still finds the section titles of the other entries when one fails to load', async () => {
+    const { props } = setup('');
+    props.catalog[0].meta = () =>
+      Promise.resolve({ default: { sections: [{ title: 'Dismissible', code: '' }], doc: null } });
+    props.catalog.push({
+      group: 'ui',
+      name: 'Broken',
+      dir: '',
+      path: 'ui/Broken',
+      load,
+      meta: () => Promise.reject(new Error('broken'))
+    });
+    const screen = await render(App, { props });
+    const nav = screen.getByRole('navigation', { name: 'Components' });
+    await screen.getByRole('searchbox', { name: 'Search' }).fill('dismiss');
+    await expect.element(nav.getByRole('link', { name: 'Dismissible' })).toBeInTheDocument();
+    await expect.element(screen.getByRole('banner').getByRole('status')).toHaveTextContent('Results: 1');
+  });
+
   it('the search also finds section titles and links to them', async () => {
     const { props } = setup('');
     props.catalog[0].meta = () =>

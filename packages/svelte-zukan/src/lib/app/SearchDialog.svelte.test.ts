@@ -323,6 +323,21 @@ describe('Tailwind CSS in the search dialog', () => {
     ).toBeNull();
   });
 
+  it('says No matches for a Tailwind CSS query only once the Tailwind CSS entries are in', async () => {
+    const { tailwind, props } = setupTailwind();
+    let resolve!: (m: { default: TailwindSource }) => void;
+    tailwind[0].load = () => new Promise((r) => (resolve = r));
+    const screen = await render(App, { props });
+    await openSearch();
+    const dialog = screen.getByRole('dialog');
+    await screen.getByRole('combobox').fill('brand');
+    // the components' metadata is in, and none of them matches
+    await expect.element(dialog.getByText('No matches', { exact: true }).first()).not.toBeInTheDocument();
+    await expect.element(dialog.getByRole('status')).toHaveTextContent('');
+    resolve({ default: tailwindSource });
+    await expect.element(dialog.getByRole('status')).toHaveTextContent('Results: 2');
+  });
+
   it('draws the light value of a light-dark() colour in a dark catalog, as the samples do', async () => {
     const { props } = setup();
     const value = 'light-dark(#00aa00, #aa0000)';

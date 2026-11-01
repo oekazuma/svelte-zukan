@@ -45,10 +45,16 @@
   function loadTitles() {
     if (titles || loadingTitles) return;
     loadingTitles = true;
-    Promise.all(entries.map(async (e) => [e.path, (await e.meta()).default.sections.map((s) => s.title)] as const))
-      .then((pairs) => (titles = new Map(pairs)))
-      // a broken file still shows its own error on its page; the search just matches IDs
-      .catch(() => (titles = new Map()));
+    Promise.all(
+      entries.map(async (e): Promise<[string, string[]]> => {
+        try {
+          return [e.path, (await e.meta()).default.sections.map((s) => s.title)];
+        } catch {
+          // a broken file still shows its own error on its page; the search just matches its ID
+          return [e.path, []];
+        }
+      })
+    ).then((pairs) => (titles = new Map(pairs)));
   }
 
   const matches = $derived.by(() => {
@@ -205,10 +211,12 @@
       onclick={async (e) => {
         const link = (e.target as Element).closest('a[href]');
         if (!(link instanceof HTMLAnchorElement && followsHere(e, link))) return;
+        // read before the panel folds: hiding it can blur the link before tick() resolves
+        const wasFocused = document.activeElement === link;
         open = false;
         await tick();
         // the folded panel hides the focused link, which would leave the focus on the body
-        if (document.activeElement === link && !link.checkVisibility())
+        if (wasFocused && !link.checkVisibility())
           document.getElementById('zukan-main')?.focus({ preventScroll: true });
       }}
       onkeydown={moveInTree}

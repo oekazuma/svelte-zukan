@@ -37,7 +37,7 @@
   type Meta = Pick<SearchItem, 'sections' | 'doc' | 'props'>;
   // loaded on the first open only, so the catalog page does not import every metadata module up front
   let metas = $state.raw<Map<string, Meta>>();
-  let sources = $state.raw<TailwindSource[]>([]);
+  let sources = $state.raw<TailwindSource[]>();
   let loading = false;
 
   // DOMParser documents are inert: no scripts run and no images load
@@ -85,7 +85,7 @@
     }))
   );
   const tailwindItems = $derived(
-    sources.flatMap((data): TailwindSearchItem[] => [
+    (sources ?? []).flatMap((data): TailwindSearchItem[] => [
       ...data.categories.map((c) => ({
         source: data.id,
         category: c.id,
@@ -245,11 +245,12 @@
         {/if}
       {/each}
     </div>
-    {#if query.trim() && !hits.length && metas}
+    <!-- both, or a Tailwind CSS query would say No matches before its tokens are in -->
+    {#if query.trim() && !hits.length && metas && sources}
       <p class="empty">{t.noMatches}</p>
     {/if}
     <div class="sr-only" role="status">
-      {#if query.trim() && metas}
+      {#if query.trim() && metas && sources}
         {hits.length ? `${t.searchResults}: ${hits.length}` : t.noMatches}
       {/if}
     </div>
