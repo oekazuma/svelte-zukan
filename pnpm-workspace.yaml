@@ -17,9 +17,9 @@ overrides:
 catalog:
   '@changesets/cli': ^3.0.3
   '@eslint/js': ^10.0.1
-  '@sveltejs/adapter-static': ^4.0.0
-  '@sveltejs/kit': ^3.1.0
-  '@sveltejs/package': ^3.0.1
+  '@sveltejs/adapter-static': ^4.0.1
+  '@sveltejs/kit': ^3.1.1
+  '@sveltejs/package': ^3.0.2
   '@sveltejs/vite-plugin-svelte': ^7.3.1
   '@tailwindcss/node': 4.3.3
   '@tailwindcss/vite': 4.3.3
