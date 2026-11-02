@@ -28,7 +28,15 @@ export type ModelContext = {
 };
 
 type CatalogJson = {
-  components: { id: string; name: string; group: string; doc: string | null; sections: { title: string }[] }[];
+  components: {
+    id: string;
+    name: string;
+    group: string;
+    doc: string | null;
+    sections: { title: string }[];
+    /** why the catalog file does not compile; it then has no sections */
+    error?: string;
+  }[];
   uncataloged: unknown[];
   tailwind?: Omit<TailwindSource, 'id' | 'css'>[] | null;
 };
@@ -42,6 +50,9 @@ const text = (value: unknown, isError = false): Result => ({
 const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
 const num = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : undefined);
 const theme = (v: unknown): Theme | undefined => (v === 'light' || v === 'dark' ? v : undefined);
+
+const noComponent = (id: unknown) =>
+  text(id == null ? 'An ID is required.' : `No component with the ID "${String(id)}".`, true);
 
 const ID = { type: 'string', description: 'A component ID from list_components, such as "ui/Button"' };
 const SECTION = { type: 'string', description: 'A section title of that component' };
@@ -108,7 +119,7 @@ export function buildTools(opts: {
       annotations: { readOnlyHint: true, openWorldHint: false },
       async execute(input) {
         const found = await find(str(input.id));
-        return found ? text(found) : text(`No component with the ID "${String(input.id)}".`, true);
+        return found ? text(found) : noComponent(input.id);
       }
     },
     {
@@ -123,7 +134,7 @@ export function buildTools(opts: {
       async execute(input) {
         const id = str(input.id);
         const component = await find(id);
-        if (!component) return text(`No component with the ID "${String(input.id)}".`, true);
+        if (!component) return noComponent(input.id);
         if (input.section != null && !component.sections.some((s) => s.title === input.section))
           return text(`No section "${String(input.section)}" in "${String(input.id)}".`, true);
         open(
@@ -152,7 +163,8 @@ export function buildTools(opts: {
         const id = str(input.id);
         const section = str(input.section);
         const component = await find(id);
-        if (!component) return text(`No component with the ID "${String(input.id)}".`, true);
+        if (!component) return noComponent(input.id);
+        if (component.error) return text(`The catalog file of "${id}" does not compile: ${component.error}`, true);
         if (!component.sections.some((s) => s.title === section)) {
           const titles = component.sections.map((s) => JSON.stringify(s.title)).join(', ') || 'none';
           const problem =

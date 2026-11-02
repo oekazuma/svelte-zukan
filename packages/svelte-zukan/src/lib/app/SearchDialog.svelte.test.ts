@@ -105,6 +105,57 @@ describe('the search dialog', () => {
     }
   });
 
+  describe('the selected option stays in view when the selection goes back to the first', () => {
+    const many = async () => {
+      const { props } = setup();
+      const catalog = Array.from({ length: 40 }, (_, i) => ({
+        ...props.catalog[0],
+        name: `Item a${i}`,
+        path: `${i % 2 ? 'ui' : 'examples'}/Item${i}`,
+        group: i % 2 ? 'ui' : 'examples'
+      }));
+      const screen = await render(App, { props: { ...props, catalog } });
+      await openSearch();
+      const input = screen.getByRole('combobox');
+      await input.fill('a');
+      await expect.element(screen.getByRole('option').first()).toBeInTheDocument();
+      for (let i = 0; i < 19; i++) await userEvent.keyboard('{ArrowDown}');
+      const results = document.querySelector('.results')!;
+      await expect.poll(() => results.scrollTop).toBeGreaterThan(0);
+      return { screen, results };
+    };
+    const selectedInView = (results: Element) => {
+      const option = results.querySelector('[aria-selected="true"]')!;
+      const [box, list] = [option.getBoundingClientRect(), results.getBoundingClientRect()];
+      return box.top >= list.top && box.bottom <= list.bottom;
+    };
+
+    it('on typing', async () => {
+      const { results } = await many();
+      // still matches the half whose path has "examples"
+      await userEvent.keyboard('m');
+      await expect.poll(() => results.querySelector('[aria-selected="true"]')?.id.endsWith('-0')).toBe(true);
+      expect(selectedInView(results)).toBe(true);
+    });
+
+    it('on opening it again', async () => {
+      const { results } = await many();
+      await userEvent.keyboard('{Escape}');
+      await expect.poll(isOpen).toBe(false);
+      await openSearch();
+      await expect.poll(isOpen).toBe(true);
+      await expect.poll(() => results.querySelector('[aria-selected="true"]')?.id.endsWith('-0')).toBe(true);
+      expect(selectedInView(results)).toBe(true);
+    });
+
+    it('on picking a group', async () => {
+      const { screen, results } = await many();
+      await screen.getByRole('group', { name: 'Groups' }).getByRole('button', { name: 'ui' }).click();
+      await expect.poll(() => results.querySelector('[aria-selected="true"]')?.id.endsWith('-0')).toBe(true);
+      expect(selectedInView(results)).toBe(true);
+    });
+  });
+
   it('finds a section, a phrase in the description and a prop', async () => {
     const { props } = setup();
     const screen = await render(App, { props });

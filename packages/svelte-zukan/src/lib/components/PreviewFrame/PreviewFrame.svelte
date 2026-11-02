@@ -140,6 +140,7 @@
   let startWidth = 0;
 
   let observer: ResizeObserver | undefined;
+  let settling: MutationObserver | undefined;
   let doc = $state.raw<Document>();
 
   // a stage narrower than MIN_WIDTH lowers the minimum, so aria-valuenow never goes below aria-valuemin
@@ -188,6 +189,7 @@
   // the preview mounts after the iframe's load event, so watch the body and pick up the wrapper element when it appears
   function observe(doc: Document) {
     observer?.disconnect();
+    settling?.disconnect();
     let target: Element | null = null;
     /** the viewport height the content last matched */
     let tiedTo = -1;
@@ -195,7 +197,7 @@
     let last = { bottom: 0, viewport: 0 };
     // the frame's own ResizeObserver: one of the catalog page keeps the elements of a frame that is taken away (as
     // closing the tab does, before any cleanup) and reports a "ResizeObserver loop" on every frame from then on
-    observer = new doc.defaultView!.ResizeObserver(() => {
+    const measure = () => {
       const found = doc.querySelector('[data-zukan-preview]');
       if (!found) return;
       // the app's CSS, which may paint the body, arrives with the content
@@ -204,6 +206,10 @@
         target = found;
         observer!.observe(found);
       }
+      // the element is there before its content: measuring it then would cut a page that came back (Back) to the
+      // minimum height for a frame, which also cuts the position the browser restores. A section that renders nothing
+      // never grows, so the page's own signal ends its skeleton
+      if (!found.hasAttribute('data-zukan-ready') && !found.getBoundingClientRect().height) return;
       const win = doc.defaultView!;
       const body = win.getComputedStyle(doc.body);
       // the app's CSS (loaded by the wrapper) may pad the body; a horizontal scrollbar takes height too
@@ -233,8 +239,11 @@
         // an expanded frame takes the stage's height, not its own
         if (!expanded) heights.set(src, next);
       });
-    });
+    };
+    observer = new doc.defaultView!.ResizeObserver(measure);
     observer.observe(doc.body);
+    settling = new doc.defaultView!.MutationObserver(measure);
+    settling.observe(doc.body, { subtree: true, attributeFilter: ['data-zukan-ready'] });
   }
 
   // the preview page has no catalog CSS; `color-scheme` also switches `light-dark()` and form controls in it
@@ -346,7 +355,10 @@
   }
   $effect(() => () => clearTimeout(linkTimer));
 
-  $effect(() => () => observer?.disconnect());
+  $effect(() => () => {
+    observer?.disconnect();
+    settling?.disconnect();
+  });
 
   // a native `title` shows only after a long delay and never on keyboard focus
   const TIP_TARGETS = 'button, a, [data-tip]';
@@ -368,8 +380,8 @@
     const r = tipFor.getBoundingClientRect();
     const { clientWidth, clientHeight } = document.documentElement;
     const centered = r.left + r.width / 2 - tip.offsetWidth / 2;
-    const below = r.bottom + TIP_GAP;
-    const top = below + tip.offsetHeight > clientHeight ? r.top - TIP_GAP - tip.offsetHeight : below;
+    const below = r.bottom;
+    const top = below + tip.offsetHeight > clientHeight ? r.top - tip.offsetHeight : below;
     tip.style.left = `${Math.max(TIP_GAP, Math.min(centered, clientWidth - tip.offsetWidth - TIP_GAP))}px`;
     tip.style.top = `${top}px`;
   }
@@ -389,6 +401,12 @@
     if (tip?.matches(':popover-open')) tip.hidePopover();
   }
 
+  /** on the control or on the tip: the pointer may move from one to the other, so the tip's text can be read */
+  function leaveTip(e: PointerEvent) {
+    const to = e.relatedTarget as Node | null;
+    if (tipFor && !tipFor.contains(to) && to !== tip && !tipFor.matches(':focus-visible')) hideTip();
+  }
+
   function tooltips(toolbar: HTMLElement) {
     // Firefox before 125 has no popover; the controls keep their aria-label and go without a tip
     if (!('showPopover' in HTMLElement.prototype)) return;
@@ -396,9 +414,6 @@
     const over = (e: PointerEvent) => {
       const el = target(e);
       if (el && e.pointerType !== 'touch') showTip(el, TIP_DELAY);
-    };
-    const out = (e: PointerEvent) => {
-      if (tipFor && !tipFor.contains(e.relatedTarget as Node | null) && !tipFor.matches(':focus-visible')) hideTip();
     };
     // a hover tip on another button stays when the previously clicked one loses focus
     const focusout = (e: FocusEvent) => {
@@ -409,13 +424,13 @@
       if (el?.matches(':focus-visible')) showTip(el, 0);
     };
     toolbar.addEventListener('pointerover', over);
-    toolbar.addEventListener('pointerout', out);
+    toolbar.addEventListener('pointerout', leaveTip);
     toolbar.addEventListener('focusin', focusin);
     toolbar.addEventListener('focusout', focusout);
     return {
       destroy() {
         toolbar.removeEventListener('pointerover', over);
-        toolbar.removeEventListener('pointerout', out);
+        toolbar.removeEventListener('pointerout', leaveTip);
         toolbar.removeEventListener('focusin', focusin);
         toolbar.removeEventListener('focusout', focusout);
         hideTip();
@@ -619,7 +634,7 @@
     </div>
   </div>
   <!-- the top layer escapes the frame's overflow and the page's containment; the name is in aria-label -->
-  <div class="tip" popover="manual" aria-hidden="true" bind:this={tip}>{tipText}</div>
+  <div class="tip" popover="manual" aria-hidden="true" bind:this={tip} onpointerleave={leaveTip}>{tipText}</div>
   {#if a11yOpen && axe && doc}
     {#key doc}
       <!-- the Close button goes away with the panel, which would leave the focus on the body -->
@@ -654,16 +669,18 @@
     inset: auto;
     margin: 0;
     padding: 3px 8px;
-    border: 0;
-    border-radius: 4px;
+    /* drawn as the gap to the control, and part of the tip for the pointer; the radius matches 4px inside it */
+    border: 0 solid transparent;
+    border-block-width: 6px;
+    border-radius: 4px / 10px;
     background: var(--_text);
+    background-clip: padding-box;
     color: var(--_bg);
     font: 12px/1.4 var(--_font);
     /* max-content, not the popover's fit-content, whose width would depend on the left the tip was last placed at */
     box-sizing: border-box;
     width: max-content;
     max-width: calc(100vw - 12px);
-    pointer-events: none;
   }
 
   .tip:popover-open {
@@ -795,6 +812,16 @@
     border-color: color-mix(in srgb, var(--_accent) 40%, transparent);
     background: color-mix(in srgb, var(--_accent) 12%, var(--_bg));
     color: var(--_accent);
+  }
+
+  /* forced colors mode drops the background and border color that mark these, but keeps an outline; before the focus
+     ring, which then wins */
+  @media (forced-colors: active) {
+    .icon[aria-pressed='true'],
+    .icon.on {
+      outline: 2px solid Highlight;
+      outline-offset: -2px;
+    }
   }
 
   .icon:focus-visible,
@@ -963,18 +990,14 @@
     max-height: calc(100% - 12px);
     background: linear-gradient(90deg, currentColor 0 2px, transparent 2px 4px, currentColor 4px 6px);
     color: var(--_muted);
-    opacity: 0.6;
     transform: translate(-50%, -50%);
-    transition:
-      opacity 0.15s,
-      color 0.15s;
+    transition: color 0.15s;
   }
 
   .handle:hover::after,
   .handle:focus-visible::after,
   .handle.dragging::after {
     color: var(--_accent);
-    opacity: 1;
   }
 
   .handle:focus-visible {

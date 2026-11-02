@@ -1,22 +1,13 @@
-<script module lang="ts">
-  import type { Entry } from '../types.js';
-
-  // Back renders the page at once, before the browser restores its position, and a promise renders `then` only later,
-  // on a page cut to one screen. A `zukan:reload` reloads the whole page, which empties this
-  const loaded = new WeakMap<Entry['meta'], Awaited<ReturnType<Entry['meta']>>>();
-  function loadMeta(entry: Entry) {
-    return loaded.get(entry.meta) ?? entry.meta().then((m) => (loaded.set(entry.meta, m), m));
-  }
-</script>
-
 <script lang="ts">
   import { tick } from 'svelte';
   import Badge from '../components/Badge/Badge.svelte';
   import CodeBlock from '../components/CodeBlock/CodeBlock.svelte';
   import PreviewFrame from '../components/PreviewFrame/PreviewFrame.svelte';
   import type { Theme } from '../components/PreviewFrame/storage.js';
+  import type { Entry } from '../types.js';
   import { followsHere, formatHash, parseHash } from './hash.js';
   import type { Messages } from './i18n.js';
+  import { loadOnce } from './load-once.js';
   import { unionMembers } from './union.js';
 
   let {
@@ -157,7 +148,13 @@
 
   function onclick(e: MouseEvent) {
     const link = e.target instanceof Element ? e.target.closest('a') : null;
-    if (link && followsHere(e, link)) revealRoute(link.hash);
+    if (!link || !followsHere(e, link)) return;
+    revealRoute(link.hash);
+    // a route opened from elsewhere only scrolls; a link in the contents is the reader's step, which the keyboard follows
+    const to = parseHash(link.hash);
+    if (!link.closest('.contents') || to.view !== 'detail' || to.section === null) return;
+    const heading = headings.get(to.section);
+    (heading?.querySelector('a') ?? heading)?.focus({ preventScroll: true });
   }
 
   /** Vite's own endpoint, the one its error overlay uses; it is under the app's `base` like the catalog */
@@ -197,17 +194,18 @@
   /**
    * A table wider than the page scrolls in a box of its own, as the props do. A wrapper rather than `display: block`
    * on the table, which drops its table semantics in some screen readers. The `{#key}` around it gives each new HTML a
-   * new element, so this runs for it and `{@html}` never has to remove nodes moved here
+   * new element, so this runs for it and `{@html}` never has to remove nodes moved here. Tables and code are focusable,
+   * so a keyboard can scroll them: arrow keys scroll the focused element's scroll container
    */
-  function scrollTables(node: HTMLElement) {
+  function scrollBoxes(node: HTMLElement) {
     for (const table of node.querySelectorAll('table')) {
       const box = document.createElement('div');
       box.className = 'table';
       table.before(box);
       box.append(table);
-      // focusable, so a keyboard can scroll the box: arrow keys scroll the focused element's scroll container
       table.tabIndex = 0;
     }
+    for (const pre of node.querySelectorAll('pre')) pre.tabIndex = 0;
   }
 </script>
 
@@ -221,7 +219,8 @@
   <a class={rel} href={formatHash('detail', to.path)} {rel}>
     <span class="hint">{rel === 'prev' ? `← ${t.previous}` : `${t.next} →`}</span>
     <span class="target"
-      >{to.name}{#if to.dir}<span class="dir">{to.dir}</span>{/if}</span
+      >{to.name}
+      {#if to.dir}<span class="dir">{to.dir}</span>{/if}</span
     >
   </a>
 {/snippet}
@@ -243,7 +242,7 @@
   </div>
 {/if}
 
-{#await loadMeta(entry) then { default: meta }}
+{#await loadOnce(entry.meta) then { default: meta }}
   {@const hasProps = !!(meta.props?.length || meta.propsType)}
   {@const toc = meta.sections.length + (hasProps ? 1 : 0) > 1}
   <div
@@ -258,7 +257,7 @@
           {#key meta.doc}
             <!-- the HTML comes from the user's own .md file, rendered by the plugin -->
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-            <div class="doc" use:scrollTables>{@html meta.doc}</div>
+            <div class="doc" use:scrollBoxes>{@html meta.doc}</div>
           {/key}
         {/if}
         {#if hasProps}
@@ -389,7 +388,7 @@
     </div>
   </div>
 {:catch error}
-  <p>{t.loadFailed} {error instanceof Error ? error.message : String(error)}</p>
+  <p class="empty">{t.loadFailed} {error instanceof Error ? error.message : String(error)}</p>
 {/await}
 
 <style>
@@ -421,6 +420,7 @@
     color: var(--_text);
     font-family: var(--_mono);
     font-size: 12px;
+    overflow-wrap: anywhere;
     cursor: pointer;
   }
 
@@ -520,6 +520,11 @@
     background: none;
   }
 
+  .doc :global(:is(img, video)) {
+    max-width: 100%;
+    height: auto;
+  }
+
   .doc :global(blockquote) {
     padding-left: 12px;
     border-left: 3px solid var(--_border);
@@ -537,7 +542,7 @@
   }
 
   /* inside, as the scroll box clips what is drawn outside the table */
-  .doc :global(table:focus-visible) {
+  .doc :global(:is(table, pre):focus-visible) {
     outline-offset: -2px;
   }
 
@@ -549,6 +554,7 @@
 
   .empty {
     color: var(--_muted);
+    overflow-wrap: anywhere;
   }
 
   .props {
@@ -686,6 +692,7 @@
     max-height: calc(100vh - 48px);
     overflow-y: auto;
     font-size: 13px;
+    overflow-wrap: anywhere;
   }
 
   .contents p {
@@ -767,7 +774,6 @@
   }
 
   .target .dir {
-    margin-left: 6px;
     font-size: 12px;
   }
 </style>

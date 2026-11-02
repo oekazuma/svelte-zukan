@@ -27,6 +27,7 @@
 
   let dialog: HTMLDialogElement;
   let input: HTMLInputElement;
+  let results: HTMLDivElement;
   // the Tailwind CSS filter option; no group name can equal it
   const TAILWIND = Symbol('tailwind');
   let query = $state('');
@@ -44,6 +45,12 @@
   const text = (html: string | null | undefined) =>
     html ? (new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '') : '';
 
+  /** the list keeps its scroll position through a new query, which would leave the selected option out of view */
+  function selectFirst() {
+    active = 0;
+    results.scrollTop = 0;
+  }
+
   function load() {
     if (loading) return;
     loading = true;
@@ -60,7 +67,7 @@
       })
     ).then((pairs) => {
       metas = new Map(pairs.filter((p): p is [string, Meta] => p[1] !== null));
-      active = 0;
+      selectFirst();
     });
     // an entry that fails to load shows its error on its own page
     Promise.all(
@@ -72,7 +79,7 @@
       )
     ).then((found) => {
       sources = found.flat();
-      active = 0;
+      selectFirst();
     });
   }
 
@@ -129,7 +136,7 @@
 
   export function open() {
     if (!dialog.open) dialog.showModal();
-    active = 0;
+    selectFirst();
     input.focus();
     input.select();
     load();
@@ -172,7 +179,7 @@
       role="combobox"
       bind:this={input}
       bind:value={query}
-      oninput={() => (active = 0)}
+      oninput={selectFirst}
       {onkeydown}
       aria-label={t.searchCatalog}
       aria-expanded={hits.length > 0}
@@ -191,13 +198,13 @@
             aria-pressed={group === g}
             onclick={() => {
               group = g;
-              active = 0;
+              selectFirst();
             }}>{g === null ? t.searchAllGroups : g === TAILWIND ? t.tailwind : g}</button
           >
         {/each}
       </div>
     {/if}
-    <div class="results" role="listbox" id="{id}-results" aria-label={t.searchResults}>
+    <div class="results" role="listbox" id="{id}-results" aria-label={t.searchResults} bind:this={results}>
       {#each kinds as [kind, label] (kind)}
         {#if hits.some((h) => h.kind === kind)}
           <div role="group" aria-labelledby="{id}-{kind}">

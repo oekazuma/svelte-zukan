@@ -1,6 +1,6 @@
 import axe from 'axe-core';
 import axeSource from 'axe-core/axe.min.js?raw';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cdp, page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import type { TailwindListItem, ZukanMeta } from '../types.js';
@@ -172,7 +172,96 @@ it('marks the picked search result with an outline in forced colors mode, which 
   }
 });
 
+it('marks the pressed toolbar buttons with an outline in forced colors mode, which drops their background', async () => {
+  const media = (value: string) =>
+    cdp().send('Emulation.setEmulatedMedia', { features: [{ name: 'forced-colors', value }] });
+  await media('active');
+  try {
+    const screen = await render(App, { props: props('#/ui/Card', 'light') });
+    const pressed = screen.getByRole('button', { name: 'Full width', pressed: true }).first();
+    await expect.element(pressed).toBeInTheDocument();
+    expect(getComputedStyle(pressed.element()).outlineStyle).toBe('solid');
+  } finally {
+    await media('');
+  }
+});
+
+/** the WCAG ratio of a color at `alpha` over a background, for what axe-core does not read or can not decide */
+function contrast(color: string, background: string, alpha = 1) {
+  // `color-mix()` computes to `color(srgb 0-1 0-1 0-1)`
+  const channels = (css: string) =>
+    css
+      .match(/[\d.]+/g)!
+      .slice(0, 3)
+      .map((c) => Number(c) * (css.startsWith('color(') ? 255 : 1));
+  const back = channels(background);
+  const luminance = (rgb: number[]) => {
+    const [r, g, b] = rgb.map((c) => {
+      const v = c / 255;
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const [one, two] = [luminance(channels(color).map((c, i) => c * alpha + back[i] * (1 - alpha))), luminance(back)];
+  return (Math.max(one, two) + 0.05) / (Math.min(one, two) + 0.05);
+}
+
 describe.each(['light', 'dark'] as const)('the catalog UI in %s has no axe violations', (theme) => {
+  it('on open code that overflows, with a comment and the copied label', async () => {
+    await page.viewport(1280, 800);
+    const code = `<!-- ${'a long comment '.repeat(40)} -->`;
+    const base = props('#/ui/Card', theme);
+    const long: ZukanMeta = {
+      ...meta,
+      sections: [{ title: 'One', code }],
+      doc: `<pre><code>${'long code '.repeat(60)}</code></pre>`
+    };
+    base.catalog[1].meta = () => Promise.resolve({ default: long });
+    const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    try {
+      const screen = await render(App, { props: base });
+      await screen.getByText('Code', { exact: true }).click();
+      await screen.getByRole('button', { name: 'Copy' }).click();
+      const copied = screen.getByRole('button', { name: 'Copied' });
+      await expect.element(copied).toBeInTheDocument();
+      // polled: the colors change in a short transition
+      await expect
+        .poll(() => {
+          const { color, backgroundColor } = getComputedStyle(copied.element());
+          return contrast(color, backgroundColor);
+        })
+        .toBeGreaterThanOrEqual(4.5);
+      expect(await violations()).toEqual([]);
+    } finally {
+      copy.mockRestore();
+    }
+  });
+
+  it('with search placeholders above 4.5:1', async () => {
+    await page.viewport(1280, 800);
+    const screen = await render(App, { props: { ...props('#/tailwind', theme), tailwind } });
+    await expect.element(screen.getByRole('searchbox', { name: 'Filter tokens' })).toBeInTheDocument();
+    await screen.getByRole('button', { name: 'Search the catalog' }).click();
+    const inputs = document.querySelectorAll<HTMLInputElement>('.zukan input[placeholder]');
+    expect(inputs).toHaveLength(3);
+    const page_ = getComputedStyle(document.querySelector('.zukan')!).backgroundColor;
+    for (const input of inputs) {
+      const { color, opacity } = getComputedStyle(input, '::placeholder');
+      const own = getComputedStyle(input).backgroundColor;
+      expect(contrast(color, own === 'rgba(0, 0, 0, 0)' ? page_ : own, Number(opacity))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('with a resize grip above 3:1', async () => {
+    await page.viewport(1280, 800);
+    const screen = await render(App, { props: props('#/ui/Card', theme) });
+    const handle = screen.getByRole('separator', { name: 'Preview width' }).first();
+    await expect.element(handle).toBeInTheDocument();
+    const { color, opacity } = getComputedStyle(handle.element(), '::after');
+    const ratio = contrast(color, getComputedStyle(handle.element()).backgroundColor, Number(opacity));
+    expect(ratio).toBeGreaterThanOrEqual(3);
+  });
+
   it('on the list', async () => {
     await page.viewport(1280, 800);
     const screen = await render(App, { props: props('', theme) });

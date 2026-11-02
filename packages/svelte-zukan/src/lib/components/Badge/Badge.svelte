@@ -20,6 +20,6 @@
     font-family: var(--_font);
     font-size: 11px;
     line-height: 18px;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 </style>

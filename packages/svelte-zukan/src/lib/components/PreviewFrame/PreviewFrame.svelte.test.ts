@@ -256,6 +256,50 @@ describe('PreviewFrame resizing', () => {
     expect(other.container.querySelector('iframe')!.style.height).toBe('80px');
   });
 
+  describe('an empty preview', () => {
+    /** a frame at the height last measured for its preview, holding the preview's element before its content is in */
+    async function reopened() {
+      const first = await render(PreviewFrame, { props });
+      const before = first.container.querySelector('iframe')!;
+      await expect.poll(() => before.contentDocument?.readyState).toBe('complete');
+      before.contentDocument!.body.style.margin = '0';
+      before.contentDocument!.body.innerHTML = '<div data-zukan-preview style="height:300px"></div>';
+      await expect.poll(() => before.style.height).toBe('300px');
+      await first.unmount();
+      const screen = await render(PreviewFrame, { props });
+      const iframe = screen.container.querySelector('iframe')!;
+      await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+      const doc = iframe.contentDocument!;
+      doc.body.style.margin = '0';
+      const target = doc.createElement('div');
+      target.setAttribute('data-zukan-preview', '');
+      doc.body.append(target);
+      // long enough for the observer, which reports on the frame's next rendering, and the height it would write
+      await new Promise((r) => setTimeout(r, 200));
+      return { busy: () => screen.container.querySelector('.frame')!.getAttribute('aria-busy'), iframe, target };
+    }
+
+    it('keeps the height last measured and the skeleton while the content has not come', async () => {
+      const { busy, iframe } = await reopened();
+      expect(iframe.style.height).toBe('300px');
+      expect(busy()).toBe('true');
+    });
+
+    it('is measured once its content comes', async () => {
+      const { busy, iframe, target } = await reopened();
+      target.style.height = '120px';
+      await expect.poll(() => iframe.style.height).toBe('120px');
+      expect(busy()).toBe('false');
+    });
+
+    it('ends the skeleton when the page says it has settled, for a section that renders nothing', async () => {
+      const { busy, iframe, target } = await reopened();
+      target.setAttribute('data-zukan-ready', 'true');
+      await expect.poll(busy).toBe('false');
+      expect(iframe.style.height).toBe('80px');
+    });
+  });
+
   it('leaves nothing observed in the preview page once the frame is gone', async () => {
     const screen = await render(PreviewFrame, { props });
     const iframe = screen.container.querySelector('iframe')!;
@@ -1178,6 +1222,77 @@ describe('PreviewFrame tools', () => {
     await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
   });
 
+  describe('Escape past what it does not close inside the preview', () => {
+    const expanded = async (html: string) => {
+      const screen = await render(PreviewFrame, { props });
+      const iframe = screen.container.querySelector('iframe')!;
+      await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+      const doc = iframe.contentDocument!;
+      doc.body.innerHTML = html;
+      const preview = screen.container.querySelector('.preview')!;
+      await screen.getByRole('button', { name: 'Expand' }).click();
+      return { doc, isExpanded: () => preview.classList.contains('expanded') };
+    };
+
+    it('leaves the expanded view with a non-modal dialog open', async () => {
+      const { doc, isExpanded } = await expanded('<button>out</button><dialog><button>in</button></dialog>');
+      doc.querySelector('dialog')!.show();
+      doc.querySelector('button')!.focus();
+      await userEvent.keyboard('{Escape}');
+      await expect.poll(isExpanded).toBe(false);
+      expect(doc.querySelector('dialog')!.open).toBe(true);
+    });
+
+    it('leaves the expanded view with the focus inside a non-modal dialog', async () => {
+      const { doc, isExpanded } = await expanded('<dialog><button>in</button></dialog>');
+      doc.querySelector('dialog')!.show();
+      doc.querySelector('button')!.focus();
+      await userEvent.keyboard('{Escape}');
+      await expect.poll(isExpanded).toBe(false);
+    });
+
+    it.each(['manual', 'nonsense'])('leaves the expanded view with a popover="%s" open', async (value) => {
+      const { doc, isExpanded } = await expanded(`<button>out</button><div popover="${value}">tip</div>`);
+      doc.querySelector<HTMLElement>('[popover]')!.showPopover();
+      doc.querySelector('button')!.focus();
+      await userEvent.keyboard('{Escape}');
+      await expect.poll(isExpanded).toBe(false);
+      expect(doc.querySelector('[popover]')!.matches(':popover-open')).toBe(true);
+    });
+
+    it.each(['popover', 'popover="auto"', 'popover="AUTO"', 'popover="hint"'])(
+      'leaves Escape to an open element with %s, so closing it does not leave the expanded view',
+      async (attribute) => {
+        const { doc, isExpanded } = await expanded(`<button>out</button><div ${attribute}>tip</div>`);
+        doc.querySelector<HTMLElement>('[popover]')!.showPopover();
+        doc.querySelector('button')!.focus();
+        await userEvent.keyboard('{Escape}');
+        await expect.poll(() => doc.querySelector('[popover]')!.matches(':popover-open')).toBe(false);
+        expect(isExpanded()).toBe(true);
+      }
+    );
+  });
+
+  it('passes ⌘K and Ctrl K on from a text field inside the preview, but no other key', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.innerHTML = '<input>';
+    const keys: string[] = [];
+    const listener = (e: KeyboardEvent) => {
+      if (e.key.length === 1) keys.push(`${e.metaKey ? 'meta+' : ''}${e.ctrlKey ? 'ctrl+' : ''}${e.key}`);
+    };
+    addEventListener('keydown', listener);
+    try {
+      doc.querySelector('input')!.focus();
+      await userEvent.keyboard('k{Control>}k{/Control}{Meta>}k{/Meta}');
+      expect(keys).toEqual(['ctrl+k', 'meta+k']);
+    } finally {
+      removeEventListener('keydown', listener);
+    }
+  });
+
   it('passes no letter shortcut on from a dialog inside the preview, but ⌘K and Ctrl K', async () => {
     const screen = await render(PreviewFrame, { props });
     const iframe = screen.container.querySelector('iframe')!;
@@ -1249,6 +1364,22 @@ describe('PreviewFrame tools', () => {
     await screen.getByRole('button', { name: 'Show outlines' }).hover();
     await screen.getByRole('button', { name: 'Show outlines' }).click();
     await expect.poll(() => tip.matches(':popover-open') && tip.textContent).toBe('Show outlines');
+  });
+
+  it('keeps the tooltip while the pointer moves onto it, with no gap to cross, until it leaves', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const tip = screen.container.querySelector<HTMLElement>('.tip')!;
+    const button = screen.getByRole('button', { name: 'Measure elements on hover' });
+    await button.hover();
+    await expect.poll(() => tip.matches(':popover-open')).toBe(true);
+    const r = button.element().getBoundingClientRect();
+    const box = tip.getBoundingClientRect();
+    expect(box.top <= r.bottom && box.bottom >= r.top).toBe(true);
+    await userEvent.hover(tip, { timeout: 2000 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(tip.matches(':popover-open')).toBe(true);
+    await screen.getByRole('spinbutton', { name: 'Width in pixels' }).hover();
+    await expect.poll(() => tip.matches(':popover-open')).toBe(false);
   });
 
   it('shows the tooltip on keyboard focus and keeps it inside the viewport', async () => {
