@@ -1,6 +1,7 @@
 // Installs the packed svelte-zukan into a fresh project, the way a user does, and checks it on the
-// Node version this script runs on: `vite build` writes the catalog, and a dev server serves /__zukan/.
-// CI runs it on the floor of `engines.node`; the dev toolchain is never held to that floor.
+// Node version this script runs on and the lowest Svelte the peer range allows: `vite build` writes the catalog,
+// and a dev server serves /__zukan/.
+// CI runs it on the floor of `engines.node`; the dev toolchain is never held to either floor.
 //
 //   node scripts/floor-smoke.mjs <path to svelte-zukan-*.tgz>
 import assert from 'node:assert/strict';
@@ -19,8 +20,9 @@ if (!tarball || !existsSync(tarball)) {
   process.exit(1);
 }
 
-const floor = JSON.parse(readFileSync(join(root, 'packages/svelte-zukan/package.json'), 'utf8')).engines.node;
-console.log(`floor-smoke: node ${process.versions.node}, engines.node ${floor}`);
+const pkg = JSON.parse(readFileSync(join(root, 'packages/svelte-zukan/package.json'), 'utf8'));
+const svelteFloor = pkg.peerDependencies.svelte.replace(/^\^/, '');
+console.log(`floor-smoke: node ${process.versions.node}, engines.node ${pkg.engines.node}, svelte ${svelteFloor}`);
 
 // the versions the repository is tested with, not whatever is newest in the peer ranges
 const lock = readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8');
@@ -39,7 +41,7 @@ const files = {
     devDependencies: {
       'svelte-zukan': `file:${tarball}`,
       vite: locked('vite'),
-      svelte: locked('svelte'),
+      svelte: svelteFloor,
       '@sveltejs/vite-plugin-svelte': locked('@sveltejs/vite-plugin-svelte')
     }
   }),
