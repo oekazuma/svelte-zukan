@@ -20,9 +20,8 @@ export function forwardEvents(view: Window, frame: HTMLIFrameElement) {
     const typing =
       e.key === 'Escape'
         ? typesText(target)
-        : !e.metaKey &&
-          !e.ctrlKey &&
-          (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+        : (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) &&
+          !((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k');
     // Escape closes a modal dialog or a light-dismissed popover first, which must not leave the expanded view too. It
     // never closes a non-modal dialog or a manual popover, and an invalid `popover` value means manual
     const closes =

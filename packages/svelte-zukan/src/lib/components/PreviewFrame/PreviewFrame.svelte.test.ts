@@ -1366,6 +1366,28 @@ describe('PreviewFrame tools', () => {
     await expect.poll(() => tip.matches(':popover-open') && tip.textContent).toBe('Show outlines');
   });
 
+  it.each(['<input>', '<textarea></textarea>', '<div contenteditable>e</div>'])(
+    'passes only ⌘K and Ctrl K on from %s in the preview, as a field on the catalog page gives no other modified key',
+    async (html) => {
+      const screen = await render(PreviewFrame, { props });
+      const iframe = screen.container.querySelector('iframe')!;
+      await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+      const doc = iframe.contentDocument!;
+      doc.body.innerHTML = html;
+      const keys: string[] = [];
+      const listener = (e: KeyboardEvent) =>
+        keys.push(`${e.metaKey ? 'meta+' : ''}${e.ctrlKey ? 'ctrl+' : ''}${e.key}`);
+      addEventListener('keydown', listener);
+      try {
+        doc.body.querySelector<HTMLElement>('*')!.focus();
+        await userEvent.keyboard('{Meta>}a{/Meta}{Control>}c{/Control}{Control>}k{/Control}{Meta>}k{/Meta}');
+        expect(keys).toEqual(['ctrl+k', 'meta+k']);
+      } finally {
+        removeEventListener('keydown', listener);
+      }
+    }
+  );
+
   it('keeps the tooltip while the pointer moves onto it, with no gap to cross, until it leaves', async () => {
     const screen = await render(PreviewFrame, { props });
     const tip = screen.container.querySelector<HTMLElement>('.tip')!;

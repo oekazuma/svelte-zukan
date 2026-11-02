@@ -435,15 +435,23 @@
     overflow-wrap: anywhere;
   }
 
+  /* the padding keeps a focus ring on screen with the heading scrolled to the top; the margins cancel it out */
   h2 {
-    margin: 32px 0 10px;
+    margin: 28px -4px 6px;
+    padding: 4px;
     font-size: 18px;
     overflow-wrap: anywhere;
   }
 
-  /* focused only to move the keyboard's starting point, like main */
-  h2:focus {
-    outline: none;
+  /* where the keyboard lands from the contents */
+  h2:focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: -2px;
+  }
+
+  h2 a:focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: 1px;
   }
 
   .example {

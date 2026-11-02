@@ -186,6 +186,34 @@ it('marks the pressed toolbar buttons with an outline in forced colors mode, whi
   }
 });
 
+/** moves the focus by keyboard to each place a route or a contents link sends it, with `check` run at each */
+async function eachLandedFocus(theme: 'light' | 'dark', check: (el: HTMLElement) => void) {
+  const screen = await render(App, { props: props('#/ui/Card', theme) });
+  const toc = screen.getByRole('navigation', { name: 'On this page' });
+  await expect.element(toc).toBeInTheDocument();
+  for (const name of ['Props', 'Two']) {
+    (toc.getByRole('link', { name }).element() as HTMLElement).focus();
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => document.activeElement?.closest('h2')?.textContent?.trim()).toBe(name);
+    check(document.activeElement as HTMLElement);
+  }
+  (screen.getByRole('link', { name: /Next/ }).element() as HTMLElement).focus();
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => document.activeElement?.id).toBe('zukan-main');
+  check(document.activeElement as HTMLElement);
+}
+
+it('keeps the focus rings where the keyboard lands in forced colors mode', async () => {
+  const media = (value: string) =>
+    cdp().send('Emulation.setEmulatedMedia', { features: [{ name: 'forced-colors', value }] });
+  await media('active');
+  try {
+    await eachLandedFocus('light', (el) => expect(getComputedStyle(el).outlineStyle).toBe('solid'));
+  } finally {
+    await media('');
+  }
+});
+
 /** the WCAG ratio of a color at `alpha` over a background, for what axe-core does not read or can not decide */
 function contrast(color: string, background: string, alpha = 1) {
   // `color-mix()` computes to `color(srgb 0-1 0-1 0-1)`
@@ -250,6 +278,16 @@ describe.each(['light', 'dark'] as const)('the catalog UI in %s has no axe viola
       const own = getComputedStyle(input).backgroundColor;
       expect(contrast(color, own === 'rgba(0, 0, 0, 0)' ? page_ : own, Number(opacity))).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it('with focus rings above 3:1 where the keyboard lands', async () => {
+    await page.viewport(1280, 800);
+    await eachLandedFocus(theme, (el) => {
+      const { outlineColor, outlineStyle } = getComputedStyle(el);
+      expect(outlineStyle).toBe('solid');
+      const background = getComputedStyle(document.querySelector('.zukan')!).backgroundColor;
+      expect(contrast(outlineColor, background)).toBeGreaterThanOrEqual(3);
+    });
   });
 
   it('with a resize grip above 3:1', async () => {

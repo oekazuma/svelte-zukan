@@ -1339,6 +1339,47 @@ describe('App', () => {
       await expect.poll(() => document.activeElement).toBe(heading.element());
     });
 
+    describe('shows where the focus went', () => {
+      const ring = (el: Element) => getComputedStyle(el).outlineStyle;
+
+      it('on the keyboard, for the props heading and the section link, on screen with the heading at the top', async () => {
+        document.body.style.minHeight = '20000px';
+        try {
+          const { screen, toc } = await open();
+          for (const name of ['Props', 'Two']) {
+            (toc.getByRole('link', { name }).element() as HTMLElement).focus();
+            await userEvent.keyboard('{Enter}');
+            const target =
+              name === 'Props'
+                ? document.getElementById('zukan-props')!
+                : screen.getByRole('heading', { level: 2, name }).getByRole('link').element();
+            await expect.poll(() => document.activeElement).toBe(target);
+            expect(target.matches(':focus-visible')).toBe(true);
+            expect(ring(target)).toBe('solid');
+            const heading = target.closest('h2')!;
+            await expect.poll(() => Math.round(heading.getBoundingClientRect().top)).toBe(0);
+            const { outlineOffset, outlineWidth } = getComputedStyle(target);
+            const drawnAt = target.getBoundingClientRect().top - parseFloat(outlineOffset) - parseFloat(outlineWidth);
+            expect(drawnAt).toBeGreaterThanOrEqual(0);
+          }
+        } finally {
+          document.body.style.minHeight = '';
+        }
+      });
+
+      it('with no ring after a click', async () => {
+        const { screen, toc } = await open();
+        await toc.getByRole('link', { name: 'Props' }).click();
+        const props = document.getElementById('zukan-props')!;
+        await expect.poll(() => document.activeElement).toBe(props);
+        expect(ring(props)).toBe('none');
+        await toc.getByRole('link', { name: 'Two' }).click();
+        const link = screen.getByRole('heading', { level: 2, name: 'Two' }).getByRole('link').element();
+        await expect.poll(() => document.activeElement).toBe(link);
+        expect(ring(link)).toBe('none');
+      });
+    });
+
     it('takes no focus on the route the page opens at', async () => {
       const { screen } = await open('#/ui/Card?section=Two');
       await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
@@ -2111,6 +2152,36 @@ describe('App', () => {
       await userEvent.keyboard('j');
       await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
       await expect.poll(() => document.activeElement).toBe(main());
+    });
+
+    it('shows the focus on the main content after the keyboard, but not after a click', async () => {
+      const screen = await render(App, { props: three() });
+      const next = () =>
+        screen.getByRole('navigation', { name: 'Previous / Next' }).getByRole('link', { name: /Next/ });
+      (next().element() as HTMLElement).focus();
+      await userEvent.keyboard('{Enter}');
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+      await expect.poll(() => document.activeElement).toBe(main());
+      expect(getComputedStyle(main()!).outlineStyle).toBe('solid');
+      await setHash('#/ui/Card');
+      await next().click();
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+      await expect.poll(() => document.activeElement).toBe(main());
+      expect(getComputedStyle(main()!).outlineStyle).toBe('none');
+    });
+
+    it('takes no modified key from a dialog in a preview, as on the catalog page', async () => {
+      const props = three();
+      props.catalog[1].meta = twoSections;
+      const screen = await render(App, { props });
+      const frame = await showPreview(screen, 'One');
+      const doc = (frame.element() as HTMLIFrameElement).contentDocument!;
+      doc.body.innerHTML = '<dialog><button>ok</button></dialog>';
+      doc.querySelector('dialog')!.showModal();
+      doc.querySelector('button')!.focus();
+      await userEvent.keyboard('{Control>}j{/Control}{Meta>}j{/Meta}');
+      await new Promise((r) => setTimeout(r, 50));
+      expect(location.hash).toBe('#/ui/Card');
     });
 
     it('leaves the focus where it is when the route keeps the focused element', async () => {

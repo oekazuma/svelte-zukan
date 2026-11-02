@@ -427,8 +427,10 @@
     transform: none;
   }
 
-  main:focus {
-    outline: none;
+  /* inside, as main reaches the edges of the window; where the skip link and a new route send the keyboard */
+  main:focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: -2px;
   }
 
   /* the browser's own is too faint in the dark theme */
