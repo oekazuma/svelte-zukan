@@ -453,6 +453,13 @@ function print(scope: Scope, n: Node, bindings: Bindings): string {
     if (Array.isArray(value)) return value.forEach((v) => visit(v, parent, key, bindings));
     if (!value || typeof value !== 'object' || typeof (value as Node).type !== 'string') return;
     const node = value as Node;
+    // `{ _default: never }` as the default of `Slots`, in `Slots extends { _default: never } ? Snippet : Snippet<[Slots]>`:
+    // nothing to read in a condition that holds whatever it says
+    if (node.type === 'TSConditionalType') {
+      const check = paramOf(node.checkType as Node, bindings);
+      if (check && print(check.scope, check.node, check.bindings) === print(scope, node.extendsType as Node, bindings))
+        return void replaced.push([node, print(scope, node.trueType as Node, bindings)]);
+    }
     const bound = paramOf(node, bindings);
     if (bound) {
       const text = print(bound.scope, bound.node, bound.bindings);
@@ -481,15 +488,30 @@ function print(scope: Scope, n: Node, bindings: Bindings): string {
   return scope.text(n, replaced);
 }
 
+/** whether a conditional type is `T extends … ? Omit<T, …> : T` */
+function isOmitOfCheck(type: Node) {
+  const nameOf = (n: Node | undefined) =>
+    n?.type === 'TSTypeReference' && !n.typeArguments ? ((n.typeName as Node).name as string | undefined) : undefined;
+  const check = nameOf(type.checkType as Node);
+  const yes = type.trueType as Node;
+  return (
+    !!check &&
+    nameOf(type.falseType as Node) === check &&
+    yes.type === 'TSTypeReference' &&
+    (yes.typeName as Node).name === 'Omit' &&
+    nameOf(((yes.typeArguments as Node | undefined)?.params as Node[] | undefined)?.[0]) === check
+  );
+}
+
 /** `A.B.C` as its names */
 const namesOf = (n: Node): string[] =>
   n.type === 'TSQualifiedName' ? [...namesOf(n.left as Node), (n.right as Node).name as string] : [n.name as string];
 
 /**
- * imports are followed this many files deep; bits-ui takes all of it for `Accordion.TriggerProps`: its index, two barrels,
- * the `export * as`, the types, and the `WithChild` they use
+ * imports are followed this many files deep; bits-ui takes all of it for the `class` of `Accordion.TriggerProps`: its
+ * index, two barrels, the `export * as`, the types, its attributes, and `svelte/elements` under them
  */
-const MAX_DEPTH = 6;
+const MAX_DEPTH = 7;
 
 /**
  * The props of a Svelte 5 component, read from `let { … }: Type = $props()` or `let { … } = $props() as Type` in its
@@ -655,8 +677,8 @@ export function extractProps(
         }
       }
       const keys =
-        (ref === 'Omit' || ref === 'Pick') && !from && !declared(scope, ref, false)
-          ? literalKeys(second && (paramOf(second, bindings)?.node ?? second))
+        (ref === 'Omit' || ref === 'Pick') && !from && !declared(scope, ref, false) && second
+          ? keysOf(second, scope, depth, bindings)
           : null;
       if (keys) {
         const start = members.length;
@@ -675,10 +697,8 @@ export function extractProps(
       const found = lookup(scope, head, depth, 'local', false, rest);
       if (!found || found.scope.package) name(scope, type, bindings);
       if (!found || seen.has(found.node)) return;
-      // a package's own type parameters stay as written, as its members are listed below
       const bind = (declaration: Node) => {
         const bound: Bindings = new Map();
-        if (found.scope.package) return bound;
         const params = ((declaration.typeParameters as Node | undefined)?.params as Node[] | undefined) ?? [];
         const outer = new Set(seen);
         params.forEach((p, i) => {
@@ -730,8 +750,24 @@ export function extractProps(
         for (const node of merged) seen.delete(node);
       }
     }
+    // `T extends { child?: any } ? Omit<T, 'child'> : T`: the same members with or without the condition
+    else if (type.type === 'TSConditionalType' && isOmitOfCheck(type))
+      collect(type.trueType as Node, scope, depth, bindings);
     // a union and the like: the reader gets the type as written
     else name(scope, type, bindings);
+  }
+  /** the keys of `'a' | 'b'` or of `keyof T`, or null when it is anything else or `T` can not be read in full */
+  function keysOf(type: Node, scope: Scope, depth: number, bindings: Bindings): string[] | null {
+    const param = paramOf(type, bindings);
+    if (param) return keysOf(param.node, param.scope, param.depth, param.bindings);
+    if (type.type !== 'TSTypeOperator' || type.operator !== 'keyof') return literalKeys(type);
+    const start = members.length;
+    const named = typeNames.length;
+    collect(type.typeAnnotation as Node, scope, depth, bindings);
+    const keys = members.splice(start).flatMap((m) => (m.node.key ? [keyName(m.node.key as Node)] : []));
+    if (typeNames.length === named) return keys;
+    typeNames.length = named;
+    return null;
   }
   collect(typeOfDeclarator(declarator), own, 0);
 
@@ -759,8 +795,6 @@ export function extractProps(
   const typeText = (scope: Scope, n: Node, bindings: Bindings) =>
     print(scope, n, bindings).replace(/(?<!\btypeof\s+)import\((['"])[^'"]*\1\)\./g, '');
   // the component's own types first, so that they win over a package's member of the same name
-  // ponytail: a package member keeps its type parameters as written (`MouseEventHandler<T>`); substitute the
-  // arguments (`HTMLAttributes<HTMLButtonElement>`) if that reads badly in practice
   // a name declared again (an interface narrowing what it extends, both sides of an intersection) is listed once: the
   // first one read, an interface's own member before the one it extends
   const props: ZukanProp[] = [];
