@@ -2,7 +2,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
-import type { ZukanMeta } from '../types.js';
+import type { TailwindSource, ZukanMeta } from '../types.js';
 import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
 import Wrapper from './Wrapper.test.svelte';
@@ -1253,6 +1253,141 @@ describe('App', () => {
         default: { sections, doc: '<div style="height:5000px">long description</div>' }
       }));
 
+  it('Back onto the list has the summaries and the Tailwind CSS data in when the browser restores the position', async () => {
+    const { props } = setup('');
+    // a module import resolves after the browser has restored the position
+    const slow = <T>(value: T) => new Promise<T>((r) => setTimeout(() => r(value), 50));
+    props.catalog[0].meta = () => slow({ default: { sections: [], doc: '<p>The summary.</p>' } });
+    const load = () =>
+      slow({
+        default: {
+          id: 'app',
+          file: 'src/app.css',
+          version: '4.3.3',
+          prefix: null,
+          categories: [
+            {
+              id: 'background-color',
+              title: 'Background Color',
+              tokens: [{ class: 'bg-brand', cssVariable: '--color-brand', value: '#ff3e00' }]
+            }
+          ],
+          variables: {},
+          css: ''
+        } as TailwindSource
+      });
+    const tailwind = [{ id: 'app', file: 'src/app.css', error: null, load }];
+    const screen = await render(App, { props: { ...props, tailwind } });
+    await expect.element(screen.getByText('The summary.')).toBeInTheDocument();
+    await expect.poll(() => document.querySelector('.card dl')).toBeTruthy();
+    await setHash('#/ui/Card');
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    // after the App's own listener, as the browser restores the position right after popstate
+    const atRestore = new Promise((resolve) =>
+      addEventListener(
+        'popstate',
+        () =>
+          resolve({
+            summary: document.querySelector('.card p')?.textContent,
+            swatches: document.querySelectorAll('.card .thumb span[style*="background-color"]').length,
+            counts: document.querySelectorAll('.card dl').length
+          }),
+        { once: true }
+      )
+    );
+    history.back();
+    expect(await atRestore).toEqual({ summary: 'The summary.', swatches: 1, counts: 1 });
+    await expect.element(screen.getByRole('heading', { level: 1, name: 'Components' })).toBeInTheDocument();
+  });
+
+  describe('a link in the table of contents', () => {
+    const open = async (hash = '#/ui/Card') => {
+      const { props } = setup(hash);
+      props.catalog[0].meta = () =>
+        twoSections().then((m) => ({
+          default: {
+            ...m.default,
+            props: [{ name: 'a', type: null, default: null, required: false, bindable: false, description: null }]
+          }
+        }));
+      const screen = await render(App, { props });
+      const toc = screen.getByRole('navigation', { name: 'On this page' });
+      await expect.element(toc).toBeInTheDocument();
+      return { screen, toc };
+    };
+
+    it('takes the keyboard to the section', async () => {
+      const { screen, toc } = await open();
+      (toc.getByRole('link', { name: 'Two' }).element() as HTMLElement).focus();
+      await userEvent.keyboard('{Enter}');
+      const heading = screen.getByRole('heading', { level: 2, name: 'Two' }).getByRole('link');
+      await expect.poll(() => document.activeElement).toBe(heading.element());
+    });
+
+    it('takes the keyboard to the props', async () => {
+      const { toc } = await open();
+      (toc.getByRole('link', { name: 'Props' }).element() as HTMLElement).focus();
+      await userEvent.keyboard('{Enter}');
+      await expect.poll(() => document.activeElement).toBe(document.getElementById('zukan-props'));
+    });
+
+    it('takes the keyboard to the section it already shows', async () => {
+      const { screen, toc } = await open('#/ui/Card?section=Two');
+      (toc.getByRole('link', { name: 'Two' }).element() as HTMLElement).focus();
+      await userEvent.keyboard('{Enter}');
+      const heading = screen.getByRole('heading', { level: 2, name: 'Two' }).getByRole('link');
+      await expect.poll(() => document.activeElement).toBe(heading.element());
+    });
+
+    describe('shows where the focus went', () => {
+      const ring = (el: Element) => getComputedStyle(el).outlineStyle;
+
+      it('on the keyboard, for the props heading and the section link, on screen with the heading at the top', async () => {
+        document.body.style.minHeight = '20000px';
+        try {
+          const { screen, toc } = await open();
+          for (const name of ['Props', 'Two']) {
+            (toc.getByRole('link', { name }).element() as HTMLElement).focus();
+            await userEvent.keyboard('{Enter}');
+            const target =
+              name === 'Props'
+                ? document.getElementById('zukan-props')!
+                : screen.getByRole('heading', { level: 2, name }).getByRole('link').element();
+            await expect.poll(() => document.activeElement).toBe(target);
+            expect(target.matches(':focus-visible')).toBe(true);
+            expect(ring(target)).toBe('solid');
+            const heading = target.closest('h2')!;
+            await expect.poll(() => Math.round(heading.getBoundingClientRect().top)).toBe(0);
+            const { outlineOffset, outlineWidth } = getComputedStyle(target);
+            const drawnAt = target.getBoundingClientRect().top - parseFloat(outlineOffset) - parseFloat(outlineWidth);
+            expect(drawnAt).toBeGreaterThanOrEqual(0);
+          }
+        } finally {
+          document.body.style.minHeight = '';
+        }
+      });
+
+      it('with no ring after a click', async () => {
+        const { screen, toc } = await open();
+        await toc.getByRole('link', { name: 'Props' }).click();
+        const props = document.getElementById('zukan-props')!;
+        await expect.poll(() => document.activeElement).toBe(props);
+        expect(ring(props)).toBe('none');
+        await toc.getByRole('link', { name: 'Two' }).click();
+        const link = screen.getByRole('heading', { level: 2, name: 'Two' }).getByRole('link').element();
+        await expect.poll(() => document.activeElement).toBe(link);
+        expect(ring(link)).toBe('none');
+      });
+    });
+
+    it('takes no focus on the route the page opens at', async () => {
+      const { screen } = await open('#/ui/Card?section=Two');
+      await expect.element(screen.getByRole('heading', { level: 2, name: 'Two' })).toBeInTheDocument();
+      await tick();
+      expect(document.activeElement).toBe(document.body);
+    });
+  });
+
   it('Back onto a detail page returns to its position past the first screen', async () => {
     const { props } = setup('#/ui/Card');
     props.catalog[0].meta = longPage();
@@ -1854,6 +1989,221 @@ describe('App', () => {
     const { props } = setup('');
     await render(App, { props: { ...props, logo: bundledLogo } });
     expect(await sidebarHeader()).toEqual({ sameRow: true });
+  });
+
+  describe('the page reflows at 320px', () => {
+    const LONG = 'LongNameWithoutABreak'.repeat(20);
+    const fits = async (props: ReturnType<typeof setup>['props'] & { listError?: string }) => {
+      await page.viewport(320, 800);
+      const screen = await render(App, { props });
+      await expect.element(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+      // what the metadata adds comes a little after the heading
+      await new Promise((r) => setTimeout(r, 100));
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(document.documentElement.clientWidth);
+    };
+
+    it('with a wide image in the doc', async () => {
+      const { props } = setup('#/ui/Card');
+      const image = encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600"></svg>');
+      props.catalog[0].meta = () =>
+        Promise.resolve({
+          default: { sections: [], doc: `<p><img src="data:image/svg+xml,${image}" alt="" width="1200"></p>` }
+        });
+      await fits(props);
+    });
+
+    it('with a long file name in the editor buttons', async () => {
+      const { props } = setup('#/ui/Card');
+      Object.assign(props.catalog[0], { edit: { file: `/repo/src/${LONG}.zukan.svelte` } });
+      await fits(props);
+    });
+
+    it('with a long path in the load error of a catalog file', async () => {
+      const { props } = setup('#/ui/Card');
+      props.catalog[0].meta = () =>
+        Promise.resolve({ default: { sections: [], doc: null, error: `/repo/src/${LONG}.zukan.svelte` } });
+      await fits(props);
+    });
+
+    it('with a long path when the metadata fails to load', async () => {
+      const { props } = setup('#/ui/Card');
+      props.catalog[0].meta = () => Promise.reject(new Error(`/repo/src/${LONG}.zukan.svelte`));
+      await fits(props);
+    });
+
+    it('with a long group name', async () => {
+      const { props } = setup('#/ui/Card');
+      props.catalog[0].group = LONG;
+      await fits(props);
+    });
+
+    it('with a long path in the error of the list', async () => {
+      const { props } = setup('');
+      await fits({ ...props, catalog: [], listError: `/repo/src/${LONG}.zukan.svelte` });
+    });
+  });
+
+  it('a wide image in the doc stays clear of the table of contents', async () => {
+    const { props } = setup('#/ui/Card');
+    const image = encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600"></svg>');
+    props.catalog[0].meta = () =>
+      twoSections().then((m) => ({
+        default: { ...m.default, doc: `<p><img src="data:image/svg+xml,${image}" alt="" width="1200"></p>` }
+      }));
+    const screen = await render(App, { props });
+    const toc = screen.getByRole('navigation', { name: 'On this page' });
+    await expect.element(toc).toBeInTheDocument();
+    const img = document.querySelector('.doc img')!;
+    await expect.poll(() => img.getBoundingClientRect().width).toBeGreaterThan(0);
+    expect(img.getBoundingClientRect().right).toBeLessThanOrEqual(toc.element().getBoundingClientRect().left);
+  });
+
+  it('a long section title wraps in the table of contents instead of being clipped', async () => {
+    const { props } = setup('#/ui/Card');
+    const title = 'ASectionTitleWithoutABreak'.repeat(10);
+    props.catalog[0].meta = () =>
+      Promise.resolve({
+        default: {
+          sections: [
+            { title, code: '' },
+            { title: 'Two', code: '' }
+          ],
+          doc: null
+        }
+      });
+    const screen = await render(App, { props });
+    const toc = screen.getByRole('navigation', { name: 'On this page' });
+    await expect.element(toc).toBeInTheDocument();
+    expect(toc.element().scrollWidth).toBeLessThanOrEqual(toc.element().clientWidth);
+  });
+
+  it('a pager link keeps a space between the name and the directory', async () => {
+    const props = three();
+    props.catalog[0].dir = 'deep/folder';
+    const screen = await render(App, { props });
+    const pager = screen.getByRole('navigation', { name: 'Previous / Next' });
+    await expect
+      .element(pager.getByRole('link', { name: '← Previous Alert deep/folder', exact: true }))
+      .toBeInTheDocument();
+  });
+
+  it('a preview in its own tab is titled by the entry and the section', async () => {
+    const { props } = setup('#/preview/ui/Card?section=One');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByText('one')).toBeInTheDocument();
+    expect(document.title).toBe('Card: One | zukan');
+  });
+
+  it('a search picked over the shortcuts closes them too, so the new page is not left behind them', async () => {
+    const props = three();
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+    await userEvent.keyboard('?');
+    const shortcuts = screen.getByRole('dialog', { name: 'Keyboard shortcuts' });
+    await expect.element(shortcuts).toBeVisible();
+    await userEvent.keyboard(modifier === '⌘' ? '{Meta>}k{/Meta}' : '{Control>}k{/Control}');
+    await screen.getByRole('combobox').fill('Tabs');
+    await expect.element(screen.getByRole('option', { name: /Tabs/ })).toBeInTheDocument();
+    await userEvent.keyboard('{Enter}');
+    await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+    expect(document.querySelector<HTMLDialogElement>('dialog.shortcuts')!.open).toBe(false);
+  });
+
+  describe('a route from inside the page', () => {
+    const main = () => document.getElementById('zukan-main');
+
+    it('moves the focus to the main content when Enter on a pager link removes the link', async () => {
+      const screen = await render(App, { props: three() });
+      const pager = screen.getByRole('navigation', { name: 'Previous / Next' });
+      (pager.getByRole('link', { name: /Next.*Tabs/ }).element() as HTMLElement).focus();
+      await userEvent.keyboard('{Enter}');
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+      await expect.poll(() => document.activeElement).toBe(main());
+    });
+
+    it('moves the focus to the main content when Enter on a card removes the card', async () => {
+      const { props } = setup('');
+      const screen = await render(App, { props });
+      (screen.getByRole('main').getByRole('link', { name: 'Card' }).element() as HTMLElement).focus();
+      await userEvent.keyboard('{Enter}');
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+      await expect.poll(() => document.activeElement).toBe(main());
+    });
+
+    it('moves the focus to the main content when J leaves a preview toolbar behind', async () => {
+      const props = three();
+      props.catalog[1].meta = twoSections;
+      const screen = await render(App, { props });
+      const button = screen.getByRole('button', { name: 'Expand' }).first();
+      await expect.element(button).toBeInTheDocument();
+      (button.element() as HTMLElement).focus();
+      await userEvent.keyboard('j');
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+      await expect.poll(() => document.activeElement).toBe(main());
+    });
+
+    it('moves the focus to the main content when J folds the panel over a sidebar link on a narrow screen', async () => {
+      await page.viewport(320, 800);
+      const screen = await render(App, { props: three() });
+      await screen.getByRole('button', { name: 'Menu' }).click();
+      const link = screen.getByRole('navigation', { name: 'Components' }).getByRole('link', { name: 'Alert' });
+      await expect.element(link).toBeVisible();
+      (link.element() as HTMLElement).focus();
+      await userEvent.keyboard('j');
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+      await expect.poll(() => document.activeElement).toBe(main());
+    });
+
+    it('shows the focus on the main content after the keyboard, but not after a click', async () => {
+      const screen = await render(App, { props: three() });
+      const next = () =>
+        screen.getByRole('navigation', { name: 'Previous / Next' }).getByRole('link', { name: /Next/ });
+      (next().element() as HTMLElement).focus();
+      await userEvent.keyboard('{Enter}');
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+      await expect.poll(() => document.activeElement).toBe(main());
+      expect(getComputedStyle(main()!).outlineStyle).toBe('solid');
+      await setHash('#/ui/Card');
+      await next().click();
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+      await expect.poll(() => document.activeElement).toBe(main());
+      expect(getComputedStyle(main()!).outlineStyle).toBe('none');
+    });
+
+    it('takes no modified key from a dialog in a preview, as on the catalog page', async () => {
+      const props = three();
+      props.catalog[1].meta = twoSections;
+      const screen = await render(App, { props });
+      const frame = await showPreview(screen, 'One');
+      const doc = (frame.element() as HTMLIFrameElement).contentDocument!;
+      doc.body.innerHTML = '<dialog><button>ok</button></dialog>';
+      doc.querySelector('dialog')!.showModal();
+      doc.querySelector('button')!.focus();
+      await userEvent.keyboard('{Control>}j{/Control}{Meta>}j{/Meta}');
+      await new Promise((r) => setTimeout(r, 50));
+      expect(location.hash).toBe('#/ui/Card');
+    });
+
+    it('leaves the focus where it is when the route keeps the focused element', async () => {
+      const screen = await render(App, { props: three() });
+      const link = screen.getByRole('navigation', { name: 'Components' }).getByRole('link', { name: 'Alert' });
+      await expect.element(link).toBeVisible();
+      (link.element() as HTMLElement).focus();
+      await userEvent.keyboard('j');
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+      await new Promise((r) => setTimeout(r, 50));
+      expect(document.activeElement).toBe(link.element());
+    });
+
+    it('moves no focus when the route came with none on the page', async () => {
+      const screen = await render(App, { props: three() });
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Card/ })).toBeInTheDocument();
+      (document.activeElement as HTMLElement).blur();
+      await setHash('#/ui/Tabs');
+      await expect.element(screen.getByRole('heading', { level: 1, name: /Tabs/ })).toBeInTheDocument();
+      await new Promise((r) => setTimeout(r, 50));
+      expect(document.activeElement).toBe(document.body);
+    });
   });
 
   it('on a 320px screen the shortcuts fit', async () => {

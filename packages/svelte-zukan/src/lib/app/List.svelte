@@ -160,5 +160,6 @@
   /* the message lists the colliding files on lines of their own */
   .list-error {
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 </style>

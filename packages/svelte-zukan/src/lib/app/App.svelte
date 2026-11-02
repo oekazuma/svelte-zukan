@@ -168,6 +168,8 @@
 
   /** goes to a catalog route as a link to it would, for the search and WebMCP */
   function go(next: string) {
+    // the search opens over the shortcuts
+    shortcuts?.close();
     detail?.revealRoute(next);
     location.hash = next;
   }
@@ -185,6 +187,12 @@
     }
   }
 
+  // a hidden element keeps the focus until the next rendering (the sidebar's panel folds on a new route)
+  function keepFocus() {
+    const focused = document.activeElement;
+    if (!focused || focused === document.body || !focused.checkVisibility()) main?.focus({ preventScroll: true });
+  }
+
   // components in a preview and links in a doc can change the hash too; only catalog routes navigate
   function onhashchange() {
     const traversal = remembered();
@@ -195,6 +203,9 @@
       remember(hash);
       return;
     }
+    // the new page may take the focused element with it, which leaves the keyboard at the top of the document. After
+    // the sidebar's own hashchange listener, which folds its panel
+    if (document.activeElement && document.activeElement !== document.body) setTimeout(keepFocus);
     hash = traversal ?? location.hash;
     restored = traversal !== null;
     if (traversal === null) remember(hash);
@@ -227,11 +238,13 @@
 
 <svelte:head>
   <title
-    >{route.view === 'detail' && entry
-      ? `${entry.name} | ${title}`
-      : route.view === 'tailwind' && tailwind.length
-        ? `Tailwind CSS | ${title}`
-        : title}</title
+    >{route.view === 'preview' && entry && route.section !== null
+      ? `${entry.name}: ${route.section} | ${title}`
+      : (route.view === 'detail' || route.view === 'preview') && entry
+        ? `${entry.name} | ${title}`
+        : route.view === 'tailwind' && tailwind.length
+          ? `Tailwind CSS | ${title}`
+          : title}</title
   >
 </svelte:head>
 
@@ -378,7 +391,7 @@
     --_success: #1a7f37;
     --_danger: #cf222e;
     --_danger-bg: #ffebe9;
-    --_syntax-comment: #6e7781;
+    --_syntax-comment: #636c76;
     --_syntax-string: #0a3069;
     --_syntax-tag: #116329;
     --_syntax-attr: #0550ae;
@@ -414,8 +427,16 @@
     transform: none;
   }
 
-  main:focus {
-    outline: none;
+  /* inside, as main reaches the edges of the window; where the skip link and a new route send the keyboard */
+  main:focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: -2px;
+  }
+
+  /* the browser's own is too faint in the dark theme */
+  .zukan :global(input::placeholder) {
+    color: var(--_muted);
+    opacity: 1;
   }
 
   .zukan[data-theme='dark'] {

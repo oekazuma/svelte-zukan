@@ -2,13 +2,18 @@
   import type { TailwindListItem, TailwindSource } from '../types.js';
   import { formatTailwindHash } from './hash.js';
   import type { Messages } from './i18n.js';
+  import { loadOnce } from './load-once.js';
   import { countTokens, isColor } from './tailwind-filter.js';
 
   let { item, t }: { item: TailwindListItem; t: Messages } = $props();
 
   // an entry with an error, or one that fails to load, shows its error on the page it links to; never rejects, as an
   // `{#await}` without `{:catch}` would rethrow
-  const data = $derived(item.error ? null : item.load().catch(() => null));
+  const data = $derived.by(() => {
+    if (item.error) return null;
+    const load = loadOnce(item.load);
+    return load instanceof Promise ? load.catch(() => null) : load;
+  });
   const id = $props.id();
 
   /** one shade per palette reads as the theme at a glance; a palette without a 500 shows its first colours */

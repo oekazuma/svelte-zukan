@@ -61,8 +61,9 @@
         {status === 'copied' ? labels.copied : status === 'failed' ? labels.copyFailed : labels.copy}
       </button>
     {/if}
-    <!-- the copy button copies `code` itself, not these parts -->
-    <pre><code
+    <!-- the copy button copies `code` itself, not these parts; focusable, so a keyboard can scroll long lines -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <pre tabindex="0"><code
         >{#each parts as part, i (i)}{#if part.kind}<span class={part.kind}>{part.text}</span
             >{:else}{part.text}{/if}{/each}</code
       ></pre>
@@ -130,7 +131,7 @@
   .copy.copied {
     border-color: color-mix(in srgb, var(--_accent) 40%, transparent);
     background: color-mix(in srgb, var(--_accent) 12%, var(--_bg));
-    color: var(--_accent);
+    color: var(--_text);
   }
 
   /* the catalog's theme defines the palette; outside it (the component's own catalog file) the code stays plain */
@@ -170,5 +171,11 @@
     font-family: var(--_mono);
     font-size: 13px;
     line-height: 1.5;
+  }
+
+  /* inside, as the box around a section's code clips what is drawn outside */
+  pre:focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: -2px;
   }
 </style>

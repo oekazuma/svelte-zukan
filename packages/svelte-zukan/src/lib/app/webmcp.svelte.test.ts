@@ -53,6 +53,19 @@ describe('WebMCP tools', () => {
     expect((await tool(tools, 'get_component').execute({ id: 42 })).isError).toBe(true);
   });
 
+  it('asks for an ID when a call names none', async () => {
+    const withAxe = buildTools({
+      fetchCatalog: () => Promise.resolve(catalog),
+      page: '/',
+      axe: () => Promise.resolve('')
+    });
+    for (const name of ['get_component', 'open_component', 'check_accessibility']) {
+      const result = await tool(withAxe, name).execute({});
+      expect(result.isError).toBe(true);
+      expect(body(result)).toBe('An ID is required.');
+    }
+  });
+
   it('opens a section at a width and theme by setting the catalog hash', async () => {
     await tool(tools, 'open_component').execute({ id: 'ui/Button', section: 'Primary', width: 375, theme: 'dark' });
     expect(location.hash).toBe('#/ui/Button?section=Primary&width=375&theme=dark');
@@ -115,6 +128,22 @@ describe('WebMCP tools', () => {
     const unknown = await tool(withAxe, 'check_accessibility').execute({ id: 'ui/Nope', section: 'Primary' });
     expect(body(unknown)).toBe('No component with the ID "ui/Nope".');
     expect(document.querySelectorAll('iframe').length).toBe(0);
+  });
+
+  it('says why a catalog file that does not compile can not be checked', async () => {
+    const error = 'src/Broken.zukan.svelte:3: Unexpected token';
+    const withAxe = buildTools({
+      fetchCatalog: () =>
+        Promise.resolve({
+          ...catalog,
+          components: [{ id: 'ui/Broken', name: 'Broken', group: 'ui', doc: null, sections: [], error }]
+        }),
+      page: '/',
+      axe: () => Promise.resolve('')
+    });
+    const result = await tool(withAxe, 'check_accessibility').execute({ id: 'ui/Broken', section: 'Primary' });
+    expect(result.isError).toBe(true);
+    expect(body(result)).toBe(`The catalog file of "ui/Broken" does not compile: ${error}`);
   });
 
   describe('check_accessibility', () => {

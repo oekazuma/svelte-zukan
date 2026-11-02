@@ -2,6 +2,7 @@
   import { BACKGROUNDS, transparent, type Theme } from '../components/PreviewFrame/storage.js';
   import type { Entry } from '../types.js';
   import { formatHash } from './hash.js';
+  import { loadOnce } from './load-once.js';
   import { fitThumb } from './thumb-fit.js';
 
   /** the width a thumbnail is laid out at, whatever it is scaled to, so the example's layout never depends on the card */
@@ -115,7 +116,7 @@
     bind:clientWidth={width}
     style:background-color={doc ? (paint ?? BACKGROUNDS[theme]) : undefined}
   >
-    {#await entry.meta() then { default: meta }}
+    {#await loadOnce(entry.meta) then { default: meta }}
       {#if meta.sections.length}
         <iframe
           src={location.pathname + formatHash('preview', entry.path, meta.sections[0].title)}
@@ -147,7 +148,7 @@
     <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
     <a href={formatHash('detail', entry.path)}>{entry.name}</a>
     {#if entry.dir}<span class="dir">{entry.dir}</span>{/if}
-    {#await entry.meta() then { default: meta }}
+    {#await loadOnce(entry.meta) then { default: meta }}
       {@const text = summary(meta.doc)}
       {#if text}<p>{text}</p>{/if}
     {:catch}

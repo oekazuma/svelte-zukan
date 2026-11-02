@@ -16,16 +16,29 @@ export function forwardEvents(view: Window, frame: HTMLIFrameElement) {
   const forward = (e: KeyboardEvent) => {
     const target = e.composedPath()[0] as HTMLElement;
     // the catalog's own page takes no shortcut from a checkbox either, but Escape still leaves the expanded view
+    // ⌘K still opens the search, as on the catalog's own page
     const typing =
       e.key === 'Escape'
         ? typesText(target)
-        : target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
-    // Escape closes a dialog or a popover open in the frame first, which must not leave the expanded view too
-    const closes = e.key === 'Escape' && view.document.querySelector('dialog[open], :popover-open');
-    // as on the catalog's own page, a key in a dialog is the dialog's, but ⌘K still opens the search. The path, as
-    // `closest` stops at a shadow root, and by tag name, as its elements are of the frame's realm
+        : (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) &&
+          !((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k');
+    // Escape closes a modal dialog or a light-dismissed popover first, which must not leave the expanded view too. It
+    // never closes a non-modal dialog or a manual popover, and an invalid `popover` value means manual
+    const closes =
+      e.key === 'Escape' &&
+      view.document.querySelector(
+        'dialog:modal, :is([popover=""], [popover="auto" i], [popover="hint" i]):popover-open'
+      );
+    // as on the catalog's own page, a key in a dialog is the dialog's, but ⌘K still opens the search, and Escape leaves
+    // the expanded view past a dialog it does not close. The path, as `closest` stops at a shadow root, and by tag name,
+    // as its elements are of the frame's realm
     const inDialog =
-      !e.metaKey && !e.ctrlKey && e.composedPath().some((node) => (node as Element).tagName === 'DIALOG');
+      !e.metaKey &&
+      !e.ctrlKey &&
+      e.composedPath().some((node) => {
+        const el = node as Element;
+        return el.tagName === 'DIALOG' && (e.key !== 'Escape' || el.matches(':modal'));
+      });
     if (e.defaultPrevented || e.isComposing || typing || closes || inDialog) return;
     const { key, code, location, repeat, ctrlKey, shiftKey, altKey, metaKey } = e;
     const copy = { key, code, location, repeat, ctrlKey, shiftKey, altKey, metaKey, bubbles: true, cancelable: true };
