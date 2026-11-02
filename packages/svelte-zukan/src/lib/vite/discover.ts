@@ -34,10 +34,13 @@ const spelledOnDisk = (root: string, rel: string) => {
         } catch {
           // keep the written name
         }
-        // macOS also opens a name stored decomposed (NFD) by its composed spelling: only a difference in case counts
+        // macOS also opens a name stored decomposed (NFD) by its composed spelling
         const key = name.normalize();
-        if (!names.some((n) => n.normalize() === key))
-          name = names.find((n) => n.normalize().toLowerCase() === key.toLowerCase()) ?? name;
+        if (!names.includes(name))
+          name =
+            names.find((n) => n.normalize() === key) ??
+            names.find((n) => n.normalize().toLowerCase() === key.toLowerCase()) ??
+            name;
       }
       dir = join(dir, name);
       return name;
@@ -71,13 +74,14 @@ export function discoverGroups(root: string, groups?: Record<string, string | st
           throw new Error(`svelte-zukan: directory not found for group "${name}": ${normalizePath(abs)}`);
         const written = normalizePath(relative(root, abs));
         const onDisk = spelledOnDisk(root, written);
-        // the watcher reports the spelling on disk, which a dir written in another case never matches: no HMR
-        if (onDisk !== written)
+        // a difference in case is the user's to fix, as catalog files are matched by case too
+        if (onDisk.normalize() !== written.normalize())
           throw new Error(
             `svelte-zukan: directory for group "${name}" is written "${written}", but is "${onDisk}" on disk; directories are matched by case`
           );
         const real = realpathSync(abs);
-        if (!seen.has(real)) seen.set(real, normalizePath(abs));
+        // as on disk: the watcher reports that spelling, which a dir kept in another one never matches, so no HMR
+        if (!seen.has(real)) seen.set(real, normalizePath(resolve(root, onDisk)));
       }
       return { name, dirs: [...seen.values()] };
     });

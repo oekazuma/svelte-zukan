@@ -1,5 +1,5 @@
 import { once } from 'node:events';
-import { mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -166,6 +166,21 @@ it('a group outside the root is watched', { timeout: 20_000 }, async () => {
   await waitForReload();
   expect(await list()).toContain('P.zukan.svelte');
   expect(fullReloads()).toBe(0);
+});
+
+// macOS opens a decomposed name by its composed spelling; Linux and Windows find neither by the other
+it('a groups dir written in another Unicode normalization keeps its HMR', { timeout: 20_000 }, async ({ skip }) => {
+  const [nfc, nfd] = ['Café', 'Café'.normalize('NFD')];
+  const file = join(tmp, `app/src/${nfd}/A.zukan.svelte`);
+  mkdirSync(dirname(file));
+  writeFileSync(file, '<Section title="A"><p>a</p></Section>');
+  if (!existsSync(join(tmp, `app/src/${nfc}`))) skip();
+  await server.close();
+  await start({ groups: { ui: `src/${nfc}` } });
+  await list();
+  send.mockClear();
+  writeFileSync(file, '<Section title="A"><p>changed</p></Section>');
+  await waitForReload();
 });
 
 it('a component in a groups dir linked through node_modules updates its props', { timeout: 25_000 }, async () => {
