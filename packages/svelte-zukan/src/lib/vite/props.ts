@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { Marked } from 'marked';
+import { Marked, type Token, type Tokens } from 'marked';
 import { normalizePath } from 'vite';
 import type { ZukanProp } from '../types.js';
 import { normalizeSource, ownParams, parseSvelte } from './extract.js';
@@ -53,15 +53,32 @@ const resolveLinks = (text: string) =>
     return kind === 'plain' ? target : `\`${target}\``;
   });
 
+/**
+ * adds to `code` the lines of the code blocks in `tokens`, which start at line `at`. By line, because a list item's tokens
+ * are read from its text without its indentation, so their offsets do not fit the item's source
+ */
+function codeLines(tokens: Token[], at: number, code: Set<number>) {
+  for (const token of tokens) {
+    const lines = token.raw.split('\n');
+    if (token.type === 'code') lines.forEach((l, i) => l && code.add(at + i));
+    else if (token.type === 'list') {
+      let line = at;
+      for (const item of (token as Tokens.List).items) {
+        codeLines(item.tokens, line, code);
+        line += item.raw.split('\n').length - 1;
+      }
+    }
+    at += lines.length - 1;
+  }
+}
+
 /** `text` up to its first block tag: an `@` line in a code block (`@media` in a fence) is code */
 function beforeTag(text: string) {
-  let out = '';
-  for (const token of jsdoc.lexer(text)) {
-    const tag = token.type === 'code' ? -1 : token.raw.search(/^[ \t]*@/m);
-    if (tag !== -1) return out + token.raw.slice(0, tag);
-    out += token.raw;
-  }
-  return out;
+  const code = new Set<number>();
+  codeLines(jsdoc.lexer(text), 0, code);
+  const lines = text.split('\n');
+  const tag = lines.findIndex((l, i) => !code.has(i) && l.trimStart().startsWith('@'));
+  return (tag === -1 ? lines : lines.slice(0, tag)).join('\n');
 }
 
 type Comment = { type: string; value: string; start: number; end: number };

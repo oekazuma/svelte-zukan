@@ -66,6 +66,19 @@ export const ownParams = (n: Node) =>
     .filter((p) => p?.type === 'TSTypeParameter')
     .map((p) => p.name as string);
 
+/**
+ * the `infer` names of an extends clause. As in TypeScript, those in the clause of a conditional type inside it are that
+ * type's own, while those in its branches are not
+ */
+function inferredIn(value: unknown): string[] {
+  if (!value || typeof value !== 'object') return [];
+  const n = value as Node;
+  if (n.type === 'TSInferType') return ownParams(n);
+  return Object.entries(n).flatMap(([key, child]) =>
+    key === 'extendsType' && n.type === 'TSConditionalType' ? [] : inferredIn(child)
+  );
+}
+
 /** the names `node` declares for what is under its `key` */
 function namesFor(node: Node, key: string): string[] {
   switch (node.type) {
@@ -99,15 +112,6 @@ function namesFor(node: Node, key: string): string[] {
     case 'TSConstructSignatureDeclaration':
     case 'TSIndexSignature':
       return (node.parameters as Node[]).flatMap((p) => patternNames(p));
-    case 'TSConditionalType': {
-      // `infer U` reaches the branch taken when it matched, and no further
-      if (key === 'checkType' || key === 'falseType') return [];
-      const inferred: string[] = [];
-      walk(node.extendsType, (n) => {
-        if (n.type === 'TSInferType') inferred.push(...ownParams(n));
-      });
-      return inferred;
-    }
     case 'CatchClause':
       return patternNames(node.param as Node);
     case 'ForStatement':
@@ -125,9 +129,15 @@ function namesFor(node: Node, key: string): string[] {
 
 /**
  * The variables `value` reads. A name the template or a function declares (an `{#each}` item, a snippet parameter,
- * `{@const}`) hides a script variable of the same name under it.
+ * `{@const}`) hides a script variable of the same name under it. A type parameter (`typeParams`) names only a type, so
+ * it hides a reference to a type, and `typeof T` or `T` in code still reads the variable.
  */
-function identifiersOf(value: unknown, hidden: ReadonlySet<string> = new Set(), names = new Set<string>()) {
+function identifiersOf(
+  value: unknown,
+  hidden: ReadonlySet<string> = new Set(),
+  names = new Set<string>(),
+  typeParams: ReadonlySet<string> = new Set()
+) {
   if (Array.isArray(value)) {
     // `{@const}` and a declaration in a block are seen by everything next to them
     const local = (value as (Node | null)[]).flatMap((n) =>
@@ -140,7 +150,7 @@ function identifiersOf(value: unknown, hidden: ReadonlySet<string> = new Set(), 
             : []
     );
     const inner = local.length ? new Set([...hidden, ...local]) : hidden;
-    for (const v of value) identifiersOf(v, inner, names);
+    for (const v of value) identifiersOf(v, inner, names, typeParams);
     return names;
   }
   if (!value || typeof value !== 'object') return names;
@@ -155,6 +165,7 @@ function identifiersOf(value: unknown, hidden: ReadonlySet<string> = new Set(), 
   else if (n.type === 'StyleDirective' && n.value === true) add(n.name as string);
   for (const [key, child] of Object.entries(n)) {
     if (key === 'metadata' || key === 'parent') continue;
+    if (key === 'typeName' && n.type === 'TSTypeReference' && typeParams.has((child as Node).name as string)) continue;
     // `obj.label`, `{ label: 1 }`, `import { format as fmt }`, `import.meta`, `NS.Type`, `enum E { A }`,
     // `outer: for (…) break outer` and `[x: number]` name no variable
     if (key === 'property' && n.type === 'MemberExpression' && !n.computed) continue;
@@ -178,8 +189,18 @@ function identifiersOf(value: unknown, hidden: ReadonlySet<string> = new Set(), 
       !n.shorthand
     )
       continue;
-    const local = typeof n.type === 'string' ? [...namesFor(n, key), ...ownParams(n)] : [];
-    identifiersOf(child, local.length ? new Set([...hidden, ...local]) : hidden, names);
+    const local = typeof n.type === 'string' ? namesFor(n, key) : [];
+    // `infer U` is seen only by the branch taken when it matched, not by the rest of its own clause
+    const params = [
+      ...ownParams(n),
+      ...(n.type === 'TSConditionalType' && key === 'trueType' ? inferredIn(n.extendsType) : [])
+    ];
+    identifiersOf(
+      child,
+      local.length ? new Set([...hidden, ...local]) : hidden,
+      names,
+      params.length ? new Set([...typeParams, ...params]) : typeParams
+    );
   }
   return names;
 }

@@ -580,6 +580,31 @@ describe('extractProps', () => {
     expect(description('@deprecated')).toBe(null);
   });
 
+  it('reads an @ line in a code block in a JSDoc list as code, and one outside it as a tag', () => {
+    const description = (...lines: string[]) =>
+      extractProps(
+        ts(
+          `  let { a }: {\n    /**\n${lines.map((l) => `     * ${l}\n`).join('')}     */\n    a: string;\n  } = $props();`
+        ),
+        'A.svelte'
+      )!.props[0].description;
+    const list = ['Intro:', '', '- example:', '', '  ```css', '  @media print { a {} }', '  ```', ''];
+    const kept = description(...list, 'More text.');
+    expect(kept).toContain('@media print');
+    expect(kept).toContain('More text.');
+    const nested = description('- a', '  - b', '', '    ```', '    @media', '    ```', '', 'More text.');
+    expect(nested).toContain('@media');
+    expect(nested).toContain('More text.');
+    const tagged = description(...list, '@default 1');
+    expect(tagged).toContain('@media print');
+    expect(tagged).not.toContain('@default');
+    const next = description('- example:', '', '  ```', '  @media', '  ```', '@default 1');
+    expect(next).toContain('@media');
+    expect(next).not.toContain('@default');
+    expect(description('- item', '  @tag', '  more')).toBe('- item');
+    expect(description('- one', '- two', '@tag', 'more')).toBe('- one\n- two');
+  });
+
   it('stops at a tag in an indented JSDoc comment without stars', () => {
     const found = extractProps(
       ts('  let { a }: {\n    /**\n      Text\n\n      @default 1\n    */\n    a: string;\n  } = $props();'),

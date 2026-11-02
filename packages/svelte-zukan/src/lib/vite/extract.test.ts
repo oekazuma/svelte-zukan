@@ -476,7 +476,8 @@ describe('extractSections', () => {
     ['an overload signature', 'function used(value: string): void;\n  function used(x: unknown) {}'],
     ['a method overload', 'class used {\n    m(value: string): void;\n    m(x: unknown) {}\n  }'],
     ['a named function expression', 'const used = function value() {};'],
-    ['a named class expression', 'const used = class value {};']
+    ['a named class expression', 'const used = class value {};'],
+    ['typeof of a parameter next to it', 'type V = (value: string, other: typeof value) => void;\n  let used: V;']
   ])('leaves out a script variable named like the name in %s', (_, declaration) => {
     const source = `<script lang="ts">\n  let value = 1;\n  ${declaration}\n</script>\n\n<Section title="a">{used}</Section>`;
     expect(extractSections(source, FILE)[0].code).not.toContain('let value');
@@ -489,7 +490,15 @@ describe('extractSections', () => {
     ['an interface', 'interface V<T> {\n    a: T;\n  }\n  let used: V<string>;'],
     ['a class', 'class used<T> {\n    a?: T;\n  }'],
     ['a mapped type', "type V = { [T in 'a']: T };\n  let used: V;"],
-    ['infer', 'type V<A> = A extends (infer T)[] ? T : never;\n  let used: V<string>;']
+    ['infer', 'type V<A> = A extends (infer T)[] ? T : never;\n  let used: V<string>;'],
+    [
+      'infer in a branch inside an extends clause',
+      'type V<A> = A extends (A extends string ? infer T : 2) ? T : never;\n  let used: V<string>;'
+    ],
+    [
+      'a type next to typeof of another name',
+      'const x = 1;\n  type V<T> = { value: typeof x; other: T };\n  let used: V<1>;'
+    ]
   ])('leaves out a type named like the type parameter of %s', (_, declaration) => {
     const source = `<script lang="ts">\n  type T = string;\n  ${declaration}\n</script>\n\n<Section title="a">{used}</Section>`;
     expect(extractSections(source, FILE)[0].code).not.toContain('type T');
@@ -507,7 +516,24 @@ describe('extractSections', () => {
       'the branch infer does not reach',
       'type T = string;',
       'type V<A> = A extends (infer T)[] ? 1 : T;\n  let used: V<1>;'
-    ]
+    ],
+    [
+      'the extends clause of infer',
+      'type T = string;',
+      'type V<A> = A extends [infer T, T] ? 1 : 2;\n  let used: V<1>;'
+    ],
+    [
+      'the clause of a conditional type inside an extends clause',
+      'type T = string;',
+      'type V<A> = A extends (A extends (infer T)[] ? 1 : 2) ? T : never;\n  let used: V<1>;'
+    ],
+    [
+      'typeof named like a type parameter',
+      'const T = 1;',
+      'type V<T> = { value: typeof T; other: T };\n  let used: V<1>;'
+    ],
+    ['typeof of a member', 'const T = { a: 1 };', 'type V<T> = { value: typeof T.a; other: T };\n  let used: V<1>;'],
+    ['code named like a type parameter', 'const T = 1;', 'function used<T>(x: T) {\n    return T;\n  }']
   ])('still includes what %s uses', (_, outer, declaration) => {
     const source = `<script lang="ts">\n  ${outer}\n  ${declaration}\n</script>\n\n<Section title="a">{used}</Section>`;
     expect(extractSections(source, FILE)[0].code).toContain(outer);
