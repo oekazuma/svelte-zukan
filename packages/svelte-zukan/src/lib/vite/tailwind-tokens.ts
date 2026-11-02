@@ -127,11 +127,15 @@ export function scanCss(css: string, ranks?: Map<CssRule, number[]>): CssRule[] 
 
 /**
  * A browser ignores an `@import` that follows a style rule, and Tailwind leaves an external one where the entry's rules
- * put it, so its output cannot be injected as it is. `@charset` must come first of all.
+ * put it, so its output cannot be injected as it is. `@charset` must come first of all. The first declaration of a layer
+ * decides its place, so the `@layer` statements ahead of the first block keep their order among the imports; a later
+ * one stays where it is, since moving it above a block's layer would change the order.
  */
 export function hoistImports(css: string): string {
   const charsets: string[] = [];
-  const imports: string[] = [];
+  const hoisted: string[] = [];
+  let hasImport = false;
+  let inHead = true;
   let rest = '';
   let start = 0;
   let depth = 0;
@@ -149,17 +153,21 @@ export function hoistImports(css: string): string {
     else if (c === '}' && --depth === 0) {
       rest += css.slice(start, i + 1);
       start = i + 1;
+      inHead = false;
     } else if (c === ';' && depth === 0) {
       const text = css.slice(start, i + 1);
       const statement = text.replace(/\/\*[\s\S]*?\*\//g, '').trim();
       if (/^@charset\b/i.test(statement)) charsets.push(statement);
-      else if (/^@import\b/i.test(statement)) imports.push(statement);
+      else if (/^@import\b/i.test(statement)) {
+        hasImport = true;
+        hoisted.push(text.trim());
+      } else if (inHead && /^@layer\s/i.test(statement)) hoisted.push(text.trim());
       else rest += text;
       start = i + 1;
     }
   }
-  if (!charsets.length && !imports.length) return css;
-  return [...charsets, ...imports, (rest + css.slice(start)).trimStart()].join('\n');
+  if (!charsets.length && !hasImport) return css;
+  return [...charsets, ...hoisted, (rest + css.slice(start)).trimStart()].join('\n');
 }
 
 /** the selectors of a list, split at its top-level commas only */

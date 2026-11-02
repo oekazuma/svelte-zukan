@@ -315,7 +315,9 @@ describe('loadTailwind', () => {
       const { root, src } = fixture(css);
       const [source] = (await loadTailwind(root, [src])).sources;
       expect(source.error, css).toBeUndefined();
-      expect(source.css.startsWith(url), css).toBe(true);
+      const at = source.css.indexOf(url);
+      expect(source.css.indexOf('@layer theme, base, components, utilities;'), css).toBeLessThan(at);
+      expect(at, css).toBeLessThan(source.css.indexOf('@layer theme {'));
       expect(source.css.split(url)).toHaveLength(2);
       expect(source.categories.find((c) => c.id === 'font-family')?.tokens.map((t) => t.class)).toContain('font-a');
     }

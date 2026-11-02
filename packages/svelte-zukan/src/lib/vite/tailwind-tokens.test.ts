@@ -682,7 +682,30 @@ describe('hoistImports', () => {
   it('moves top-level @charset and @import statements to the top, @charset first', () => {
     expect(
       hoistImports('/* c */@layer a;.x{color:red}@import url("u;v") layer(y);\n.z{top:0}@charset "utf-8";@import "w";')
-    ).toBe('@charset "utf-8";\n@import url("u;v") layer(y);\n@import "w";\n/* c */@layer a;.x{color:red}\n.z{top:0}');
+    ).toBe('@charset "utf-8";\n/* c */@layer a;\n@import url("u;v") layer(y);\n@import "w";\n.x{color:red}\n.z{top:0}');
+  });
+
+  it('keeps a leading @layer statement ahead of an import that declares a later layer', () => {
+    expect(hoistImports('@layer theme, base;\n.x{color:red}\n@import url(x) layer(y);\n.z{top:0}')).toBe(
+      '@layer theme, base;\n@import url(x) layer(y);\n.x{color:red}\n.z{top:0}'
+    );
+  });
+
+  it('leaves an @layer statement after a block in place, where moving it would change the layer order', () => {
+    expect(hoistImports('@layer a{.x{top:0}}@layer b, a;.y{top:0}@import url(z);')).toBe(
+      '@import url(z);\n@layer a{.x{top:0}}@layer b, a;.y{top:0}'
+    );
+  });
+
+  it('keeps an import and a following @layer statement in source order', () => {
+    expect(hoistImports('@import url(x) layer(y);@layer theme, base;.a{top:0}')).toBe(
+      '@import url(x) layer(y);\n@layer theme, base;\n.a{top:0}'
+    );
+  });
+
+  it('returns a stylesheet with only @layer statements to move unchanged', () => {
+    const css = '/* c */\n@layer a, b;\n@layer c;\n.x{top:0}\n';
+    expect(hoistImports(css)).toBe(css);
   });
 
   it('leaves statements in blocks, strings, comments and url() alone', () => {
