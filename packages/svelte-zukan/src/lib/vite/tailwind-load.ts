@@ -17,7 +17,12 @@ const JS_EXTENSIONS = ['.js', '.json', '.node', '.ts'];
 
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 // `@reference` is a different at-rule, so it never matches, and an import with `reference` is the same thing
-const importIds = (css: string, url = true, skip = /(?:^|\s)reference(?:\s|$)/) =>
+const REFERENCE = /(?:^|\s)reference(?:\s|$)/;
+// `theme(reference)` emits nothing either, but what it imports still belongs to the importing entry's theme, so it
+// only keeps a file from becoming an entry: `@import "./tokens.css" theme(reference)` in an entry keeps tokens.css a
+// partial
+const OR_THEME_REFERENCE = /(?:^|\s)(?:theme\([^)]*)?reference\b/;
+const importIds = (css: string, url = true, skip = REFERENCE) =>
   [
     ...stripComments(css).matchAll(
       url ? /@import\s+(?:url\(\s*)?(['"])(.+?)\1([^;]*)/g : /@import\s+(['"])(.+?)\1([^;]*)/g
@@ -31,11 +36,10 @@ const resolveFallback = (base: string, id: string, extensions = ['.css']) => {
   const file = path.resolve(base, id);
   return existsSync(file) ? file : (extensions.map((ext) => file + ext).find((f) => existsSync(f)) ?? file);
 };
-// `theme(reference)` emits nothing either, as `reference` does, but what it imports still belongs to the entry's theme,
-// so it hides a Tailwind import only here: `@import "./tokens.css" theme(reference)` keeps tokens.css a partial
-const importsTailwind = (css: string) =>
-  importIds(css, true, /(?:^|\s)(?:theme\([^)]*)?reference\b/).some(isTailwindId);
-export const isCandidate = (css: string) => importsTailwind(css) || /@theme\b/.test(stripComments(css));
+const importsTailwind = (css: string) => importIds(css, true, OR_THEME_REFERENCE).some(isTailwindId);
+const isCandidate = (css: string) => importsTailwind(css) || /@theme\b/.test(stripComments(css));
+/** whether an edit of a file that is no entry yet can make it one */
+export const canBecomeEntry = (css: string) => isCandidate(css) || importIds(css, false).length > 0;
 
 function cssFiles(dirs: string[]): string[] {
   const found = new Set<string>();
@@ -49,24 +53,29 @@ function cssFiles(dirs: string[]): string[] {
   return [...found].sort();
 }
 
-function readCandidates(dirs: string[]): Map<string, string> {
+function readSheets(dirs: string[]): Map<string, string> {
   const out = new Map<string, string>();
   for (const file of cssFiles(dirs)) {
-    let css: string;
     try {
-      css = readFileSync(file, 'utf8');
+      out.set(file, readFileSync(file, 'utf8'));
     } catch {
       // the glob also returns dangling symlinks and directories named `*.css`
-      continue;
     }
-    if (isCandidate(css)) out.set(file, css);
   }
   return out;
 }
 
-/** the CSS files that `@import "tailwindcss"` or declare `@theme`, minus those another of them imports */
-export async function findTailwindEntries(dirs: string[], resolveCss: Resolver): Promise<string[]> {
-  const candidates = readCandidates(dirs);
+/**
+ * The CSS files that `@import "tailwindcss"`, declare `@theme` or import such a file, minus those another of them
+ * imports. A plain CSS file counts only if `canLoad` accepts it: its candidates would otherwise be partials of an
+ * entry that `loadTailwind` skips.
+ */
+export async function findTailwindEntries(
+  dirs: string[],
+  resolveCss: Resolver,
+  canLoad: (file: string) => boolean = () => true
+): Promise<string[]> {
+  const sheets = readSheets(dirs);
   // Vite's resolver answers with real paths, while the glob keeps a symlinked root or `groups` directory as given
   const real = (file: string) => {
     try {
@@ -77,32 +86,47 @@ export async function findTailwindEntries(dirs: string[], resolveCss: Resolver):
   };
   // a file reached through two scanned paths (a directory and a symlink to it) is one file, listed once
   const byReal = new Map<string, string>();
-  for (const file of candidates.keys()) if (!byReal.has(real(file))) byReal.set(real(file), file);
-  const partials = new Set<string>();
-  // a plain CSS file between them (`app.css` -> `base.css` -> `theme.css`) still makes the last one a partial
-  const follow = async (file: string, css: string, from: string, seen: Set<string>) => {
+  for (const file of sheets.keys()) if (!byReal.has(real(file))) byReal.set(real(file), file);
+  const candidates = new Set([...byReal.keys()].filter((id) => isCandidate(sheets.get(byReal.get(id)!)!)));
+  if (!candidates.size) return [];
+
+  const reached = async (file: string, css: string, skip: RegExp, seen = new Set<string>()) => {
     const base = path.dirname(file);
     // Tailwind inlines `@import "x"` only, never `@import url(x)`
-    for (const id of importIds(css, false)) {
+    for (const id of importIds(css, false, skip)) {
       if (isTailwindId(id)) continue;
       const resolved = real((await resolveCss(id, base).catch(() => undefined)) || resolveFallback(base, id));
-      const target = byReal.get(resolved);
-      if (target) {
-        if (target !== from) partials.add(target);
-      } else if (!seen.has(resolved) && resolved.endsWith('.css') && !resolved.includes('/node_modules/')) {
-        seen.add(resolved);
-        let plain: string;
-        try {
-          plain = readFileSync(resolved, 'utf8');
-        } catch {
-          continue;
-        }
-        await follow(resolved, plain, from, seen);
+      if (seen.has(resolved)) continue;
+      if (!byReal.has(resolved) && (!resolved.endsWith('.css') || resolved.includes('/node_modules/'))) continue;
+      seen.add(resolved);
+      let text: string;
+      try {
+        text = readFileSync(resolved, 'utf8');
+      } catch {
+        continue;
       }
+      await reached(resolved, text, skip, seen);
     }
+    return seen;
   };
-  for (const file of byReal.values()) await follow(file, candidates.get(file)!, file, new Set());
-  return [...byReal.values()].filter((file) => !partials.has(file));
+
+  const sources = new Map<string, string>();
+  for (const [id, file] of byReal) {
+    if (
+      candidates.has(id) ||
+      (canLoad(file) &&
+        [...(await reached(file, sheets.get(file)!, OR_THEME_REFERENCE))].some((r) => candidates.has(r)))
+    ) {
+      sources.set(id, file);
+    }
+  }
+  const partials = new Set<string>();
+  for (const [id, file] of sources) {
+    // whatever a partial imports, its importer reaches too; skipping it leaves one entry in an import cycle, not none
+    if (partials.has(id)) continue;
+    for (const target of await reached(file, sheets.get(file)!, REFERENCE)) if (target !== id) partials.add(target);
+  }
+  return [...sources].filter(([id]) => !partials.has(id)).map(([, file]) => file);
 }
 
 /**
@@ -161,7 +185,9 @@ export function resolveTailwindNode(from: string[]): { node: string; tailwind: s
 
 /** the entry-module check: no resolver, so a partial counts as an entry too */
 export function hasTailwind(dirs: string[], root: string): boolean {
-  return [...readCandidates(dirs).keys()].some((file) => resolveTailwindNode([path.dirname(file), root]));
+  return [...readSheets(dirs)].some(
+    ([file, css]) => isCandidate(css) && resolveTailwindNode([path.dirname(file), root])
+  );
 }
 
 function tooOld(version: string): boolean {
@@ -223,7 +249,8 @@ export async function loadTailwind(
   const watch = new Set<string>();
   const onDependency = (file: string) => void watch.add(normalizePath(file));
 
-  for (const entry of await findTailwindEntries(dirs, resolvers.css ?? (async () => undefined))) {
+  const canLoad = (file: string) => resolveTailwindNode([path.dirname(file), root]) !== null;
+  for (const entry of await findTailwindEntries(dirs, resolvers.css ?? (async () => undefined), canLoad)) {
     const found = resolveTailwindNode([path.dirname(entry), root]);
     if (!found) continue;
     const file = normalizePath(path.relative(root, entry));
