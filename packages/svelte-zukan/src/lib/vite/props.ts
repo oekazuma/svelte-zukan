@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { Marked } from 'marked';
 import { normalizePath } from 'vite';
 import type { ZukanProp } from '../types.js';
-import { normalizeSource, parseSvelte } from './extract.js';
+import { normalizeSource, ownParams, parseSvelte } from './extract.js';
 import { findPackage } from './tailwind-load.js';
 
 type Node = { type: string; start: number; end: number } & Record<string, unknown>;
@@ -53,6 +53,17 @@ const resolveLinks = (text: string) =>
     return kind === 'plain' ? target : `\`${target}\``;
   });
 
+/** `text` up to its first block tag: an `@` line in a code block (`@media` in a fence) is code */
+function beforeTag(text: string) {
+  let out = '';
+  for (const token of jsdoc.lexer(text)) {
+    const tag = token.type === 'code' ? -1 : token.raw.search(/^[ \t]*@/m);
+    if (tag !== -1) return out + token.raw.slice(0, tag);
+    out += token.raw;
+  }
+  return out;
+}
+
 type Comment = { type: string; value: string; start: number; end: number };
 
 /**
@@ -71,9 +82,14 @@ function jsdocOf(node: Node, comments: Comment[], from: number) {
     // the first line follows `/**` directly, so a `*` there is a star only before a space (`/** * text */`), and
     // otherwise text (`/** **bold** */`)
     .map((l, i) => l.replace(i ? /^\s*\* ?/ : /^\s*\*(\s|$)/, '').trimEnd());
-  const tag = lines.findIndex((l) => l.trimStart().startsWith('@'));
-  const text = (tag === -1 ? lines : lines.slice(0, tag))
-    .join('\n')
+  // a comment without stars is indented as a whole, which Markdown would take for a code block
+  const width = Math.min(
+    ...lines
+      .slice(1)
+      .map((l) => l.search(/\S/))
+      .filter((w) => w !== -1)
+  );
+  const text = beforeTag(lines.map((l, i) => (i ? l.slice(width) : l.trimStart())).join('\n'))
     .trim()
     // inline Markdown reads a fence as a code span, which would start with its language (```svelte)
     .replace(/^([ \t]*`{3,})[^`\n]+$/gm, '$1');
@@ -81,11 +97,12 @@ function jsdocOf(node: Node, comments: Comment[], from: number) {
 }
 
 /**
- * the regex literals and template literals in a node, which `collapse` would misread when split around one another, and
- * its blocks, whose statements need not end in `;` and so must keep their line breaks
+ * the regex literals and template literals in a node, which `collapse` would misread when split around one another; its
+ * blocks and class bodies, whose statements need not end in `;` and so must keep their line breaks; and, as nodes without
+ * a type or a length, the places where a member of an object type relies on a line break that `collapse` takes away
  */
-function verbatimOf(value: unknown, out: Node[] = []): Node[] {
-  if (Array.isArray(value)) for (const v of value) verbatimOf(v, out);
+function verbatimOf(value: unknown, lf: string, out: Node[] = []): Node[] {
+  if (Array.isArray(value)) for (const v of value) verbatimOf(v, lf, out);
   else if (value && typeof value === 'object' && typeof (value as Node).type === 'string') {
     const node = value as Node;
     // a string continued with `\` past a line break is one too, for `blockOf`
@@ -96,8 +113,11 @@ function verbatimOf(value: unknown, out: Node[] = []): Node[] {
       out.push(node);
     else {
       // and what is in it too, where `blockOf` finds the strings whose lines it must not dedent
-      if (node.type === 'BlockStatement') out.push(node);
-      for (const [k, v] of Object.entries(node)) if (!k.endsWith('Comments')) verbatimOf(v, out);
+      if (node.type === 'BlockStatement' || node.type === 'ClassBody') out.push(node);
+      if (node.type === 'TSTypeLiteral')
+        for (const m of (node.members as Node[]).slice(0, -1))
+          if (!/[;,]/.test(lf[m.end - 1])) out.push({ type: '', start: m.end, end: m.end });
+      for (const [k, v] of Object.entries(node)) if (!k.endsWith('Comments')) verbatimOf(v, lf, out);
     }
   }
   return out;
@@ -170,14 +190,17 @@ function scopeOf(file: string, lf: string, body: Node[], comments: Comment[], pk
     text: (n, replaced = []) => {
       let out = '';
       let at = n.start;
-      const verbatim = verbatimOf(n);
-      const kept = verbatim.map((r): [Node, string | null] => [r, null]);
+      const verbatim = verbatimOf(n, lf);
+      const kept = verbatim.map((r): [Node, string | null] => [r, r.type ? null : ';']);
       for (const [r, s] of [...kept, ...replaced].sort((a, b) => a[0].start - b[0].start)) {
         // a type parameter inside a template literal type stays as written, and so does what is inside a block
         if (r.start < at) continue;
         out +=
           collapse(lf.slice(at, r.start)) +
-          (s ?? (r.type === 'BlockStatement' ? blockOf(lf, r, verbatim) : lf.slice(r.start, r.end)));
+          (s ??
+            (r.type === 'BlockStatement' || r.type === 'ClassBody'
+              ? blockOf(lf, r, verbatim)
+              : lf.slice(r.start, r.end)));
         at = r.end;
       }
       return (out + collapse(lf.slice(at, n.end))).trim();
@@ -196,9 +219,24 @@ function scopeOf(file: string, lf: string, body: Node[], comments: Comment[], pk
   };
 }
 
-/** `let { … }: Props = $props()` */
+/** an expression without the TypeScript around it, which Svelte removes, and the outermost type written there */
+function unwrap(n: Node | null | undefined) {
+  let type: Node | undefined;
+  while (n && ['TSAsExpression', 'TSSatisfiesExpression', 'TSTypeAssertion', 'TSNonNullExpression'].includes(n.type)) {
+    type ??= n.typeAnnotation as Node | undefined;
+    n = n.expression as Node;
+  }
+  return { value: n, type };
+}
+
+/** the type of `let x: T`, or else of `let x = y as T` */
+const typeOfDeclarator = (declarator: Node) =>
+  (((declarator.id as Node).typeAnnotation as Node | undefined)?.typeAnnotation as Node | undefined) ??
+  unwrap(declarator.init as Node | null | undefined).type;
+
+/** `let { … }: Props = $props()`, `let { … } = $props() as Props` */
 function isProps(declarator: Node) {
-  const init = declarator.init as Node | null | undefined;
+  const init = unwrap(declarator.init as Node | null | undefined).value;
   return (
     init?.type === 'CallExpression' &&
     (init.callee as Node).type === 'Identifier' &&
@@ -335,12 +373,6 @@ const paramOf = (n: Node, bindings: Bindings) =>
     ? bindings.get((n.typeName as Node).name as string)
     : undefined;
 
-/** the parameter names a node declares for itself: `<V>(v: V) => V`, `{ [K in keyof T]: … }`, `infer U` */
-const ownParams = (n: Node) =>
-  [...(((n.typeParameters as Node | undefined)?.params as Node[] | undefined) ?? []), n.typeParameter as Node]
-    .filter((p) => p?.type === 'TSTypeParameter')
-    .map((p) => p.name as string);
-
 /** how loosely a type binds: an argument put in a tighter place than it is written needs parentheses */
 const looseness: Record<string, number> = {
   TSFunctionType: 0,
@@ -392,7 +424,8 @@ function print(scope: Scope, n: Node, bindings: Bindings): string {
 const MAX_DEPTH = 3;
 
 /**
- * The props of a Svelte 5 component, read from `let { … }: Type = $props()` in its source.
+ * The props of a Svelte 5 component, read from `let { … }: Type = $props()` or `let { … } = $props() as Type` in its
+ * source.
  * `Type` may be a type literal, a type alias or interface declared in the component, or one imported from a relative
  * path (`./types`, `./types.js`, `../types/index.ts`, or another component's `<script module>`). A type from a
  * package (`svelte/elements`) is named in `typeName`, and of its members only the destructured ones are listed,
@@ -524,8 +557,7 @@ export function extractProps(
       const queried = first?.type === 'TSTypeQuery' ? (first.exprName as Node) : null;
       if (from?.from === 'svelte' && from.name === 'ComponentProps' && queried?.type === 'Identifier') {
         const component = lookup(scope, queried.name as string, depth, 'local', true);
-        const t = ((component?.node.id as Node | undefined)?.typeAnnotation as Node | undefined)?.typeAnnotation as
-          Node | undefined;
+        const t = component && typeOfDeclarator(component.node);
         const callee = (t?.type === 'TSImportType' ? t.qualifier : t?.typeName) as Node | undefined;
         const props =
           component && isProps(component.node)
@@ -546,15 +578,14 @@ export function extractProps(
         const start = members.length;
         const named = typeNames.length;
         collect(first, scope, depth, bindings);
+        const picked = members
+          .splice(start)
+          .filter((m) => (!!m.node.key && keys.includes(keyName(m.node.key as Node))) === (ref === 'Pick'));
+        members.push(...picked);
         // with anything under it that is not listed in full (a package type, a union), `Omit<…>` is named as written
-        if (typeNames.length === named && members.slice(start).every((m) => !m.scope.package)) {
-          const picked = members
-            .splice(start)
-            .filter((m) => (!!m.node.key && keys.includes(keyName(m.node.key as Node))) === (ref === 'Pick'));
-          return void members.push(...picked);
-        }
-        members.length = start;
+        if (typeNames.length === named && picked.every((m) => !m.scope.package)) return;
         typeNames.length = named;
+        return name(scope, type, bindings);
       }
       // `T.Props` with `import type * as T`: looked up in a scope that imports only `Props` from that file
       const ns =
@@ -634,7 +665,7 @@ export function extractProps(
     // a union and the like: the reader gets the type as written
     else name(scope, type, bindings);
   }
-  collect((id.typeAnnotation as Node | undefined)?.typeAnnotation as Node | undefined, own, 0);
+  collect(typeOfDeclarator(declarator), own, 0);
 
   /** a comment on the destructured prop describes it when its type has none, as a package's member mostly does */
   const defaults = new Map<string, { value: string | null; bindable: boolean; description: string | null }>();
@@ -643,11 +674,12 @@ export function extractProps(
       if (p.type !== 'Property' || p.computed) continue;
       const value = p.value as Node;
       let right = value.type === 'AssignmentPattern' ? (value.right as Node) : null;
+      const call = unwrap(right).value;
       const bindable =
-        right?.type === 'CallExpression' &&
-        (right.callee as Node).type === 'Identifier' &&
-        (right.callee as Node).name === '$bindable';
-      if (bindable) right = ((right!.arguments as Node[])[0] as Node | undefined) ?? null;
+        call?.type === 'CallExpression' &&
+        (call.callee as Node).type === 'Identifier' &&
+        (call.callee as Node).name === '$bindable';
+      if (bindable) right = ((call!.arguments as Node[])[0] as Node | undefined) ?? null;
       defaults.set(keyName(p.key as Node), {
         value: right ? own.text(right) : null,
         bindable,
