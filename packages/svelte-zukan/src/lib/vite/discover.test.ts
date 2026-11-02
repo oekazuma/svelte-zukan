@@ -192,13 +192,13 @@ describe('discoverGroups', () => {
   });
 
   // macOS opens a decomposed name by its composed spelling; Linux and Windows find neither by the other
-  it('a groups dir is matched by case, not by Unicode normalization', () => {
+  it('a groups dir is matched by case, not by Unicode normalization, and kept as it is on disk', () => {
     const [nfc, nfd] = ['Café', 'Café'.normalize('NFD')];
     write(`app/src/${nfd}/Card.zukan.svelte`);
     const app = join(tmp, 'app');
     const either = existsSync(join(app, 'src', nfc));
     if (either)
-      expect(discoverGroups(app, { ui: `src/${nfc}` })).toEqual([{ name: 'ui', dirs: [p(`app/src/${nfc}`)] }]);
+      expect(discoverGroups(app, { ui: `src/${nfc}` })).toEqual([{ name: 'ui', dirs: [p(`app/src/${nfd}`)] }]);
     else expect(() => discoverGroups(app, { ui: `src/${nfc}` })).toThrow(/directory not found/);
     const upper = nfc.toUpperCase();
     expect(() => discoverGroups(app, { ui: `src/${upper}` })).toThrow(

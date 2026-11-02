@@ -133,7 +133,7 @@ jobs:
       - name: Check that the catalog was written
         run: test -f packages/svelte-zukan/zukan-dist/index.html
 
-  # the published engines.node floor, on a user-style install of the packed library;
+  # the published engines.node and svelte floors, on a user-style install of the packed library;
   # every other job runs the dev toolchain on devEngines.runtime instead
   floor:
     runs-on: ubuntu-latest

@@ -177,18 +177,32 @@ describe('resolveOptions', () => {
 });
 
 describe('extendFsAllow', () => {
-  it('leaves allow alone when every dir is inside the root', async () => {
-    const { root } = await makeApp();
-    expect(extendFsAllow(root, [`${root}/src`], ['/x'])).toBeUndefined();
+  it('leaves allow alone when it covers every path', async () => {
+    const { root, outside } = await makeApp();
+    expect(extendFsAllow(root, [`${root}/src`], undefined)).toBeUndefined();
+    expect(extendFsAllow(root, [`${root}/src/a`, `${outside}/b.svg`], [root, outside])).toBeUndefined();
+    // Vite resolves a relative entry against the root, and SvelteKit's list has some
+    expect(extendFsAllow(root, [`${root}/src/lib/a`, outside], ['src/lib', '../outside'])).toBeUndefined();
   });
 
-  it('keeps an explicit allow list and adds the dirs outside the root', async () => {
+  it('adds to an explicit allow list what it does not cover, inside the root too', async () => {
     const { tmp, root, outside } = await makeApp();
     const ws = searchForWorkspaceRoot(root);
     // an explicit list (SvelteKit's, or the user's) is kept as it is; the workspace root stands in only for Vite's default
     expect(normalizePath(ws)).toBe(tmp);
-    expect(extendFsAllow(root, [`${root}/src`, outside], ['/x'])).toEqual(['/x', outside]);
-    expect(extendFsAllow(root, [outside], undefined)).toEqual([ws, outside]);
+    expect(extendFsAllow(root, [`${root}/.zukan`, `${root}/src/a`, outside], ['/x', 'src'])).toEqual([
+      '/x',
+      'src',
+      `${root}/.zukan`,
+      outside
+    ]);
+    expect(extendFsAllow(root, [`${root}/src`, outside], undefined)).toEqual([ws, outside]);
+  });
+
+  it("gives SvelteKit's list the wrapper's directory and the logo inside the root", async () => {
+    const { root } = await makeApp();
+    const { config } = boot(root, { wrapper: 'Wrapper.svelte', logo: 'logo.png', groups: { a: 'src' } }, ['src']);
+    expect(config.server?.fs?.allow).toEqual(['src', libDir, root, `${root}/logo.png`]);
   });
 
   it('is applied in the config hook', async () => {
@@ -196,8 +210,8 @@ describe('extendFsAllow', () => {
     const ws = searchForWorkspaceRoot(root);
     // the library itself (src/lib here) is outside the temporary root
     expect(boot(root).config.server?.fs?.allow).toEqual([ws, libDir]);
-    const { config } = boot(root, { groups: { a: 'src', b: '../outside' } }, ['/x']);
-    expect(config.server?.fs?.allow).toEqual(['/x', outside, libDir]);
+    const { config } = boot(root, { groups: { a: 'src', b: '../outside' } }, ['/x', 'src']);
+    expect(config.server?.fs?.allow).toEqual(['/x', 'src', outside, libDir]);
   });
 
   it('adds the dir of a wrapper and the logo file outside the root', async () => {
@@ -1028,15 +1042,7 @@ describe('build', () => {
       build: {
         outDir: `${root}/out/catalog`,
         manifest: false,
-        copyPublicDir: false,
-        rolldownOptions: {
-          input: { zukan: 'virtual:svelte-zukan/entry' },
-          output: {
-            entryFileNames: '_zukan/[name]-[hash].js',
-            chunkFileNames: expect.any(Function),
-            assetFileNames: '_zukan/[name]-[hash][extname]'
-          }
-        }
+        copyPublicDir: false
       }
     });
     expect((await bootBuild(root, { build: true })).added.environments.zukan.build.outDir).toBe(`${root}/zukan-dist`);
@@ -1044,8 +1050,10 @@ describe('build', () => {
 
   it('names a metadata chunk without its ID, which can be longer than a file name may be', async () => {
     const { root } = await makeApp();
-    const { added } = await bootBuild(root, { build: true });
-    const { chunkFileNames } = added.environments.zukan.build.rolldownOptions.output;
+    const { p } = await bootBuild(root, { build: true });
+    const env = { build: {} as { rolldownOptions: { output: { chunkFileNames: (c: object) => string } } } };
+    p.configEnvironment('zukan', env);
+    const { chunkFileNames } = env.build.rolldownOptions.output;
     expect(chunkFileNames({ facadeModuleId: '\0' + metaId('ui/' + 'ボタン'.repeat(50)) })).toBe(
       '_zukan/meta-[hash].js'
     );
@@ -1082,7 +1090,8 @@ describe('build', () => {
         // library mode: the app's bundle leaves svelte to its users, the catalog has none
         rolldownOptions: {
           input: { main: 'index.html', nested: 'nested/index.html', zukan: ENTRY },
-          external: ['svelte', /^svelte\//]
+          external: ['svelte', /^svelte\//],
+          output: [{ format: 'cjs', dir: 'out', entryFileNames: 'js/[name].js' }, {}]
         }
       }
     });
@@ -1094,7 +1103,15 @@ describe('build', () => {
       emptyOutDir: false,
       cssCodeSplit: true,
       cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
-      rolldownOptions: { input: { zukan: ENTRY } }
+      rolldownOptions: {
+        input: { zukan: ENTRY },
+        output: {
+          format: 'es',
+          entryFileNames: '_zukan/[name]-[hash].js',
+          chunkFileNames: expect.any(Function),
+          assetFileNames: '_zukan/[name]-[hash][extname]'
+        }
+      }
     });
     const client = inherited();
     p.configEnvironment('client', client);
@@ -1119,6 +1136,11 @@ describe('build', () => {
     });
     expect(render('assets/w-1.js', worker)).toEqual({ runtime: 'new URL("./assets/w-1.js", import.meta.url).href' });
     expect(own).toHaveBeenCalledTimes(1);
+    // a file of publicDir, from a chunk of the catalog and from one of the app
+    expect(render('img/bg.png', { ...worker, type: 'public' })).toEqual({
+      runtime: 'new URL("./img/bg.png", import.meta.url).href'
+    });
+    expect(render('img/bg.png', { ...ctx, type: 'public' })).toBe('https://cdn.example/x.js');
     // without one, the app's files get Vite's default
     const plain = await bootBuild(root, { build: true });
     expect(plain.config.experimental.renderBuiltUrl('assets/index-1.js', ctx)).toBeUndefined();

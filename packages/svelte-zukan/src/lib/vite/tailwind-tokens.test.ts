@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import type { TailwindCategoryId } from '../types.js';
 import {
   extractTokens,
+  hoistImports,
   resolveValue,
   rootVariables,
   scanCss,
@@ -337,6 +338,64 @@ export default plugin.withOptions(
     });
   });
 
+  it('reads the value Tailwind writes for browsers with color-mix, not its fallback', async () => {
+    const { token, result } = await load(
+      `@import "tailwindcss"; :root { --p: #f00; --q: color-mix(in oklab, var(--p) 20%, white); }
+       @theme {
+         --color-soft: color-mix(in oklab, var(--p) 20%, white);
+         --color-half: --alpha(var(--p) / 50%);
+         --color-c: color-mix(in oklab, var(--color-red-500) 50%, white);
+       }
+       @theme inline { --color-q: var(--q); }`
+    );
+    expect(token('background-color', 'bg-soft')?.value).toBe('color-mix(in oklab, #f00 20%, white)');
+    expect(token('background-color', 'bg-half')?.value).toBe('color-mix(in oklab, #f00 50%, transparent)');
+    expect(token('background-color', 'bg-c')?.value).toContain('in oklab');
+    expect(token('background-color', 'bg-q')?.value).toBe('color-mix(in oklab, #f00 20%, white)');
+    expect(result.variables['--color-soft']).toBe('color-mix(in oklab, var(--p) 20%, white)');
+  });
+
+  it('names the variable of the namespace the class reads when a generic one has the same suffix', async () => {
+    const { token } = await load(`@import "tailwindcss"; @theme {
+      --color-primary: #00f; --text-color-primary: #111; --background-color-primary: #222; --border-color-primary: #333;
+      --spacing-card: 1rem; --padding-card: 2rem; --margin-card: 3rem; --width-card: 4rem; --height-card: 5rem;
+    }`);
+    for (const [id, cls, cssVariable, value] of [
+      ['text-color', 'text-primary', '--text-color-primary', '#111'],
+      ['background-color', 'bg-primary', '--background-color-primary', '#222'],
+      ['border-color', 'border-primary', '--border-color-primary', '#333'],
+      ['padding', 'p-card', '--padding-card', '2rem'],
+      ['margin', 'm-card', '--margin-card', '3rem'],
+      ['width', 'w-card', '--width-card', '4rem'],
+      ['height', 'h-card', '--height-card', '5rem']
+    ] as const) {
+      expect(token(id, cls)).toEqual({ class: cls, cssVariable, value });
+    }
+  });
+
+  it('names the variable of a specific namespace next to an @theme inline generic one, and the reverse', async () => {
+    const { token } = await load(`@import "tailwindcss";
+      @theme inline { --color-a: #00f; --spacing-b: var(--color-a); --text-color-c: var(--color-a); }
+      @theme { --text-color-a: #111; --padding-b: 2rem; --color-c: #333; }`);
+    expect(token('text-color', 'text-a')?.cssVariable).toBe('--text-color-a');
+    expect(token('padding', 'p-b')?.cssVariable).toBe('--padding-b');
+    expect(token('text-color', 'text-c')?.cssVariable).toBe('--text-color-c');
+  });
+
+  it('names its own variable for an @theme inline token written with a CSS function', async () => {
+    const { token } = await load(`@import "tailwindcss"; :root { --p: #f00; }
+      @theme inline {
+        --color-a: var(--p);
+        --color-b: --alpha(var(--p) / 50%);
+        --spacing-gutter: --spacing(6);
+        --radius-card: theme(--radius-lg);
+      }`);
+    expect(token('background-color', 'bg-a')?.cssVariable).toBe('--color-a');
+    expect(token('background-color', 'bg-b')?.cssVariable).toBe('--color-b');
+    expect(token('padding', 'p-gutter')?.cssVariable).toBe('--spacing-gutter');
+    expect(token('border-radius', 'rounded-card')?.cssVariable).toBe('--radius-card');
+  });
+
   describe('order', () => {
     it('lists keyword colors after the theme colors', async () => {
       const { result } = await load('@import "tailwindcss";');
@@ -499,12 +558,12 @@ export default plugin.withOptions(
     expect(token('border-radius', 'rounded-card')?.value).toBe('0.5rem');
     expect(token('border-radius', 'rounded-pill')?.value).toBe('0.75rem');
     expect(token('background-color', 'bg-brand-soft')?.value).toBe(
-      'color-mix(in srgb, oklch(0.6 0.2 250) 50%, transparent)'
+      'color-mix(in oklab, oklch(0.6 0.2 250) 50%, transparent)'
     );
     expect(result.variables).toMatchObject({
       '--spacing-gutter': 'calc(var(--spacing) * 6)',
       '--radius-card': '0.5rem',
-      '--color-brand-soft': 'color-mix(in srgb, oklch(0.6 0.2 250) 50%, transparent)'
+      '--color-brand-soft': 'color-mix(in oklab, var(--color-brand) 50%, transparent)'
     });
     const padding = result.categories.find((c) => c.id === 'padding')!.tokens.map((t) => t.class);
     expect(padding.indexOf('p-gutter')).toBeLessThan(padding.indexOf('p-7'));
@@ -525,7 +584,7 @@ export default plugin.withOptions(
     const { result, token } = await load('@import "tailwindcss";\n@theme inline { --spacing-gutter: --spacing(6); }');
     expect(token('padding', 'p-gutter')).toEqual({
       class: 'p-gutter',
-      cssVariable: null,
+      cssVariable: '--spacing-gutter',
       value: 'calc(0.25rem * 6)'
     });
     expect(result.variables['--spacing-gutter']).toBe('--spacing(6)');
@@ -595,6 +654,64 @@ describe('scanCss', () => {
         ]
       }
     ]);
+  });
+
+  it("merges Tailwind's color-mix block into the rule around it, after the fallback", () => {
+    const [rule] = scanCss(
+      ':root{--x:var(--p);@supports (color: color-mix(in lab, red, red)){--x:color-mix(in oklab, var(--p) 20%, white);}--y:1}'
+    );
+    expect(rule.atRules).toEqual([]);
+    expect(rule.declarations).toEqual([
+      ['--x', 'var(--p)'],
+      ['--x', 'color-mix(in oklab, var(--p) 20%, white)'],
+      ['--y', '1']
+    ]);
+  });
+
+  it('merges no other nested at-rule', () => {
+    expect(
+      rootVariables(
+        ':root{--a:1;@media (prefers-color-scheme: dark){--a:2}@supports (display: grid){--a:3}}' +
+          '@supports (color: color-mix(in lab, red, red)){:root{--b:4}}'
+      )
+    ).toEqual({ '--a': '1' });
+  });
+});
+
+describe('hoistImports', () => {
+  it('moves top-level @charset and @import statements to the top, @charset first', () => {
+    expect(
+      hoistImports('/* c */@layer a;.x{color:red}@import url("u;v") layer(y);\n.z{top:0}@charset "utf-8";@import "w";')
+    ).toBe('@charset "utf-8";\n/* c */@layer a;\n@import url("u;v") layer(y);\n@import "w";\n.x{color:red}\n.z{top:0}');
+  });
+
+  it('keeps a leading @layer statement ahead of an import that declares a later layer', () => {
+    expect(hoistImports('@layer theme, base;\n.x{color:red}\n@import url(x) layer(y);\n.z{top:0}')).toBe(
+      '@layer theme, base;\n@import url(x) layer(y);\n.x{color:red}\n.z{top:0}'
+    );
+  });
+
+  it('leaves an @layer statement after a block in place, where moving it would change the layer order', () => {
+    expect(hoistImports('@layer a{.x{top:0}}@layer b, a;.y{top:0}@import url(z);')).toBe(
+      '@import url(z);\n@layer a{.x{top:0}}@layer b, a;.y{top:0}'
+    );
+  });
+
+  it('keeps an import and a following @layer statement in source order', () => {
+    expect(hoistImports('@import url(x) layer(y);@layer theme, base;.a{top:0}')).toBe(
+      '@import url(x) layer(y);\n@layer theme, base;\n.a{top:0}'
+    );
+  });
+
+  it('returns a stylesheet with only @layer statements to move unchanged', () => {
+    const css = '/* c */\n@layer a, b;\n@layer c;\n.x{top:0}\n';
+    expect(hoistImports(css)).toBe(css);
+  });
+
+  it('leaves statements in blocks, strings, comments and url() alone', () => {
+    const css =
+      '/* @import "a"; */@layer l{@import url(b);}.c{content:"@import \\"d\\";";background:url(data:x;@import "e";)}';
+    expect(hoistImports(css)).toBe(css);
   });
 });
 

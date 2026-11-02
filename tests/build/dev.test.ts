@@ -21,7 +21,7 @@ beforeAll(async () => {
   // the vite-svelte fixture with the package installed as npm installs it: copied into node_modules, not linked,
   // so that the plugin finds itself installed. Its dependencies and the app's are linked
   app = realpathSync(mkdtempSync(join(tmpdir(), 'zukan-dev-')));
-  for (const file of ['index.html', 'package.json', 'src'])
+  for (const file of ['index.html', 'package.json', 'public', 'src'])
     cpSync(join(fixtures, 'vite-svelte', file), join(app, file), { recursive: true });
   const installed = join(app, 'node_modules/svelte-zukan');
   mkdirSync(installed, { recursive: true });

@@ -1,5 +1,5 @@
 import { once } from 'node:events';
-import { mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -166,6 +166,21 @@ it('a group outside the root is watched', { timeout: 20_000 }, async () => {
   await waitForReload();
   expect(await list()).toContain('P.zukan.svelte');
   expect(fullReloads()).toBe(0);
+});
+
+// macOS opens a decomposed name by its composed spelling; Linux and Windows find neither by the other
+it('a groups dir written in another Unicode normalization keeps its HMR', { timeout: 20_000 }, async ({ skip }) => {
+  const [nfc, nfd] = ['Café', 'Café'.normalize('NFD')];
+  const file = join(tmp, `app/src/${nfd}/A.zukan.svelte`);
+  mkdirSync(dirname(file));
+  writeFileSync(file, '<Section title="A"><p>a</p></Section>');
+  if (!existsSync(join(tmp, `app/src/${nfc}`))) skip();
+  await server.close();
+  await start({ groups: { ui: `src/${nfc}` } });
+  await list();
+  send.mockClear();
+  writeFileSync(file, '<Section title="A"><p>changed</p></Section>');
+  await waitForReload();
 });
 
 it('a component in a groups dir linked through node_modules updates its props', { timeout: 25_000 }, async () => {
@@ -367,6 +382,65 @@ describe('modules shared with the app', () => {
     }
   );
 
+  /** restarts the server with B.svelte, which only its catalog file imports, or the app's page too */
+  async function withComponent({ served = false, inApp = false } = {}) {
+    await server.close();
+    link('svelte');
+    const component = join(tmp, 'app/src/B.svelte');
+    writeFileSync(component, '<p>b</p>\n');
+    writeFileSync(
+      join(tmp, 'app/src/B.zukan.svelte'),
+      '<script>\n  import B from \'./B.svelte\';\n</script>\n<Section title="B"><B /></Section>'
+    );
+    writeFileSync(join(tmp, 'app/src/main.js'), inApp ? "import './B.svelte';\n" : 'export default 1;\n');
+    await start({}, { plugins: [svelte()] });
+    await list();
+    const env = server.environments.client;
+    for (const id of ['/src/main.js', '/src/B.zukan.svelte', '/src/B.svelte']) await env.transformRequest(id);
+    if (served) await meta('app/B');
+    send.mockClear();
+    return component;
+  }
+
+  describe.each([false, true])('a component only a catalog file imports (props served: %s)', (served) => {
+    it.each([
+      ['an unclosed block', '{#if}\n'],
+      ['a duplicate declaration', '<script>\n  let a;\n  let a;\n</script>\n'],
+      ['a missing import', "<script>\n  import './missing.js';\n</script>\n"]
+    ])('an edit with %s reloads only the catalog, also once fixed', { timeout: 30_000 }, async (_, broken) => {
+      const component = await withComponent({ served });
+      writeFileSync(component, broken);
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(errors()).toHaveLength(0);
+      expect(fullReloads()).toBe(0);
+      expect(await get('/src/B.svelte')).toMatch(/^throw new Error\(/);
+      send.mockClear();
+      writeFileSync(component, '<p>fixed</p>\n');
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(errors()).toHaveLength(0);
+      expect(fullReloads()).toBe(0);
+      expect(await get('/src/B.svelte')).not.toMatch(/^throw /);
+    });
+
+    it('an edit that compiles keeps its own HMR, with no reload', { timeout: 25_000 }, async () => {
+      const component = await withComponent({ served });
+      writeFileSync(component, '<p>changed</p>\n');
+      await expect.poll(() => updated('/src/B.svelte'), { timeout: 10_000 }).toBe(true);
+      await new Promise((r) => setTimeout(r, 300));
+      expect(reloaded()).toBe(false);
+      expect(fullReloads()).toBe(0);
+    });
+  });
+
+  it("a compile error in a component the app imports stays Vite's error", { timeout: 25_000 }, async () => {
+    const component = await withComponent({ inApp: true });
+    writeFileSync(component, '{#if}\n');
+    await expect.poll(() => errors().length, { timeout: 10_000 }).toBe(1);
+    expect(reloaded()).toBe(false);
+  });
+
   // without the names, the import would fail to link ("does not provide an export named") before the module throws
   it(
     'a module only a catalog file imports by name throws its compile error, not a link error',
@@ -388,6 +462,35 @@ describe('modules shared with the app', () => {
       const importer = `import { x, y, 'a-b' as ab } from ${JSON.stringify(data(body))}; export default [x, y, ab];`;
       // the path is relative to the root, as Oxc's relative to the working directory is not
       await expect(import(/* @vite-ignore */ data(importer))).rejects.toThrow(/\[ src[\\/]bad\.ts:1:18 \]/);
+    }
+  );
+
+  it(
+    'a module only a catalog file reaches through `export *` also throws its compile error, not a link error',
+    { timeout: 25_000 },
+    async () => {
+      await server.close();
+      link('svelte');
+      writeFileSync(join(tmp, 'app/src/bad.ts'), 'export const x = ;\n');
+      // two levels, and a cycle the search has to end on
+      writeFileSync(join(tmp, 'app/src/mid.ts'), "export * from './bad.ts';\nexport * from './cycle.ts';\n");
+      writeFileSync(join(tmp, 'app/src/cycle.ts'), "export * from './mid.ts';\n");
+      writeFileSync(join(tmp, 'app/src/outer.ts'), "export * from './mid.ts';\n");
+      writeFileSync(join(tmp, 'app/src/named.ts'), "export * as ns from './bad.ts';\nexport const z = 1;\n");
+      writeFileSync(
+        join(tmp, 'app/src/A.zukan.svelte'),
+        "<script>\n  import { x } from './mid.ts';\n  import { y } from './outer.ts';\n  import { z } from './named.ts';\n</script>\n<Section title=\"A\"><p>{x}{y}{z}</p></Section>"
+      );
+      await start({}, { plugins: [svelte()] });
+      await list();
+      for (const id of ['/src/A.zukan.svelte', '/src/outer.ts', '/src/mid.ts', '/src/cycle.ts', '/src/named.ts'])
+        await server.environments.client.transformRequest(id);
+      const body = await get('/src/bad.ts');
+      const data = (code: string) => 'data:text/javascript,' + encodeURIComponent(code);
+      const importer = `import { x, y } from ${JSON.stringify(data(body))}; export default [x, y];`;
+      await expect(import(/* @vite-ignore */ data(importer))).rejects.toThrow(/\[ src[\\/]bad\.ts:1:18 \]/);
+      // `export * as` names the module itself, so what its importers import is not asked of the failed module
+      expect(body).not.toContain('"z"');
     }
   );
 
