@@ -530,7 +530,7 @@
     overflow-x: auto;
   }
 
-  /* keeps its columns' natural widths and scrolls, rather than breaking every word */
+  /* breaks only between words and scrolls past that, rather than breaking every word */
   .doc :global(table) {
     border-collapse: collapse;
     overflow-wrap: normal;

@@ -1200,6 +1200,37 @@ describe('PreviewFrame tools', () => {
     }
   });
 
+  it('passes no letter shortcut on from a shadow root inside a dialog in the preview, but Ctrl K', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    const view = iframe.contentWindow as Window & typeof globalThis;
+    view.customElements.define(
+      'zukan-field',
+      class extends view.HTMLElement {
+        connectedCallback() {
+          this.attachShadow({ mode: 'open' }).innerHTML = '<button>ok</button>';
+        }
+      }
+    );
+    doc.body.innerHTML = '<dialog><zukan-field></zukan-field></dialog>';
+    const keys: string[] = [];
+    const listener = (e: KeyboardEvent) => {
+      if (e.key.length === 1) keys.push(`${e.ctrlKey ? 'Control+' : ''}${e.key}`);
+    };
+    addEventListener('keydown', listener);
+    try {
+      doc.querySelector('dialog')!.showModal();
+      doc.querySelector('zukan-field')!.shadowRoot!.querySelector('button')!.focus();
+      await userEvent.keyboard('j');
+      await userEvent.keyboard('{Control>}k{/Control}');
+      expect(keys).toEqual(['Control+k']);
+    } finally {
+      removeEventListener('keydown', listener);
+    }
+  });
+
   it('shows a tooltip with the name of a toolbar control on hover, without a native title', async () => {
     const screen = await render(PreviewFrame, { props: { ...props, shareUrl: () => '' } });
     const tip = screen.container.querySelector<HTMLElement>('.tip')!;
