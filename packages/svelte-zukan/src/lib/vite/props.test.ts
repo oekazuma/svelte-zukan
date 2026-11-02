@@ -1048,6 +1048,253 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
     ]);
   });
 
+  describe('through a Vite alias', () => {
+    const aliased = (file: string, alias: { find: string | RegExp; replacement: string }[]) =>
+      extractProps(readFileSync(file, 'utf8'), file, { alias, root: tmp })!;
+
+    it("reads a SvelteKit-style `$lib` as the project's own file, not as a package", () => {
+      const utils = write(
+        'src/lib/utils.ts',
+        'export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & { ref?: U | null };\n'
+      );
+      const file = component(
+        "  import type { WithElementRef } from '$lib/utils.js';\n  let { ref, class: className, children, extra }: WithElementRef<{ class?: string; children?: () => void; /** all of it */ extra: number }, HTMLButtonElement> = $props();"
+      );
+      const found = aliased(file, [{ find: '$lib', replacement: `${tmp}/src/lib` }]);
+      expect(found.typeName).toBeNull();
+      expect(found.props.map((p) => [p.name, p.type, p.description])).toEqual([
+        ['class', 'string', null],
+        ['children', '() => void', null],
+        ['extra', 'number', 'all of it'],
+        ['ref', 'HTMLButtonElement | null', null]
+      ]);
+      expect(found.files).toEqual([utils]);
+    });
+
+    it('lists every member of an aliased type, as for a relative import', () => {
+      write('src/lib/types.ts', 'export type Props = { a: string; b: number };\n');
+      const file = component("  import type { Props } from '$lib/types';\n  let { a }: Props = $props();");
+      const found = aliased(file, [{ find: '$lib', replacement: `${tmp}/src/lib` }]);
+      expect(found.props.map((p) => [p.name, p.type])).toEqual([
+        ['a', 'string'],
+        ['b', 'number']
+      ]);
+    });
+
+    it('matches a string on a whole path segment, and the first alias that matches wins', () => {
+      write('src/lib/types.ts', 'export type Props = { a: string };\n');
+      write('other/types.ts', 'export type Props = { b: string };\n');
+      const file = component("  import type { Props } from '$lib/types';\n  let { a }: Props = $props();");
+      const found = aliased(file, [
+        { find: '$li', replacement: `${tmp}/other` },
+        { find: '$lib', replacement: `${tmp}/src/lib` },
+        { find: /^\$lib\//, replacement: `${tmp}/other/` }
+      ]);
+      expect(found.props.map((p) => p.name)).toEqual(['a']);
+    });
+
+    it('fills in the groups of a pattern', () => {
+      write('src/parts/types.ts', 'export type Props = { a: string };\n');
+      const file = component("  import type { Props } from '~/parts/types';\n  let { a }: Props = $props();");
+      const found = aliased(file, [{ find: /^~\/(.+)$/, replacement: `${tmp}/src/$1` }]);
+      expect(found.props.map((p) => [p.name, p.type])).toEqual([['a', 'string']]);
+    });
+
+    it('reads `/src` from the root first, as Vite does, and then as a path', () => {
+      write('src/types.ts', 'export type Props = { a: string };\n');
+      write('elsewhere/types.ts', 'export type Other = { b: string };\n');
+      const file = component(
+        "  import type { Props } from '@/types';\n  import type { Other } from 'out/types';\n  let { a, b }: Props & Other = $props();"
+      );
+      const found = aliased(file, [
+        { find: '@', replacement: '/src' },
+        { find: 'out', replacement: `${tmp}/elsewhere` }
+      ]);
+      expect(found.props.map((p) => [p.name, p.type])).toEqual([
+        ['a', 'string'],
+        ['b', 'string']
+      ]);
+    });
+
+    it('takes an alias to a package name, or into node_modules, as a package', () => {
+      write('node_modules/real/package.json', JSON.stringify({ types: './index.d.ts' }));
+      const dts = write('node_modules/real/index.d.ts', 'export type Attrs = { title?: string; lang?: string };\n');
+      const file = component(
+        "  import type { Attrs } from 'fake';\n  import type { Attrs as Direct } from 'direct';\n  let { title }: Attrs & Direct = $props();"
+      );
+      const found = aliased(file, [
+        { find: 'fake', replacement: 'real' },
+        { find: 'direct', replacement: dts }
+      ]);
+      expect(found.typeName).toBe('Attrs, Direct');
+      expect(found.props.map((p) => [p.name, p.type])).toEqual([['title', 'string']]);
+      expect(found.files).toEqual([]);
+    });
+
+    it('reports the files an alias may point to before they exist', () => {
+      const file = component("  import type { Props } from '$lib/types';\n  let { a }: Props = $props();");
+      const found = aliased(file, [{ find: '$lib', replacement: `${tmp}/src/lib` }]);
+      expect(found.files).toContain(`${tmp}/src/lib/types.ts`);
+      expect(found.typeName).toBe('Props');
+    });
+  });
+
+  describe('through the `imports` of package.json', () => {
+    const lib = JSON.stringify({ imports: { '#lib': './src/lib/index.ts', '#lib/*': './src/lib/*' } });
+
+    it("reads SvelteKit's `#lib` as the project's own file, not as a package", () => {
+      write('package.json', lib);
+      const utils = write('src/lib/utils.ts', 'export type Props = { a: string; b: number };\n');
+      const index = write('src/lib/index.ts', 'export type Index = { c: boolean };\n');
+      const file = write(
+        'src/lib/Button.svelte',
+        ts(
+          "  import type { Props } from '#lib/utils.js';\n  import type { Index } from '#lib';\n  let { a }: Props & Index = $props();"
+        )
+      );
+      const found = read(file)!;
+      expect(found.typeName).toBeNull();
+      expect(found.props.map((p) => [p.name, p.type])).toEqual([
+        ['a', 'string'],
+        ['b', 'number'],
+        ['c', 'boolean']
+      ]);
+      expect(found.files.sort()).toEqual([index, utils].sort());
+    });
+
+    it('takes the types condition, or a package the import maps to as a package', () => {
+      write(
+        'package.json',
+        JSON.stringify({ imports: { '#types': { types: './t.d.ts', default: './t.js' }, '#dep': 'dep' } })
+      );
+      write('t.d.ts', 'export type Local = { a: string };\n');
+      write('node_modules/dep/package.json', JSON.stringify({ types: './index.d.ts' }));
+      write('node_modules/dep/index.d.ts', 'export type Attrs = { title?: string; lang?: string };\n');
+      const file = component(
+        "  import type { Local } from '#types';\n  import type { Attrs } from '#dep';\n  let { a, title }: Local & Attrs = $props();"
+      );
+      const found = read(file)!;
+      expect(found.typeName).toBe('Attrs');
+      expect(found.props.map((p) => [p.name, p.type])).toEqual([
+        ['a', 'string'],
+        ['title', 'string']
+      ]);
+    });
+
+    it('uses the nearest package.json, and names a type it does not map', () => {
+      write('package.json', lib);
+      write('src/lib/types.ts', 'export type Props = { outer: string };\n');
+      write('lib/package.json', '{}');
+      const file = component("  import type { Props } from '#lib/types.js';\n  let { a }: Props = $props();");
+      const found = read(file)!;
+      expect(found.typeName).toBe('Props');
+      expect(found.props.map((p) => [p.name, p.type])).toEqual([['a', null]]);
+    });
+
+    it('gives way to an alias of the same name', () => {
+      write('package.json', lib);
+      write('other/types.ts', 'export type Props = { a: string };\n');
+      const file = component("  import type { Props } from '#lib/types';\n  let { a }: Props = $props();");
+      const found = extractProps(readFileSync(file, 'utf8'), file, {
+        alias: [{ find: '#lib', replacement: `${tmp}/other` }]
+      })!;
+      expect(found.props.map((p) => [p.name, p.type])).toEqual([['a', 'string']]);
+    });
+  });
+
+  describe('through a namespace re-export', () => {
+    it('reads `P.Props` from `export * as P`', () => {
+      const p = write('lib/p.ts', 'export type Props = { /** n */ n: number };\n');
+      const barrel = write('lib/barrel.ts', "export * as P from './p';\n");
+      const file = component("  import type { P } from './barrel';\n  let { n }: P.Props = $props();");
+      const found = read(file)!;
+      expect(found.typeName).toBeNull();
+      expect(found.props.map((x) => [x.name, x.type, x.description])).toEqual([['n', 'number', 'n']]);
+      expect(found.files.sort()).toEqual([barrel, p].sort());
+    });
+
+    it('follows it through `export *`, a renamed re-export and a nested qualified name', () => {
+      write('lib/p.ts', 'export type Inner = { n: number };\nexport type { Inner as Props };\n');
+      write('lib/ns.ts', "export * as Q from './p';\n");
+      write('lib/star.ts', "export * from './ns';\n");
+      write('lib/renamed.ts', "export { Q as P } from './star';\n");
+      const file = component(
+        "  import type { P } from './renamed';\n  import type * as All from './ns';\n  let { n }: P.Props & All.Q.Inner = $props();"
+      );
+      const found = read(file)!;
+      expect(found.typeName).toBeNull();
+      expect(found.props.map((x) => [x.name, x.type])).toEqual([['n', 'number']]);
+    });
+
+    it('reads a namespace import that is exported again', () => {
+      write('lib/p.ts', 'export type Props = { n: number };\n');
+      write('lib/barrel.ts', "import * as P from './p';\nexport { P };\n");
+      const file = component("  import type { P } from './barrel';\n  let { n }: P.Props = $props();");
+      expect(read(file)!.props.map((x) => [x.name, x.type])).toEqual([['n', 'number']]);
+    });
+
+    it('takes a member of a namespace as a value in `ComponentProps<typeof P.Root>`', () => {
+      write('lib/Root.svelte', ts('  let { n }: { n: number } = $props();'));
+      write('lib/p.ts', "export { default as Root } from './Root.svelte';\n");
+      write('lib/barrel.ts', "export * as P from './p';\n");
+      const file = component(
+        "  import type { ComponentProps } from 'svelte';\n  import { P } from './barrel';\n  let { n }: ComponentProps<typeof P.Root> = $props();"
+      );
+      expect(read(file)!.props.map((x) => [x.name, x.type])).toEqual([['n', 'number']]);
+    });
+
+    it('names what it can not find, and is not lost in a cycle of re-exports', () => {
+      write('lib/a.ts', "export * from './b';\nexport * as N from './a';\n");
+      write('lib/b.ts', "export * from './a';\n");
+      const file = component(
+        "  import type { N } from './a';\n  import type { Missing } from './b';\n  let { x }: N.N.N.N.N.N.N.N.Props & N.Props & Missing = $props();"
+      );
+      const found = read(file)!;
+      expect(found.typeName).toBe('N.N.N.N.N.N.N.N.Props, N.Props, Missing');
+      expect(found.props.map((x) => [x.name, x.type])).toEqual([['x', null]]);
+    });
+
+    it('does not take a type for a namespace', () => {
+      write('lib/p.ts', 'export type P = { n: number };\n');
+      const file = component("  import type { P } from './p';\n  let { n }: P.n = $props();");
+      expect(read(file)!.typeName).toBe('P.n');
+    });
+
+    // the layout of bits-ui: a chain of barrels, then the types, then what they are built from
+    it('reads `Accordion.TriggerProps` of a package laid out like bits-ui', () => {
+      write(
+        'node_modules/lib/package.json',
+        JSON.stringify({ exports: { '.': { types: './dist/index.d.ts', svelte: './dist/index.js' } } })
+      );
+      write('node_modules/lib/dist/index.d.ts', 'export { Accordion } from "./bits/index.js";\n');
+      write('node_modules/lib/dist/bits/index.d.ts', 'export { Accordion } from "./accordion/index.js";\n');
+      write('node_modules/lib/dist/bits/accordion/index.d.ts', 'export * as Accordion from "./exports.js";\n');
+      write(
+        'node_modules/lib/dist/bits/accordion/exports.d.ts',
+        'export type { AccordionTriggerProps as TriggerProps } from "./types.js";\n'
+      );
+      write(
+        'node_modules/lib/dist/bits/accordion/types.d.ts',
+        'import type { WithChild } from "../../internal/types.js";\nexport type AccordionTriggerProps = WithChild & { /** the level */ level?: number };\n'
+      );
+      write(
+        'node_modules/lib/dist/internal/types.d.ts',
+        'export type WithChild = { /** the ref */ ref?: HTMLElement | null };\n'
+      );
+      const file = component(
+        "  import { Accordion as Primitive } from 'lib';\n  let { ref, level, other }: Primitive.TriggerProps = $props();"
+      );
+      const found = read(file)!;
+      expect(found.typeName).toBe('Primitive.TriggerProps');
+      expect(found.props.map((x) => [x.name, x.type, x.description])).toEqual([
+        ['ref', 'HTMLElement | null', 'the ref'],
+        ['level', 'number', 'the level'],
+        ['other', null, null]
+      ]);
+      expect(found.files).toEqual([]);
+    });
+  });
+
   it('expands Omit and Pick over a type it reads, and names them over a package type', () => {
     write('lib/types.ts', 'export type Base = { a: string; b?: number; c: boolean };\n');
     const file = component(

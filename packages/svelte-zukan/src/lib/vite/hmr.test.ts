@@ -669,6 +669,30 @@ it.each([false, true])(
   }
 );
 
+it.each([
+  ['inside the root', 'app/src/lib'],
+  ['outside the root', 'shared']
+])('changing a props type behind a `$lib` alias %s updates the metadata', { timeout: 25_000 }, async (_, dir) => {
+  await server.close();
+  const lib = join(tmp, dir);
+  mkdirSync(lib, { recursive: true });
+  const types = join(lib, 'types.ts');
+  writeFileSync(types, 'export type Props = { a: number };\n');
+  writeFileSync(
+    join(tmp, 'app/src/A.svelte'),
+    '<script lang="ts">\n  import type { Props } from \'$lib/types.js\';\n  let { a }: Props = $props();\n</script>\n<p>{a}</p>'
+  );
+  await start({}, { resolve: { alias: [{ find: '$lib', replacement: lib }] } });
+  expect(await meta('app/A')).toContain('"name":"a","type":"number"');
+  expect(await meta('app/A')).toContain('"propsType":null');
+  send.mockClear();
+  writeFileSync(types, 'export type Props = { a: number; b?: string };\n');
+  await waitForReload();
+  await new Promise((r) => setTimeout(r, 300));
+  expect(fullReloads()).toBe(0);
+  expect(await meta('app/A')).toContain('"name":"b","type":"string"');
+});
+
 it('a props type file deleted or created while the server runs updates the metadata', { timeout: 25_000 }, async () => {
   const types = await withPropsType();
   await list();

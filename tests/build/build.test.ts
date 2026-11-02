@@ -100,6 +100,13 @@ test('kit monorepo build', { timeout: 120_000 }, () => {
   expect(unloadedCss(dir)).toEqual([]);
   expect(withLocalPaths(dir)).toEqual([]);
   const catalog = JSON.parse(readFileSync(join(dir, 'zukan-dist/catalog.json'), 'utf8'));
+  // `$lib` through `alias` in SvelteKit's config and `#lib` through `imports`: the project's own files, with every member listed
+  const aliased = catalog.components.find((c: { id: string }) => c.id.endsWith('/lib/Aliased'));
+  expect(aliased.propsType).toBeNull();
+  expect(aliased.props.map((p: { name: string; type: string }) => [p.name, p.type])).toEqual([
+    ['label', 'string'],
+    ['ref', 'HTMLElement | null']
+  ]);
   // no Tailwind CSS in the app: no page for it
   expect(catalog.tailwind).toBeNull();
   // one metadata chunk per entry, not named after its ID

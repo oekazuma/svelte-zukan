@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { Marked, type Token, type Tokens } from 'marked';
-import { normalizePath } from 'vite';
+import { normalizePath, type Alias } from 'vite';
 import type { ZukanProp } from '../types.js';
 import { normalizeSource, ownParams, parseSvelte } from './extract.js';
 import { findPackage } from './tailwind-load.js';
@@ -17,7 +17,7 @@ type Scope = {
   declarations: Node[];
   /** imported names */
   imports: Map<string, { from: string; name: string }>;
-  /** the names a barrel re-exports (`export type { Props } from './button'`) */
+  /** the names a barrel re-exports (`export type { Props } from './button'`), `*` for `export * as P from './p'` */
   reexports: Map<string, { from: string; name: string }>;
   /** the file's own exports, exported name to local name (`export type Props`, `export { Inner as Props }`) */
   exported: Map<string, string>;
@@ -194,7 +194,9 @@ function scopeOf(file: string, lf: string, body: Node[], comments: Comment[], pk
           imports.set(s.local.name as string, { from, name: keyName(s.imported) });
         else if (s.type === 'ImportDefaultSpecifier') imports.set(s.local.name as string, { from, name: 'default' });
         else if (s.type === 'ImportNamespaceSpecifier') imports.set(s.local.name as string, { from, name: '*' });
-    } else if (n.type === 'ExportAllDeclaration' && !n.exported) stars.push(from);
+    } else if (n.type === 'ExportAllDeclaration')
+      if (n.exported) reexports.set(keyName(n.exported as Node), { from, name: '*' });
+      else stars.push(from);
   }
   // a string keeps its spaces; a `//` comment would swallow what follows once the lines are joined
   const collapse = (s: string) =>
@@ -308,6 +310,26 @@ function packageCandidates(from: string, spec: string): string[] {
   return typed.some(isFile) ? typed : own;
 }
 
+/** what `path` maps to in a package's `exports` or `imports`; of the patterns (`./*`), the longest prefix wins, as in Node */
+function mapped(map: Record<string, unknown>, path: string): unknown {
+  let entry = map[path];
+  let star: string | null = null;
+  if (entry === undefined)
+    for (const key of Object.keys(map).sort((a, b) => b.indexOf('*') - a.indexOf('*'))) {
+      const [prefix, suffix] = key.split('*');
+      if (suffix === undefined || !path.startsWith(prefix) || !path.endsWith(suffix)) continue;
+      if (path.length < prefix.length + suffix.length) continue;
+      entry = map[key];
+      star = path.slice(prefix.length, path.length - suffix.length);
+      break;
+    }
+  while (entry && typeof entry === 'object') {
+    const conditions = entry as Record<string, unknown>;
+    entry = conditions.types ?? conditions.import ?? conditions.default;
+  }
+  return typeof entry === 'string' && star !== null ? entry.replaceAll('*', star) : entry;
+}
+
 function entryOf(dir: string, sub: string): string[] {
   let manifest;
   try {
@@ -323,32 +345,54 @@ function entryOf(dir: string, sub: string): string[] {
       ? { '.': exports }
       : exports;
   const path = `.${sub}`;
-  let entry = map && typeof map === 'object' ? map[path] : undefined;
-  let star: string | null = null;
-  // a pattern such as `./*`: the longest prefix that matches wins, as in Node
-  if (entry === undefined && map && typeof map === 'object')
-    for (const key of Object.keys(map).sort((a, b) => b.indexOf('*') - a.indexOf('*'))) {
-      const [prefix, suffix] = key.split('*');
-      if (suffix === undefined || !path.startsWith(prefix) || !path.endsWith(suffix)) continue;
-      if (path.length < prefix.length + suffix.length) continue;
-      entry = map[key];
-      star = path.slice(prefix.length, path.length - suffix.length);
-      break;
-    }
-  while (entry && typeof entry === 'object') entry = entry.types ?? entry.import ?? entry.default;
-  if (typeof entry === 'string' && star !== null) entry = entry.replaceAll('*', star);
+  let entry = map && typeof map === 'object' ? mapped(map, path) : undefined;
   if (entry === undefined && !exports)
     entry = sub ? path : (manifest.types ?? manifest.typings ?? manifest.main ?? 'index');
   // a workspace package often points at its source `.ts` rather than a built `.d.ts`
   return typeof entry === 'string' ? filesOf(resolve(dir, entry)) : [];
 }
 
-/** the files `import … from './types'` may point to */
-function candidatesOf(from: string, spec: string) {
-  if (!isRelative(spec)) return packageCandidates(from, spec);
-  const base = resolve(dirname(from), spec);
+/** `#lib/utils.js` as the `imports` of the nearest `package.json` map it: a path, or a package's name */
+function subpathImport(from: string, spec: string) {
+  for (let dir = dirname(from); ; dir = dirname(dir)) {
+    const manifest = join(dir, 'package.json');
+    if (isFile(manifest)) {
+      let imports;
+      try {
+        imports = JSON.parse(readFileSync(manifest, 'utf-8')).imports;
+      } catch {
+        return spec;
+      }
+      const target = imports && typeof imports === 'object' ? mapped(imports, spec) : undefined;
+      if (typeof target !== 'string') return spec;
+      return isRelative(target) ? normalizePath(resolve(dir, target)) : target;
+    }
+    if (dir === dirname(dir)) return spec;
+  }
+}
+
+/**
+ * `spec` as Vite rewrites it: the first entry of `resolve.alias` that matches, a string on whole path segments, or else
+ * the `imports` of `package.json`
+ */
+function aliasOf(spec: string, from: string, alias: Alias[]) {
+  const entry = alias.find(({ find }) =>
+    typeof find === 'string' ? spec === find || spec.startsWith(`${find}/`) : find.test(spec)
+  );
+  if (entry) return normalizePath(spec.replace(entry.find, entry.replacement));
+  return spec.startsWith('#') ? subpathImport(from, spec) : spec;
+}
+
+/** the files `import … from './types'` may point to; `spec` has been through `aliasOf` */
+function candidatesOf(from: string, spec: string, root: string) {
+  if (!isRelative(spec) && !isAbsolute(spec)) return packageCandidates(from, spec);
   // `.`, `..` and `./dir/` name a folder only, as in TypeScript: never the `dir.ts` next to it
-  return /(^|\/)\.\.?$|\/$/.test(spec) ? [`${base}/index.ts`, `${base}/index.d.ts`].map(normalizePath) : filesOf(base);
+  const filesAt = (base: string) =>
+    /(^|\/)\.\.?$|\/$/.test(spec) ? [`${base}/index.ts`, `${base}/index.d.ts`].map(normalizePath) : filesOf(base);
+  // `'@': '/src'`: Vite takes a leading slash outside the root for a URL under the root first, and then for a path
+  return spec.startsWith('/') && !spec.startsWith(`${root}/`)
+    ? [...filesAt(join(root, spec)), ...filesAt(spec)]
+    : filesAt(resolve(dirname(from), spec));
 }
 
 /** a `.ts` file parses as the module script of a component, which allows its exports */
@@ -437,15 +481,22 @@ function print(scope: Scope, n: Node, bindings: Bindings): string {
   return scope.text(n, replaced);
 }
 
-/** imports are followed this many files deep */
-const MAX_DEPTH = 3;
+/** `A.B.C` as its names */
+const namesOf = (n: Node): string[] =>
+  n.type === 'TSQualifiedName' ? [...namesOf(n.left as Node), (n.right as Node).name as string] : [n.name as string];
+
+/**
+ * imports are followed this many files deep; bits-ui takes all of it for `Accordion.TriggerProps`: its index, two barrels,
+ * the `export * as`, the types, and the `WithChild` they use
+ */
+const MAX_DEPTH = 6;
 
 /**
  * The props of a Svelte 5 component, read from `let { … }: Type = $props()` or `let { … } = $props() as Type` in its
  * source.
  * `Type` may be a type literal, a type alias or interface declared in the component, or one imported from a relative
- * path (`./types`, `./types.js`, `../types/index.ts`, or another component's `<script module>`). A type from a
- * package (`svelte/elements`) is named in `typeName`, and of its members only the destructured ones are listed,
+ * path (`./types`, `./types.js`, `../types/index.ts`, or another component's `<script module>`) or through `alias`,
+ * Vite's `resolve.alias` (`$lib/types`) or the `imports` of `package.json` (`#lib/types`). A type from a package (`svelte/elements`) is named in `typeName`, and of its members only the destructured ones are listed,
  * typed from the package's declaration file when it has one; a type it can not read at all is named the same way.
  * `typeName` joins the names with commas.
  * `files` are the other files read, so that a change to them can refresh the props. `null` when the component
@@ -453,7 +504,8 @@ const MAX_DEPTH = 3;
  */
 export function extractProps(
   source: string,
-  filename: string
+  filename: string,
+  { alias = [], root = '' }: { alias?: Alias[]; root?: string } = {}
 ): { props: ZukanProp[]; typeName: string | null; files: string[] } | null {
   const lf = normalizeSource(source);
   let ast;
@@ -502,28 +554,33 @@ export function extractProps(
   /**
    * The declaration a name refers to in a scope: its own, or one it imports or re-exports. `via` is how the name
    * reached the scope: written in it (`local`), imported from it by its exported name (`import`), or through
-   * `export *` (`star`), which passes on only what that file exports
+   * `export *` (`star`), which passes on only what that file exports. `rest` are the names after it in `name.rest`,
+   * each looked up in the file the one before stands for as a namespace
    */
   function lookup(
     scope: Scope,
     name: string,
     depth: number,
     via: 'local' | 'import' | 'star' = 'local',
-    value = false
+    value = false,
+    rest: string[] = []
   ): { node: Node; scope: Scope; depth: number } | null {
     const local =
       via === 'local' ? name : via === 'import' ? (scope.exported.get(name) ?? name) : scope.exported.get(name);
     const node = local === undefined ? null : declared(scope, local, value);
-    if (node) return { node, scope, depth };
+    if (node) return rest.length ? null : { node, scope, depth };
     if (depth >= MAX_DEPTH) return null;
     const imported = scope.reexports.get(name) ?? (local === undefined ? undefined : scope.imports.get(local));
     const next = imported ? [{ ...imported, star: false }] : scope.stars.map((from) => ({ from, name, star: true }));
     for (const { from, name: target, star } of next) {
-      const candidates = candidatesOf(scope.file, from);
+      const spec = aliasOf(from, scope.file, alias);
+      const candidates = candidatesOf(scope.file, spec, root);
       const file = candidates.find(isFile);
-      const pkg = scope.package || !isRelative(from);
+      const inModules = (file ?? candidates[0] ?? '').includes('/node_modules/');
+      // an alias to a path (`$lib`, `#lib`) is the project's own unless it points into `node_modules`
+      const pkg = scope.package || (!isRelative(spec) && !isAbsolute(spec)) || (spec !== from && inModules);
       // a workspace package links outside `node_modules`: its files are the project's own, edited while it runs
-      const installed = pkg && (file ?? candidates[0] ?? '').includes('/node_modules/');
+      const installed = pkg && inModules;
       // even when it does not parse, or is not there yet: fixing it, or creating one that comes before it, should
       // refresh the props
       if (!installed)
@@ -533,7 +590,12 @@ export function extractProps(
       if (!cache.has(file)) cache.set(file, readScope(file, pkg));
       const found = cache.get(file);
       if (!found) continue;
-      const result = lookup(found, target, depth + 1, star ? 'star' : 'import', value);
+      const result =
+        target !== '*'
+          ? lookup(found, target, depth + 1, star ? 'star' : 'import', value, rest)
+          : rest.length
+            ? lookup(found, rest[0], depth + 1, 'import', value, rest.slice(1))
+            : null;
       if (result) return result;
     }
     return null;
@@ -572,8 +634,13 @@ export function extractProps(
       // `ComponentProps<typeof Button>`, with `Button` a source component, or declared `Component<Props>` as
       // svelte-package writes it
       const queried = first?.type === 'TSTypeQuery' ? (first.exprName as Node) : null;
-      if (from?.from === 'svelte' && from.name === 'ComponentProps' && queried?.type === 'Identifier') {
-        const component = lookup(scope, queried.name as string, depth, 'local', true);
+      if (
+        from?.from === 'svelte' &&
+        from.name === 'ComponentProps' &&
+        (queried?.type === 'Identifier' || queried?.type === 'TSQualifiedName')
+      ) {
+        const [head, ...rest] = namesOf(queried);
+        const component = lookup(scope, head, depth, 'local', true, rest);
         const t = component && typeOfDeclarator(component.node);
         const callee = (t?.type === 'TSImportType' ? t.qualifier : t?.typeName) as Node | undefined;
         const props =
@@ -604,24 +671,8 @@ export function extractProps(
         typeNames.length = named;
         return name(scope, type, bindings);
       }
-      // `T.Props` with `import type * as T`: looked up in a scope that imports only `Props` from that file
-      const ns =
-        typeName.type === 'TSQualifiedName' && (typeName.left as Node).type === 'Identifier'
-          ? scope.imports.get((typeName.left as Node).name as string)
-          : undefined;
-      const found =
-        ref !== null
-          ? lookup(scope, ref, depth)
-          : ns?.name === '*'
-            ? lookup(
-                {
-                  ...scope,
-                  imports: new Map([['', { from: ns.from, name: (typeName.right as Node).name as string }]])
-                },
-                '',
-                depth
-              )
-            : null;
+      const [head, ...rest] = namesOf(typeName);
+      const found = lookup(scope, head, depth, 'local', false, rest);
       if (!found || found.scope.package) name(scope, type, bindings);
       if (!found || seen.has(found.node)) return;
       // a package's own type parameters stay as written, as its members are listed below
