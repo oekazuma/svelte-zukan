@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { OutgoingHttpHeaders, ServerResponse } from 'node:http';
 import { dirname, extname, isAbsolute, join, posix, relative, resolve } from 'node:path';
@@ -260,6 +260,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   let kitAppDir: string | null = null;
   /** `vite dev`: the catalog may then carry absolute paths, to open files in an editor */
   let serving = false;
+  /** whether the environment being built is the catalog's */
+  let buildingCatalog = false;
   /** printed once in buildApp: Vite resolves the config again for every environment */
   let warning: string | null = null;
   /** path → item, from the last listing; dropped when a catalog file is created or deleted */
@@ -455,11 +457,17 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         (config.experimental ??= {}).renderBuiltUrl = (filename, ctx) => {
           if (filename.startsWith(OUT_PREFIX)) return { relative: true };
           // a Web Worker keeps the app's file name (`worker` options and Vite's worker bundles are shared by all
-          // environments); generateBundle moves it under OUT_PREFIX
-          if (ctx.type === 'asset' && ctx.hostType === 'js' && ctx.hostId.startsWith(OUT_PREFIX)) {
+          // environments); generateBundle moves it under OUT_PREFIX. A file of publicDir: buildApp copies it there
+          if (
+            (ctx.type === 'asset' || ctx.type === 'public') &&
+            ctx.hostType === 'js' &&
+            ctx.hostId.startsWith(OUT_PREFIX)
+          ) {
             const url = posix.relative(posix.dirname(ctx.hostId), OUT_PREFIX + filename);
             return { runtime: `new URL(${JSON.stringify('./' + url)}, import.meta.url).href` };
           }
+          // the catalog's stylesheets lie in OUT_PREFIX too, but their hostId does not tell them from the app's
+          if (ctx.type === 'public' && ctx.hostType === 'css' && buildingCatalog) return `./${filename}`;
           return renderBuiltUrl?.(filename, ctx);
         };
 
@@ -526,6 +534,9 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           assetFileNames: `${OUT_PREFIX}[name]-[hash][extname]`
         }
       };
+    },
+    buildStart() {
+      buildingCatalog = this.environment.name === 'zukan';
     },
     generateBundle: {
       // after Vite's worker plugin and SvelteKit, which emit files named for the app: workers are moved where
@@ -598,6 +609,10 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           .find((c) => c.type === 'chunk' && c.name === 'zukan');
         if (!entry) throw new Error('svelte-zukan: the catalog entry was not built');
         if (!write) return;
+        // beside the catalog's own files, which it does not overwrite: the outDir's root may be shared with other files
+        const { publicDir } = env.config;
+        if (publicDir && existsSync(publicDir))
+          cpSync(publicDir, join(resolved.build, OUT_PREFIX), { recursive: true, force: false });
         const icon = readFileSync(appFile('icon.svg'), 'utf-8');
         const html = renderHtml({
           title: resolved.title,

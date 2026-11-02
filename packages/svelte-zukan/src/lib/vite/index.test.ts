@@ -1136,6 +1136,11 @@ describe('build', () => {
     });
     expect(render('assets/w-1.js', worker)).toEqual({ runtime: 'new URL("./assets/w-1.js", import.meta.url).href' });
     expect(own).toHaveBeenCalledTimes(1);
+    // a file of publicDir, from a chunk of the catalog and from one of the app
+    expect(render('img/bg.png', { ...worker, type: 'public' })).toEqual({
+      runtime: 'new URL("./img/bg.png", import.meta.url).href'
+    });
+    expect(render('img/bg.png', { ...ctx, type: 'public' })).toBe('https://cdn.example/x.js');
     // without one, the app's files get Vite's default
     const plain = await bootBuild(root, { build: true });
     expect(plain.config.experimental.renderBuiltUrl('assets/index-1.js', ctx)).toBeUndefined();

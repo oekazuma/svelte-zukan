@@ -14,6 +14,7 @@ zukan({ build: true });
 カタログはアプリのビルドとは別に `zukan-dist/` へ書き出されます。`build: { outDir: 'docs/zukan' }` のように出力先も選べます。アプリのビルドの出力先とは別なので、adapter の書き出しに消されません。`/zukan-dist` は `.gitignore` に足してください。
 
 - 出力のパスは相対パスなので、どのサブパス（例: `/docs/zukan/`）に置いても動きます。サーバー側の書き換え設定は要りません
+- アプリの `publicDir`（`public`、SvelteKit では `static`）は `_zukan/` にコピーされ、CSS や import で指定したそのファイルの URL（`url('/bg.png')`、`import bg from '/bg.png?url'`）はコピーを指すようになります。マークアップに直接書いた `/bg.png`（`<img src="/bg.png">`）は書き換えられません。ホストのルートを指すので、アプリと同じオリジンで配信しているときにしか読み込めません。ファイルを import してください
 - `build` を有効にすると、`vite build` は Vite の builder モード（Environment API）で動き、全環境が 1 回の実行でビルドされます
 - カタログの CSS はアプリの `build.cssTarget` にかかわらず、`light-dark()` に対応したブラウザー（Chrome と Edge 123、Firefox 120、Safari 17.5）向けに出力します。そのため、コンポーネントの `light-dark()` もカタログのテーマボタンに従います
 - `vite preview` でも、書き出したカタログを `/__zukan/`（`base` を設定していればその下）で開けるので、公開する前に確かめられます。`preview.headers` も送りますが、プレビューはどれも `index.html` のフレームなので、`index.html` では `X-Frame-Options: DENY` を `SAMEORIGIN` に変え、Content-Security-Policy の `frame-ancestors` に `'self'` を足します。カタログを公開するホストでも、同じオリジンのフレームを許可してください
