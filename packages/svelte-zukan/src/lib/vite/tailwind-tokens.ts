@@ -193,12 +193,14 @@ const unwrapped = (list: string): string[] =>
  * custom properties declared unconditionally on the root: by a rule whose selector list includes `:root`, `:host` or
  * `html`, alone or in `:where()` / `:is()` (daisyUI's `:where(:root)`), at the top level or inside `@layer`. Of several
  * declarations, the one the cascade layers put last wins (`!important` aside). With `themeOnly`, only Tailwind's own
- * theme rule counts, in whichever layer the entry imports it, so a project's `:root` override is left out.
+ * theme rule counts, in whichever layer the entry imports it: the first `:root, :host`, since Tailwind writes one, ahead
+ * of the entry's rules, so a project's override is left out.
  */
 export function rootVariables(css: string, themeOnly = false): Record<string, string> {
   const out: Record<string, string> = {};
   const ranks = new Map<CssRule, number[]>();
   const stored: Record<string, number[]> = {};
+  let themeRead = false;
   // a later layer wins, and a layer's own rules beat its sublayers as unlayered rules beat every layer
   const outranks = (a: number[], b: number[]) => {
     const i = a.findIndex((n, j) => n !== b[j]);
@@ -207,7 +209,10 @@ export function rootVariables(css: string, themeOnly = false): Record<string, st
   for (const rule of scanCss(css, ranks)) {
     if (!unwrapped(rule.selector).some((s) => s === ':root' || s === ':host' || s === 'html')) continue;
     if (!rule.atRules.every((a) => /^@layer(\s|$)/.test(a))) continue;
-    if (themeOnly && rule.selector !== ':root, :host') continue;
+    if (themeOnly) {
+      if (themeRead || rule.selector !== ':root, :host') continue;
+      themeRead = true;
+    }
     const rank = ranks.get(rule)!;
     for (const [property, value] of rule.declarations) {
       if (!property.startsWith('--')) continue;

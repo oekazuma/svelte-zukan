@@ -286,15 +286,18 @@ describe('loadTailwind', () => {
     expect(source.variables['--spacing-gutter']).toBe('calc(var(--spacing) * 6)');
   });
 
-  it("keeps the declared theme value in Full config when the entry's own :root overrides it", async () => {
-    const { root, src } = fixture(
-      '@import "tailwindcss"; @theme { --color-brand: #f00; } :root { --color-brand: #00f; }'
-    );
-    const [source] = (await loadTailwind(root, [src])).sources;
-    expect(source.variables['--color-brand']).toBe('#f00');
-    const tokens = source.categories.find((c) => c.id === 'background-color')!.tokens;
-    expect(tokens.find((t) => t.class === 'bg-brand')?.value).toBe('#00f');
-  });
+  it.each([':root', ':root, :host'])(
+    "keeps the declared theme value in Full config under the entry's own %s",
+    async (selector) => {
+      const { root, src } = fixture(
+        `@import "tailwindcss"; @theme { --color-brand: #f00; } ${selector} { --color-brand: #00f; }`
+      );
+      const [source] = (await loadTailwind(root, [src])).sources;
+      expect(source.variables['--color-brand']).toBe('#f00');
+      const tokens = source.categories.find((c) => c.id === 'background-color')!.tokens;
+      expect(tokens.find((t) => t.class === 'bg-brand')?.value).toBe('#00f');
+    }
+  );
 
   it('adds Tailwind to the sample of an entry whose only Tailwind import is a reference', async () => {
     const { root, src } = fixture('@import "tailwindcss" reference; @theme { --color-brand: #f00; }');
