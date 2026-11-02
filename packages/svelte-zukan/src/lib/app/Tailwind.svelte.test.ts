@@ -307,6 +307,68 @@ describe('the Tailwind CSS page', () => {
     expect(width('--breakpoint-sm')).toBeCloseTo(full, 0);
   });
 
+  it("computes breakpoints at the browser's initial font size, as media queries do", async () => {
+    const rem: TailwindSource = {
+      ...sizes,
+      categories: [
+        {
+          id: 'breakpoints',
+          title: 'Breakpoints',
+          tokens: [
+            { class: null, cssVariable: '--breakpoint-sm', value: '40rem' },
+            { class: null, cssVariable: '--breakpoint-tablet', value: '48em' },
+            { class: null, cssVariable: '--breakpoint-print', value: '10in' }
+          ]
+        }
+      ],
+      css: 'html { font-size: 62.5% } body { font-size: 14px }'
+    };
+    const screen = await render(App, { props: props('#/tailwind?category=breakpoints', [item(rem)]) });
+    const { doc } = await frame(screen.container);
+    const px = (token: string) => doc.querySelector(`[data-token="${token}"] .zukan-px code`)?.textContent;
+    await expect.poll(() => px('--breakpoint-sm')).toBe('640px');
+    expect(px('--breakpoint-tablet')).toBe('768px');
+    expect(px('--breakpoint-print')).toBe('960px');
+    const bar = (token: string) => doc.querySelector(`[data-token="${token}"] .zukan-bar`)!.getBoundingClientRect();
+    expect(bar('--breakpoint-sm').width / bar('--breakpoint-print').width).toBeCloseTo(640 / 960);
+  });
+
+  it('draws a text colour on both a light and a dark band, so that no token is invisible', async () => {
+    const colors: TailwindSource = {
+      ...source,
+      categories: [
+        {
+          id: 'text-color',
+          title: 'Text Color',
+          tokens: [
+            { class: 'text-white', cssVariable: '--color-white', value: '#fff' },
+            { class: 'text-black', cssVariable: '--color-black', value: '#000' }
+          ]
+        }
+      ],
+      css: '.text-white { color: #fff } .text-black { color: #000 }'
+    };
+    const screen = await render(App, { props: props('#/tailwind?category=text-color', [item(colors)]) });
+    const { doc } = await frame(screen.container);
+    const bands = (token: string) =>
+      [...doc.querySelectorAll<HTMLElement>(`[data-token="${token}"] .zukan-value`)].map((el) => {
+        const style = getComputedStyle(el);
+        return { color: style.color, background: style.backgroundColor, text: el.textContent.trim() };
+      });
+    const light = 'rgb(255, 255, 255)';
+    const dark = 'rgb(31, 35, 40)';
+    await expect.poll(() => bands('text-white').length).toBe(2);
+    const text = 'The quick brown fox jumps over the lazy dog';
+    expect(bands('text-white')).toEqual([
+      { color: light, background: light, text },
+      { color: light, background: dark, text }
+    ]);
+    expect(bands('text-black')).toEqual([
+      { color: 'rgb(0, 0, 0)', background: light, text },
+      { color: 'rgb(0, 0, 0)', background: dark, text }
+    ]);
+  });
+
   it('draws long widths across the row, and marks a bar cut off by it', async () => {
     const widths: TailwindSource = {
       ...source,

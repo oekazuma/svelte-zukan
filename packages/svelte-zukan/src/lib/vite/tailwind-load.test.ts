@@ -136,6 +136,34 @@ describe('findTailwindEntries', () => {
     expect(await findTailwindEntries([src], noResolver)).toEqual([normalizePath(join(src, 'theme.css'))]);
   });
 
+  it('ignores a Tailwind import with a reference parameter, in any spelling', async () => {
+    const { src } = fixture('@import "tailwindcss";', { tailwind: false });
+    write(join(src, 'lib/a.css'), '@import "tailwindcss" reference; .a { @apply p-4; }');
+    write(join(src, 'lib/b.css'), "@import 'tailwindcss/theme.css' reference;\n.b { @apply p-4; }");
+    write(join(src, 'lib/c.css'), '@import "tailwindcss/theme.css" theme(reference); .c { @apply p-4; }');
+    write(join(src, 'lib/d.css'), '@import "tailwindcss" layer(reference);');
+    expect(await findTailwindEntries([src], noResolver)).toEqual([
+      normalizePath(join(src, 'app.css')),
+      normalizePath(join(src, 'lib/d.css'))
+    ]);
+  });
+
+  it('keeps an entry that another file imports with a reference parameter', async () => {
+    const { src } = fixture('@import "tailwindcss";', { tailwind: false });
+    write(join(src, 'lib/c.css'), '@import "../app.css" reference;\n@theme { --color-c: red; }');
+    write(join(src, 'lib/d.css'), '@import "tailwindcss/theme.css" theme(reference); @import "../app.css" reference;');
+    expect(await findTailwindEntries([src], noResolver)).toEqual([
+      normalizePath(join(src, 'app.css')),
+      normalizePath(join(src, 'lib/c.css'))
+    ]);
+  });
+
+  it('still treats a file imported with theme(reference) as a partial, since its theme is part of the entry', async () => {
+    const { src } = fixture('@import "tailwindcss"; @import "./tokens.css" theme(reference);', { tailwind: false });
+    write(join(src, 'tokens.css'), '@theme { --color-a: red; }');
+    expect(await findTailwindEntries([src], noResolver)).toEqual([normalizePath(join(src, 'app.css'))]);
+  });
+
   it('matches the .css extension by case on every platform', async () => {
     const { src } = fixture('body { margin: 0; }');
     write(join(src, 'Theme.CSS'), '@theme { --color-brand: red; }');
@@ -242,6 +270,57 @@ describe('loadTailwind', () => {
     expect(value('border-radius', 'rounded-card')).toBe('0.5rem');
     expect(s.variables['--spacing-gutter']).toBe('calc(var(--spacing) * 6)');
     expect(s.css).toContain('.p-gutter');
+  });
+
+  const theme = '@theme { --spacing-gutter: --spacing(6); }';
+  it.each([
+    `@import "tailwindcss" layer(tw); ${theme}`,
+    `@import "tailwindcss/theme.css"; ${theme}`,
+    `@import "tailwindcss/theme.css" layer(tokens); ${theme}`,
+    '@import "./tokens.css"; @import "tailwindcss";'
+  ])('shows what Tailwind writes in Full config for the theme of %s', async (css) => {
+    const { root, src } = fixture(css);
+    write(join(src, 'tokens.css'), theme);
+    const [source] = (await loadTailwind(root, [src])).sources;
+    expect(source.error).toBeUndefined();
+    expect(source.variables['--spacing-gutter']).toBe('calc(var(--spacing) * 6)');
+  });
+
+  it.each([':root', ':root, :host'])(
+    "keeps the declared theme value in Full config under the entry's own %s",
+    async (selector) => {
+      const { root, src } = fixture(
+        `@import "tailwindcss"; @theme { --color-brand: #f00; } ${selector} { --color-brand: #00f; }`
+      );
+      const [source] = (await loadTailwind(root, [src])).sources;
+      expect(source.variables['--color-brand']).toBe('#f00');
+      const tokens = source.categories.find((c) => c.id === 'background-color')!.tokens;
+      expect(tokens.find((t) => t.class === 'bg-brand')?.value).toBe('#00f');
+    }
+  );
+
+  it('adds Tailwind to the sample of an entry whose only Tailwind import is a reference', async () => {
+    const { root, src } = fixture('@import "tailwindcss" reference; @theme { --color-brand: #f00; }');
+    const [source] = (await loadTailwind(root, [src])).sources;
+    expect(source.error).toBeUndefined();
+    expect(source.css).toContain('.bg-brand');
+  });
+
+  it('keeps an external @import in front of the style rules of the sample', async () => {
+    const url = '@import url("https://fonts.example.com/css2?family=Inter")';
+    for (const css of [
+      `@import "tailwindcss"; ${url}; @theme { --font-a: Inter; }`,
+      `${url}; @theme { --font-a: Inter; }`
+    ]) {
+      const { root, src } = fixture(css);
+      const [source] = (await loadTailwind(root, [src])).sources;
+      expect(source.error, css).toBeUndefined();
+      const at = source.css.indexOf(url);
+      expect(source.css.indexOf('@layer theme, base, components, utilities;'), css).toBeLessThan(at);
+      expect(at, css).toBeLessThan(source.css.indexOf('@layer theme {'));
+      expect(source.css.split(url)).toHaveLength(2);
+      expect(source.categories.find((c) => c.id === 'font-family')?.tokens.map((t) => t.class)).toContain('font-a');
+    }
   });
 
   it('adds the defaults to an @theme-only entry', async () => {

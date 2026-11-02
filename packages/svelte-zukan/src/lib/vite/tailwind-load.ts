@@ -16,18 +16,25 @@ const MIN_VERSION = '4.1.0';
 const JS_EXTENSIONS = ['.js', '.json', '.node', '.ts'];
 
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
-// `@reference` is a different at-rule, so it never matches
-const importIds = (css: string, url = true) =>
-  [...stripComments(css).matchAll(url ? /@import\s+(?:url\(\s*)?(['"])(.+?)\1/g : /@import\s+(['"])(.+?)\1/g)].map(
-    (m) => m[2]
-  );
+// `@reference` is a different at-rule, so it never matches, and an import with `reference` is the same thing
+const importIds = (css: string, url = true, skip = /(?:^|\s)reference(?:\s|$)/) =>
+  [
+    ...stripComments(css).matchAll(
+      url ? /@import\s+(?:url\(\s*)?(['"])(.+?)\1([^;]*)/g : /@import\s+(['"])(.+?)\1([^;]*)/g
+    )
+  ]
+    .filter((m) => !skip.test(m[3]))
+    .map((m) => m[2]);
 const isTailwindId = (id: string) => id === 'tailwindcss' || id.startsWith('tailwindcss/');
 // like Tailwind's resolver, which tries the id as written, then with each extension
 const resolveFallback = (base: string, id: string, extensions = ['.css']) => {
   const file = path.resolve(base, id);
   return existsSync(file) ? file : (extensions.map((ext) => file + ext).find((f) => existsSync(f)) ?? file);
 };
-const importsTailwind = (css: string) => importIds(css).some(isTailwindId);
+// `theme(reference)` emits nothing either, as `reference` does, but what it imports still belongs to the entry's theme,
+// so it hides a Tailwind import only here: `@import "./tokens.css" theme(reference)` keeps tokens.css a partial
+const importsTailwind = (css: string) =>
+  importIds(css, true, /(?:^|\s)(?:theme\([^)]*)?reference\b/).some(isTailwindId);
 export const isCandidate = (css: string) => importsTailwind(css) || /@theme\b/.test(stripComments(css));
 
 function cssFiles(dirs: string[]): string[] {
