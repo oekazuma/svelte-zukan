@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { OutgoingHttpHeaders, ServerResponse } from 'node:http';
 import { dirname, extname, isAbsolute, join, posix, relative, resolve } from 'node:path';
@@ -108,26 +108,42 @@ const realPath = (file: string): string => {
   }
 };
 
-/** the names the importers of these modules, as last served, import from them by name */
+/** the names the importers of these modules, as last served, import from them by name, through `export *` too */
 const importedNames = (mods: Iterable<EnvironmentModuleNode>, base: string) => {
   const names = new Set<string>();
-  for (const mod of mods) {
-    const url = mod.url.split('?')[0];
-    for (const importer of mod.importers) {
-      const code = importer.transformResult?.code;
-      if (!code) continue;
-      for (const node of parseSync('importer.js', code).program.body) {
-        if ((node.type !== 'ImportDeclaration' && node.type !== 'ExportNamedDeclaration') || !node.source) continue;
-        const from = node.source.value.split('?')[0];
-        if (from !== url && from !== base.slice(0, -1) + url) continue;
-        for (const spec of node.specifiers) {
-          const name =
-            spec.type === 'ImportSpecifier' ? spec.imported : spec.type === 'ExportSpecifier' ? spec.local : null;
-          if (name) names.add('name' in name ? name.name : String(name.value));
+  const seen = new Set<EnvironmentModuleNode>();
+  const collect = (mods: Iterable<EnvironmentModuleNode>) => {
+    for (const mod of mods) {
+      if (seen.has(mod)) continue;
+      seen.add(mod);
+      const url = mod.url.split('?')[0];
+      for (const importer of mod.importers) {
+        const code = importer.transformResult?.code;
+        if (!code) continue;
+        for (const node of parseSync('importer.js', code).program.body) {
+          if (
+            (node.type !== 'ImportDeclaration' &&
+              node.type !== 'ExportNamedDeclaration' &&
+              node.type !== 'ExportAllDeclaration') ||
+            !node.source
+          )
+            continue;
+          const from = node.source.value.split('?')[0];
+          if (from !== url && from !== base.slice(0, -1) + url) continue;
+          if (node.type === 'ExportAllDeclaration') {
+            if (!node.exported) collect([importer]);
+            continue;
+          }
+          for (const spec of node.specifiers) {
+            const name =
+              spec.type === 'ImportSpecifier' ? spec.imported : spec.type === 'ExportSpecifier' ? spec.local : null;
+            if (name) names.add('name' in name ? name.name : String(name.value));
+          }
         }
       }
     }
-  }
+  };
+  collect(mods);
   names.delete('default');
   return [...names];
 };
@@ -244,6 +260,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   let kitAppDir: string | null = null;
   /** `vite dev`: the catalog may then carry absolute paths, to open files in an editor */
   let serving = false;
+  /** whether the environment being built is the catalog's */
+  let buildingCatalog = false;
   /** printed once in buildApp: Vite resolves the config again for every environment */
   let warning: string | null = null;
   /** path → item, from the last listing; dropped when a catalog file is created or deleted */
@@ -439,11 +457,17 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         (config.experimental ??= {}).renderBuiltUrl = (filename, ctx) => {
           if (filename.startsWith(OUT_PREFIX)) return { relative: true };
           // a Web Worker keeps the app's file name (`worker` options and Vite's worker bundles are shared by all
-          // environments); generateBundle moves it under OUT_PREFIX
-          if (ctx.type === 'asset' && ctx.hostType === 'js' && ctx.hostId.startsWith(OUT_PREFIX)) {
+          // environments); generateBundle moves it under OUT_PREFIX. A file of publicDir: buildApp copies it there
+          if (
+            (ctx.type === 'asset' || ctx.type === 'public') &&
+            ctx.hostType === 'js' &&
+            ctx.hostId.startsWith(OUT_PREFIX)
+          ) {
             const url = posix.relative(posix.dirname(ctx.hostId), OUT_PREFIX + filename);
             return { runtime: `new URL(${JSON.stringify('./' + url)}, import.meta.url).href` };
           }
+          // the catalog's stylesheets lie in OUT_PREFIX too, but their hostId does not tell them from the app's
+          if (ctx.type === 'public' && ctx.hostType === 'css' && buildingCatalog) return `./${filename}`;
           return renderBuiltUrl?.(filename, ctx);
         };
 
@@ -470,21 +494,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
               build: {
                 outDir: resolved.build,
                 manifest: false,
-                copyPublicDir: false,
-                // only the JS entry, with fixed names: SvelteKit shares `base` and its naming rules with every environment
-                rolldownOptions: {
-                  input: { zukan: ENTRY },
-                  output: {
-                    entryFileNames: `${OUT_PREFIX}[name]-[hash].js`,
-                    // a metadata chunk is named after its module, the hex of the ID: a long ID would exceed the
-                    // 255 bytes a file name may have
-                    chunkFileNames: (chunk) =>
-                      chunk.facadeModuleId?.startsWith('\0' + META)
-                        ? `${OUT_PREFIX}meta-[hash].js`
-                        : `${OUT_PREFIX}[name]-[hash].js`,
-                    assetFileNames: `${OUT_PREFIX}[name]-[hash][extname]`
-                  }
-                }
+                copyPublicDir: false
               }
             }
           }
@@ -504,8 +514,29 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         cssCodeSplit: true,
         cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5']
       });
-      // `external`: the catalog is loaded as it is, with nothing to provide an externalized import (library mode)
-      config.build.rolldownOptions = { ...config.build.rolldownOptions, input: { zukan: ENTRY }, external: undefined };
+      config.build.rolldownOptions = {
+        ...config.build.rolldownOptions,
+        // only the JS entry
+        input: { zukan: ENTRY },
+        // the catalog is loaded as it is, with nothing to provide an externalized import (library mode)
+        external: undefined,
+        // replaced, not merged: index.html loads one set of ES modules under OUT_PREFIX, wherever the app writes its own
+        // output (another format, a `dir`, an array of outputs), and SvelteKit shares its naming rules with every environment
+        output: {
+          format: 'es',
+          entryFileNames: `${OUT_PREFIX}[name]-[hash].js`,
+          // a metadata chunk is named after its module, the hex of the ID: a long ID would exceed the
+          // 255 bytes a file name may have
+          chunkFileNames: (chunk) =>
+            chunk.facadeModuleId?.startsWith('\0' + META)
+              ? `${OUT_PREFIX}meta-[hash].js`
+              : `${OUT_PREFIX}[name]-[hash].js`,
+          assetFileNames: `${OUT_PREFIX}[name]-[hash][extname]`
+        }
+      };
+    },
+    buildStart() {
+      buildingCatalog = this.environment.name === 'zukan';
     },
     generateBundle: {
       // after Vite's worker plugin and SvelteKit, which emit files named for the app: workers are moved where
@@ -578,6 +609,10 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           .find((c) => c.type === 'chunk' && c.name === 'zukan');
         if (!entry) throw new Error('svelte-zukan: the catalog entry was not built');
         if (!write) return;
+        // beside the catalog's own files, which it does not overwrite: the outDir's root may be shared with other files
+        const { publicDir } = env.config;
+        if (publicDir && existsSync(publicDir))
+          cpSync(publicDir, join(resolved.build, OUT_PREFIX), { recursive: true, force: false });
         const icon = readFileSync(appFile('icon.svg'), 'utf-8');
         const html = renderHtml({
           title: resolved.title,
@@ -688,6 +723,27 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           kitGlobal
         });
       }
+    },
+    configResolved(config) {
+      // Vite's Svelte plugin compiles an edited component in its `hotUpdate`, and Vite answers a throw there with an
+      // overlay on every tab, the app's too. Wrapped, since compiling first in our own hook is no way out: that plugin
+      // would find its last result already replaced, see no change and drop the component's HMR
+      const compiling = config.plugins.find((p) => p.name === 'vite-plugin-svelte:hot-update')?.hotUpdate;
+      if (!serving || typeof compiling !== 'object') return;
+      const { handler } = compiling;
+      compiling.handler = async function (options) {
+        try {
+          return await handler.call(this, options);
+        } catch (e) {
+          const file = normalizePath(options.file);
+          const mods = this.environment.moduleGraph.getModulesByFile(file);
+          if (this.environment.config.consumer !== 'client' || !mods?.size || ![...mods].every((m) => catalogOnly(m)))
+            throw e;
+          failed.add(file);
+          this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
+          return [];
+        }
+      };
     },
     configureServer(server) {
       const { root, base } = server.config;

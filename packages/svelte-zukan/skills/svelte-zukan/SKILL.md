@@ -11,7 +11,7 @@ svelte-zukan is a Vite plugin that serves a component catalog at `/__zukan/` on 
 
 Skip this when `vite.config.*` already calls `zukan(`. Otherwise:
 
-1. Read `package.json`: SvelteKit (`@sveltejs/kit`) or plain Vite (`@sveltejs/vite-plugin-svelte`). svelte-zukan needs Vite 8+, Svelte 5.46.4+ and Node 22.17+. If `svelte-zukan` is not installed, add it as a dev dependency with the package manager of the lockfile
+1. Read `package.json`: SvelteKit (`@sveltejs/kit`) or plain Vite (`@sveltejs/vite-plugin-svelte`). svelte-zukan needs Vite 8+, Svelte 5.57.1+ and Node 22.17+. If `svelte-zukan` is not installed, add it as a dev dependency with the package manager of the lockfile
 2. In `vite.config.*`, import `zukan` from `svelte-zukan/vite` and make `zukan()` the first entry of `plugins`, ahead of `sveltekit()` / `svelte()` and every other plugin: `plugins: [zukan(), tailwindcss(), sveltekit()]`
 3. Start from `zukan()` and add an option only for what you find:
 

@@ -59,10 +59,12 @@ export const isInside = (dir: string, parent: string) =>
   dir === parent || dir.startsWith(parent.replace(/\/$/, '') + '/');
 
 /**
- * `server.fs.allow` with the paths (directories or files) outside the root added, or undefined when nothing has to be added.
- * Without a list, Vite's default (the workspace root) is kept; an explicit list, such as SvelteKit's, is not widened.
+ * `server.fs.allow` with the paths (directories or files) it does not cover added, or undefined when nothing has to be added.
+ * Vite's default (the workspace root) is kept when there is no list, and covers the root. An explicit list may not: with
+ * `paths.base`, SvelteKit's dev middleware serves only what its list names, and that list leaves out most of the root.
  */
 export function extendFsAllow(root: string, paths: string[], allow: string[] | undefined): string[] | undefined {
-  const outside = paths.filter((p) => !isInside(normalizePath(p), normalizePath(root)));
-  return outside.length ? [...(allow ?? [searchForWorkspaceRoot(root)]), ...outside] : undefined;
+  const covering = allow?.map((dir) => normalizePath(resolve(root, dir))) ?? [normalizePath(root)];
+  const missing = paths.filter((p) => !covering.some((dir) => isInside(normalizePath(p), dir)));
+  return missing.length ? [...(allow ?? [searchForWorkspaceRoot(root)]), ...missing] : undefined;
 }
