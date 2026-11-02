@@ -124,6 +124,12 @@ describe('findTailwindEntries', () => {
     expect(entries.map((file) => realpathSync(file))).toEqual([realpathSync(join(src, 'app.css'))]);
   });
 
+  it('leaves one entry when two entries import each other', async () => {
+    const { src, entry } = fixture('@import "tailwindcss";\n@import "./theme.css";', { tailwind: false });
+    write(join(src, 'theme.css'), '@theme { --color-brand: red; }\n@import "./app.css";');
+    expect(await findTailwindEntries([src], noResolver)).toEqual([entry]);
+  });
+
   it('ignores @reference imports and unrelated CSS', async () => {
     const { src } = fixture('@reference "tailwindcss";\n.x { color: red; }');
     write(join(src, 'plain.css'), '@import "./other.css";\nbody { margin: 0; }');
@@ -162,6 +168,96 @@ describe('findTailwindEntries', () => {
     const { src } = fixture('@import "tailwindcss"; @import "./tokens.css" theme(reference);', { tailwind: false });
     write(join(src, 'tokens.css'), '@theme { --color-a: red; }');
     expect(await findTailwindEntries([src], noResolver)).toEqual([normalizePath(join(src, 'app.css'))]);
+  });
+
+  describe('a plain CSS file that imports an entry', () => {
+    const aggregator = () => {
+      const f = fixture('@import "./tw.css";\n@import "./tokens.css";', { tailwind: false });
+      write(join(f.src, 'tw.css'), '@import "tailwindcss";');
+      write(join(f.src, 'tokens.css'), '@theme { --color-brand: red; }');
+      return f;
+    };
+
+    it('is the entry, and what it imports its partials', async () => {
+      const { src, entry } = aggregator();
+      expect(await findTailwindEntries([src], noResolver)).toEqual([entry]);
+    });
+
+    it('is the entry through other plain CSS files', async () => {
+      const { src } = aggregator();
+      write(join(src, 'main.css'), 'body { margin: 0; }\n@import "./mid/index.css";');
+      write(join(src, 'mid/index.css'), '@import "../app.css";');
+      expect(await findTailwindEntries([src], noResolver)).toEqual([normalizePath(join(src, 'main.css'))]);
+    });
+
+    it('is the entry through an alias', async () => {
+      const { src, entry } = fixture('@import "$lib/tw.css";', { tailwind: false });
+      write(join(src, 'lib/tw.css'), '@import "tailwindcss";');
+      const resolveCss: Resolver = async (id) => (id === '$lib/tw.css' ? join(src, 'lib/tw.css') : undefined);
+      expect(await findTailwindEntries([src], resolveCss)).toEqual([entry]);
+    });
+
+    it('is an entry of its own when two of them share a candidate', async () => {
+      const { src, entry } = fixture('@import "./tw.css";', { tailwind: false });
+      write(join(src, 'tw.css'), '@import "tailwindcss";');
+      write(join(src, 'admin.css'), '@import "./tw.css";');
+      expect(await findTailwindEntries([src], noResolver)).toEqual([normalizePath(join(src, 'admin.css')), entry]);
+    });
+
+    it('is a partial when an entry imports it', async () => {
+      const { src, entry } = fixture('@import "tailwindcss";\n@import "./mid.css";', { tailwind: false });
+      write(join(src, 'mid.css'), '@import "./tokens.css";');
+      write(join(src, 'tokens.css'), '@theme { --color-brand: red; }');
+      expect(await findTailwindEntries([src], noResolver)).toEqual([entry]);
+    });
+
+    it('is not an entry when it only reaches the candidate with a reference', async () => {
+      const { src } = fixture('@import "./tw.css" reference;', { tailwind: false });
+      const tw = normalizePath(join(src, 'tw.css'));
+      write(tw, '@import "tailwindcss";');
+      write(join(src, 'a.css'), '@reference "./tw.css";\n.a { @apply p-4; }');
+      write(join(src, 'b.css'), '@import "./tw.css" theme(reference);\n.b { @apply p-4; }');
+      write(join(src, 'c.css'), '@import "./app.css";');
+      write(join(src, 'd.css'), '@import url("./tw.css");');
+      expect(await findTailwindEntries([src], noResolver)).toEqual([tw]);
+    });
+
+    it('is not an entry when it is outside the searched directories', async () => {
+      const { src, root } = fixture('@import "tailwindcss";', { tailwind: false });
+      write(join(root, 'all.css'), '@import "./src/app.css";');
+      expect(await findTailwindEntries([src], noResolver)).toEqual([normalizePath(join(src, 'app.css'))]);
+    });
+
+    it('is not an entry when Tailwind can not be loaded from it, which leaves the candidate as it was', async () => {
+      const { src } = fixture('@import "./tw.css";', { tailwind: false });
+      const tw = normalizePath(join(src, 'tw.css'));
+      write(tw, '@import "tailwindcss";');
+      expect(await findTailwindEntries([src], noResolver, (file) => file === tw)).toEqual([tw]);
+    });
+
+    it('leaves one entry in an import cycle', async () => {
+      const { src, entry } = fixture('@import "./other.css";\n@import "./tokens.css";', { tailwind: false });
+      write(join(src, 'other.css'), '@import "./app.css";');
+      write(join(src, 'tokens.css'), '@theme { --color-brand: red; }');
+      expect(await findTailwindEntries([src], noResolver)).toEqual([entry]);
+    });
+
+    it('makes no entry without a candidate', async () => {
+      const { src } = fixture('@import "./reset.css";');
+      write(join(src, 'reset.css'), 'body { margin: 0; }');
+      expect(await findTailwindEntries([src], noResolver)).toEqual([]);
+      expect(hasTailwind([src], dirname(src))).toBe(false);
+    });
+
+    it('gets the tokens of everything it imports', async () => {
+      const { root, src } = fixture('@import "./tw.css";\n@import "./tokens.css";');
+      write(join(src, 'tw.css'), '@import "tailwindcss";');
+      write(join(src, 'tokens.css'), '@theme { --color-brand: red; }');
+      const { sources } = await loadTailwind(root, [src]);
+      expect(sources.map((s) => [s.file, s.error])).toEqual([['src/app.css', undefined]]);
+      expect(sources[0].variables['--color-brand']).toBe('red');
+      expect(sources[0].css).toContain('.bg-brand');
+    });
   });
 
   it('matches the .css extension by case on every platform', async () => {

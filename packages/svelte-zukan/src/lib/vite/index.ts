@@ -27,7 +27,7 @@ import { renderHtml } from './html.js';
 import { detectSvelteKit } from './kit.js';
 import { createMatchers } from './matchers.js';
 import { appFile, extendFsAllow, isInside, libDir, resolveOptions, type ZukanOptions } from './options.js';
-import { hasTailwind, isCandidate, loadTailwind, type Resolver } from './tailwind-load.js';
+import { canBecomeEntry, hasTailwind, loadTailwind, type Resolver } from './tailwind-load.js';
 import {
   AXE,
   CATALOG,
@@ -915,12 +915,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
             );
         };
         if (watchedCss) regenerate();
-        // a plain CSS file edited into an entry (`@theme` added) is not watched yet; `read()` waits for the editor to
-        // finish writing, where reading the file at once could find it empty
+        // a plain CSS file edited into an entry (`@theme` or an `@import` added) is not watched yet; `read()` waits for
+        // the editor to finish writing, where reading the file at once could find it empty
         else
           Promise.resolve()
             .then(read)
-            .then((css) => isCandidate(css) && regenerate())
+            .then((css) => canBecomeEntry(css) && regenerate())
             .catch(() => {});
         // a stylesheet only the catalog imports can be a failed file too
         if (failed.delete(normalizePath(file)) || resolvedFailed.length) {

@@ -859,6 +859,18 @@ describe('Tailwind CSS', () => {
     expect(await transform(TAILWIND)).toContain('"file":"src/extra.css"');
   });
 
+  it('picks up a plain CSS file edited to import an entry', { timeout: 30_000 }, async () => {
+    await withTailwind({ 'app/src/tw.css': brand, 'app/src/app.css': 'body { margin: 0; }\n' });
+    expect(await transform(TAILWIND)).toContain('"file":"src/tw.css"');
+    send.mockClear();
+    writeFileSync(join(tmp, 'app/src/app.css'), '@import "./tw.css";\n');
+    await waitForReload();
+    expect(fullReloads()).toBe(0);
+    const list = await transform(TAILWIND);
+    expect(list).toContain('"file":"src/app.css"');
+    expect(list).not.toContain('"file":"src/tw.css"');
+  });
+
   it("does not swallow the app's CSS update", { timeout: 30_000 }, async () => {
     await withTailwind({ 'app/src/app.css': brand });
     await firstSource();
