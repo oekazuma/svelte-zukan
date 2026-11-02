@@ -15,12 +15,12 @@ const vite = join(fixtures, 'node_modules/vite/bin/vite.js');
 const { NODE_ENV, VITEST, TEST, ...env } = process.env;
 
 /** `vite build` in a child process: SvelteKit takes `process.cwd()` as its project root */
-const build = (dir: string, args: string[] = []) => {
+const build = (dir: string, args: string[] = [], extraEnv: Record<string, string> = {}) => {
   for (const out of ['zukan-dist', 'build', 'dist', '.svelte-kit'])
     rmSync(join(dir, out), { recursive: true, force: true });
   const r = spawnSync(process.execPath, [vite, 'build', ...args], {
     cwd: dir,
-    env,
+    env: { ...env, ...extraEnv },
     encoding: 'utf8',
     timeout: 110_000
   });
@@ -238,3 +238,33 @@ test('plain vite build', { timeout: 120_000 }, async () => {
     await server.close();
   }
 });
+
+test.each(['cjs', 'iife', 'dir', 'array', 'chunks and names', 'inlineDynamicImports'])(
+  "the catalog keeps its own output with the app's build.rollupOptions.output: %s",
+  { timeout: 120_000 },
+  async (output) => {
+    const dir = join(fixtures, 'vite-svelte');
+    const configFile = join(dir, 'vite.config.output.ts');
+    build(dir, ['--config', 'vite.config.output.ts'], { FIXTURE_OUTPUT: output });
+    expect(existsSync(join(dir, 'zukan-dist/index.html'))).toBe(true);
+    expect(strays(dir)).toEqual([]);
+    expectWorker(dir);
+    if (!hasChromium) return;
+
+    const server = await preview({ root: dir, configFile, logLevel: 'error', preview: { port: 0 } });
+    const browser = await chromium.launch();
+    try {
+      const url = `${server.resolvedUrls!.local[0]}__zukan/#/preview/vite-svelte/lib/Worker?section=Basic`;
+      const page = await browser.newPage();
+      const errors: string[] = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      await page.goto(url);
+      for (const id of ['via-url', 'via-import'])
+        await expect.poll(() => page.locator(`#${id}`).textContent(), { timeout: 30_000 }).toBe('from worker');
+      expect(errors).toEqual([]);
+    } finally {
+      await browser.close();
+      await server.close();
+    }
+  }
+);

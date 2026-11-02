@@ -367,6 +367,65 @@ describe('modules shared with the app', () => {
     }
   );
 
+  /** restarts the server with B.svelte, which only its catalog file imports, or the app's page too */
+  async function withComponent({ served = false, inApp = false } = {}) {
+    await server.close();
+    link('svelte');
+    const component = join(tmp, 'app/src/B.svelte');
+    writeFileSync(component, '<p>b</p>\n');
+    writeFileSync(
+      join(tmp, 'app/src/B.zukan.svelte'),
+      '<script>\n  import B from \'./B.svelte\';\n</script>\n<Section title="B"><B /></Section>'
+    );
+    writeFileSync(join(tmp, 'app/src/main.js'), inApp ? "import './B.svelte';\n" : 'export default 1;\n');
+    await start({}, { plugins: [svelte()] });
+    await list();
+    const env = server.environments.client;
+    for (const id of ['/src/main.js', '/src/B.zukan.svelte', '/src/B.svelte']) await env.transformRequest(id);
+    if (served) await meta('app/B');
+    send.mockClear();
+    return component;
+  }
+
+  describe.each([false, true])('a component only a catalog file imports (props served: %s)', (served) => {
+    it.each([
+      ['an unclosed block', '{#if}\n'],
+      ['a duplicate declaration', '<script>\n  let a;\n  let a;\n</script>\n'],
+      ['a missing import', "<script>\n  import './missing.js';\n</script>\n"]
+    ])('an edit with %s reloads only the catalog, also once fixed', { timeout: 30_000 }, async (_, broken) => {
+      const component = await withComponent({ served });
+      writeFileSync(component, broken);
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(errors()).toHaveLength(0);
+      expect(fullReloads()).toBe(0);
+      expect(await get('/src/B.svelte')).toMatch(/^throw new Error\(/);
+      send.mockClear();
+      writeFileSync(component, '<p>fixed</p>\n');
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(errors()).toHaveLength(0);
+      expect(fullReloads()).toBe(0);
+      expect(await get('/src/B.svelte')).not.toMatch(/^throw /);
+    });
+
+    it('an edit that compiles keeps its own HMR, with no reload', { timeout: 25_000 }, async () => {
+      const component = await withComponent({ served });
+      writeFileSync(component, '<p>changed</p>\n');
+      await expect.poll(() => updated('/src/B.svelte'), { timeout: 10_000 }).toBe(true);
+      await new Promise((r) => setTimeout(r, 300));
+      expect(reloaded()).toBe(false);
+      expect(fullReloads()).toBe(0);
+    });
+  });
+
+  it("a compile error in a component the app imports stays Vite's error", { timeout: 25_000 }, async () => {
+    const component = await withComponent({ inApp: true });
+    writeFileSync(component, '{#if}\n');
+    await expect.poll(() => errors().length, { timeout: 10_000 }).toBe(1);
+    expect(reloaded()).toBe(false);
+  });
+
   // without the names, the import would fail to link ("does not provide an export named") before the module throws
   it(
     'a module only a catalog file imports by name throws its compile error, not a link error',

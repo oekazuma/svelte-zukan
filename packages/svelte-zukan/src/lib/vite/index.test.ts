@@ -1028,15 +1028,7 @@ describe('build', () => {
       build: {
         outDir: `${root}/out/catalog`,
         manifest: false,
-        copyPublicDir: false,
-        rolldownOptions: {
-          input: { zukan: 'virtual:svelte-zukan/entry' },
-          output: {
-            entryFileNames: '_zukan/[name]-[hash].js',
-            chunkFileNames: expect.any(Function),
-            assetFileNames: '_zukan/[name]-[hash][extname]'
-          }
-        }
+        copyPublicDir: false
       }
     });
     expect((await bootBuild(root, { build: true })).added.environments.zukan.build.outDir).toBe(`${root}/zukan-dist`);
@@ -1044,8 +1036,10 @@ describe('build', () => {
 
   it('names a metadata chunk without its ID, which can be longer than a file name may be', async () => {
     const { root } = await makeApp();
-    const { added } = await bootBuild(root, { build: true });
-    const { chunkFileNames } = added.environments.zukan.build.rolldownOptions.output;
+    const { p } = await bootBuild(root, { build: true });
+    const env = { build: {} as { rolldownOptions: { output: { chunkFileNames: (c: object) => string } } } };
+    p.configEnvironment('zukan', env);
+    const { chunkFileNames } = env.build.rolldownOptions.output;
     expect(chunkFileNames({ facadeModuleId: '\0' + metaId('ui/' + 'ボタン'.repeat(50)) })).toBe(
       '_zukan/meta-[hash].js'
     );
@@ -1082,7 +1076,8 @@ describe('build', () => {
         // library mode: the app's bundle leaves svelte to its users, the catalog has none
         rolldownOptions: {
           input: { main: 'index.html', nested: 'nested/index.html', zukan: ENTRY },
-          external: ['svelte', /^svelte\//]
+          external: ['svelte', /^svelte\//],
+          output: [{ format: 'cjs', dir: 'out', entryFileNames: 'js/[name].js' }, {}]
         }
       }
     });
@@ -1094,7 +1089,15 @@ describe('build', () => {
       emptyOutDir: false,
       cssCodeSplit: true,
       cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
-      rolldownOptions: { input: { zukan: ENTRY } }
+      rolldownOptions: {
+        input: { zukan: ENTRY },
+        output: {
+          format: 'es',
+          entryFileNames: '_zukan/[name]-[hash].js',
+          chunkFileNames: expect.any(Function),
+          assetFileNames: '_zukan/[name]-[hash][extname]'
+        }
+      }
     });
     const client = inherited();
     p.configEnvironment('client', client);

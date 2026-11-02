@@ -470,21 +470,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
               build: {
                 outDir: resolved.build,
                 manifest: false,
-                copyPublicDir: false,
-                // only the JS entry, with fixed names: SvelteKit shares `base` and its naming rules with every environment
-                rolldownOptions: {
-                  input: { zukan: ENTRY },
-                  output: {
-                    entryFileNames: `${OUT_PREFIX}[name]-[hash].js`,
-                    // a metadata chunk is named after its module, the hex of the ID: a long ID would exceed the
-                    // 255 bytes a file name may have
-                    chunkFileNames: (chunk) =>
-                      chunk.facadeModuleId?.startsWith('\0' + META)
-                        ? `${OUT_PREFIX}meta-[hash].js`
-                        : `${OUT_PREFIX}[name]-[hash].js`,
-                    assetFileNames: `${OUT_PREFIX}[name]-[hash][extname]`
-                  }
-                }
+                copyPublicDir: false
               }
             }
           }
@@ -504,8 +490,26 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         cssCodeSplit: true,
         cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5']
       });
-      // `external`: the catalog is loaded as it is, with nothing to provide an externalized import (library mode)
-      config.build.rolldownOptions = { ...config.build.rolldownOptions, input: { zukan: ENTRY }, external: undefined };
+      config.build.rolldownOptions = {
+        ...config.build.rolldownOptions,
+        // only the JS entry
+        input: { zukan: ENTRY },
+        // the catalog is loaded as it is, with nothing to provide an externalized import (library mode)
+        external: undefined,
+        // replaced, not merged: index.html loads one set of ES modules under OUT_PREFIX, wherever the app writes its own
+        // output (another format, a `dir`, an array of outputs), and SvelteKit shares its naming rules with every environment
+        output: {
+          format: 'es',
+          entryFileNames: `${OUT_PREFIX}[name]-[hash].js`,
+          // a metadata chunk is named after its module, the hex of the ID: a long ID would exceed the
+          // 255 bytes a file name may have
+          chunkFileNames: (chunk) =>
+            chunk.facadeModuleId?.startsWith('\0' + META)
+              ? `${OUT_PREFIX}meta-[hash].js`
+              : `${OUT_PREFIX}[name]-[hash].js`,
+          assetFileNames: `${OUT_PREFIX}[name]-[hash][extname]`
+        }
+      };
     },
     generateBundle: {
       // after Vite's worker plugin and SvelteKit, which emit files named for the app: workers are moved where
@@ -688,6 +692,27 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           kitGlobal
         });
       }
+    },
+    configResolved(config) {
+      // Vite's Svelte plugin compiles an edited component in its `hotUpdate`, and Vite answers a throw there with an
+      // overlay on every tab, the app's too. Wrapped, since compiling first in our own hook is no way out: that plugin
+      // would find its last result already replaced, see no change and drop the component's HMR
+      const compiling = config.plugins.find((p) => p.name === 'vite-plugin-svelte:hot-update')?.hotUpdate;
+      if (!serving || typeof compiling !== 'object') return;
+      const { handler } = compiling;
+      compiling.handler = async function (options) {
+        try {
+          return await handler.call(this, options);
+        } catch (e) {
+          const file = normalizePath(options.file);
+          const mods = this.environment.moduleGraph.getModulesByFile(file);
+          if (this.environment.config.consumer !== 'client' || !mods?.size || ![...mods].every((m) => catalogOnly(m)))
+            throw e;
+          failed.add(file);
+          this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
+          return [];
+        }
+      };
     },
     configureServer(server) {
       const { root, base } = server.config;
