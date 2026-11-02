@@ -7,6 +7,7 @@ import { stripVTControlCharacters, styleText } from 'node:util';
 import {
   buildErrorMessage,
   createIdResolver,
+  type Alias,
   type Connect,
   normalizePath,
   parseSync,
@@ -236,7 +237,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       servedProps.delete(component);
       return null;
     }
-    const found = extractProps(readFileSync(component, 'utf-8'), component);
+    const found = extractProps(readFileSync(component, 'utf-8'), component, { alias, root });
     servedProps.set(component, JSON.stringify(found));
     // a file reached through a `node_modules` link: the watcher ignores node_modules and reports it by its real path
     const deps = (found?.files ?? []).map((file) => (file.includes('/node_modules/') ? realPath(file) : file));
@@ -252,6 +253,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     return found;
   };
   let root = '';
+  let alias: Alias[] = [];
   let groups: CatalogGroup[] = [];
   let resolved: ReturnType<typeof resolveOptions>;
   /** whether the user's config builds every environment (`builder`, or `vite build --app`) */
@@ -363,6 +365,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
     const { sources } = await tailwindData(env);
     return catalogJson({
       root,
+      alias,
       title: resolved.title,
       items,
       uncataloged: uncataloged(items),
@@ -725,6 +728,7 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       }
     },
     configResolved(config) {
+      alias = config.resolve.alias;
       // Vite's Svelte plugin compiles an edited component in its `hotUpdate`, and Vite answers a throw there with an
       // overlay on every tab, the app's too. Wrapped, since compiling first in our own hook is no way out: that plugin
       // would find its last result already replaced, see no change and drop the component's HMR

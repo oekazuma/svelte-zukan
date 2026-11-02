@@ -24,7 +24,7 @@ export const config = (
             }
           ]
     },
-    plugins: [zukan({ build: true }), sveltekit({ adapter: adapter(), ...kit })]
+    plugins: [zukan({ build: true }), sveltekit({ adapter: adapter(), alias: { $lib: 'src/lib' }, ...kit })]
   });
 
 export default config();

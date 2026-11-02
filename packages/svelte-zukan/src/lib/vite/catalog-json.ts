@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { relative } from 'node:path';
-import { normalizePath } from 'vite';
+import { normalizePath, type Alias } from 'vite';
 import { formatHash } from '../app/hash.js';
 import type { CatalogItem, TailwindSource, ZukanProp } from '../types.js';
 import { existsExactly } from './discover.js';
@@ -38,6 +38,7 @@ export type CatalogJson = {
 
 export function catalogJson(opts: {
   root: string;
+  alias?: Alias[];
   title: string;
   items: CatalogItem[];
   uncataloged: { group: string; file: string }[];
@@ -52,7 +53,7 @@ export function catalogJson(opts: {
     components: opts.items.map((item) => {
       const component = opts.componentFileOf(item.file);
       const docFile = opts.docFileOf(item.file);
-      const found = existsExactly(component) ? extractProps(read(component), component) : null;
+      const found = existsExactly(component) ? extractProps(read(component), component, opts) : null;
       let sections: CatalogJson['components'][number]['sections'] = [];
       let error: string | undefined;
       try {
