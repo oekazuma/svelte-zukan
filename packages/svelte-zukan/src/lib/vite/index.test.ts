@@ -177,18 +177,32 @@ describe('resolveOptions', () => {
 });
 
 describe('extendFsAllow', () => {
-  it('leaves allow alone when every dir is inside the root', async () => {
-    const { root } = await makeApp();
-    expect(extendFsAllow(root, [`${root}/src`], ['/x'])).toBeUndefined();
+  it('leaves allow alone when it covers every path', async () => {
+    const { root, outside } = await makeApp();
+    expect(extendFsAllow(root, [`${root}/src`], undefined)).toBeUndefined();
+    expect(extendFsAllow(root, [`${root}/src/a`, `${outside}/b.svg`], [root, outside])).toBeUndefined();
+    // Vite resolves a relative entry against the root, and SvelteKit's list has some
+    expect(extendFsAllow(root, [`${root}/src/lib/a`, outside], ['src/lib', '../outside'])).toBeUndefined();
   });
 
-  it('keeps an explicit allow list and adds the dirs outside the root', async () => {
+  it('adds to an explicit allow list what it does not cover, inside the root too', async () => {
     const { tmp, root, outside } = await makeApp();
     const ws = searchForWorkspaceRoot(root);
     // an explicit list (SvelteKit's, or the user's) is kept as it is; the workspace root stands in only for Vite's default
     expect(normalizePath(ws)).toBe(tmp);
-    expect(extendFsAllow(root, [`${root}/src`, outside], ['/x'])).toEqual(['/x', outside]);
-    expect(extendFsAllow(root, [outside], undefined)).toEqual([ws, outside]);
+    expect(extendFsAllow(root, [`${root}/.zukan`, `${root}/src/a`, outside], ['/x', 'src'])).toEqual([
+      '/x',
+      'src',
+      `${root}/.zukan`,
+      outside
+    ]);
+    expect(extendFsAllow(root, [`${root}/src`, outside], undefined)).toEqual([ws, outside]);
+  });
+
+  it("gives SvelteKit's list the wrapper's directory and the logo inside the root", async () => {
+    const { root } = await makeApp();
+    const { config } = boot(root, { wrapper: 'Wrapper.svelte', logo: 'logo.png', groups: { a: 'src' } }, ['src']);
+    expect(config.server?.fs?.allow).toEqual(['src', libDir, root, `${root}/logo.png`]);
   });
 
   it('is applied in the config hook', async () => {
@@ -196,8 +210,8 @@ describe('extendFsAllow', () => {
     const ws = searchForWorkspaceRoot(root);
     // the library itself (src/lib here) is outside the temporary root
     expect(boot(root).config.server?.fs?.allow).toEqual([ws, libDir]);
-    const { config } = boot(root, { groups: { a: 'src', b: '../outside' } }, ['/x']);
-    expect(config.server?.fs?.allow).toEqual(['/x', outside, libDir]);
+    const { config } = boot(root, { groups: { a: 'src', b: '../outside' } }, ['/x', 'src']);
+    expect(config.server?.fs?.allow).toEqual(['/x', 'src', outside, libDir]);
   });
 
   it('adds the dir of a wrapper and the logo file outside the root', async () => {
