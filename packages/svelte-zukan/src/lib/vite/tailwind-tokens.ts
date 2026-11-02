@@ -32,10 +32,15 @@ function stringEnd(css: string, start: number): number {
 
 type Layer = { name: string; places: number[] };
 
+// Tailwind writes a `color-mix()` or `--alpha()` over a `var()` as a fallback followed by this block, which every
+// browser Tailwind v4 supports applies
+const COLOR_MIX_SUPPORTS = '@supports (color: color-mix(in lab, red, red))';
+
 /**
  * Brace matching over serialized CSS, enough for Tailwind's own output. Declarations directly inside an at-rule
- * (`@property`, `@font-face`) belong to no rule. `ranks` gets each rule's cascade layer rank: per layer level, the place
- * where that layer first appears, ending in Infinity for the layer's own rules.
+ * (`@property`, `@font-face`) belong to no rule, except Tailwind's color-mix block, which adds to the rule around it.
+ * `ranks` gets each rule's cascade layer rank: per layer level, the place where that layer first appears, ending in
+ * Infinity for the layer's own rules.
  */
 export function scanCss(css: string, ranks?: Map<CssRule, number[]>): CssRule[] {
   const rules: CssRule[] = [];
@@ -100,7 +105,8 @@ export function scanCss(css: string, ranks?: Map<CssRule, number[]>): CssRule[] 
       buf = '';
       if (prelude.startsWith('@')) {
         const layer = /^@layer(\s|$)/.test(prelude) ? declareLayer(layerName(prelude)) : undefined;
-        stack.push({ prelude, rule: null, layer });
+        const around = prelude === COLOR_MIX_SUPPORTS ? (stack.at(-1)?.rule ?? null) : null;
+        stack.push({ prelude, rule: around, layer });
       } else {
         const rule: CssRule = {
           selector: prelude,
@@ -117,6 +123,43 @@ export function scanCss(css: string, ranks?: Map<CssRule, number[]>): CssRule[] 
     }
   }
   return rules;
+}
+
+/**
+ * A browser ignores an `@import` that follows a style rule, and Tailwind leaves an external one where the entry's rules
+ * put it, so its output cannot be injected as it is. `@charset` must come first of all.
+ */
+export function hoistImports(css: string): string {
+  const charsets: string[] = [];
+  const imports: string[] = [];
+  let rest = '';
+  let start = 0;
+  let depth = 0;
+  let parens = 0;
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i];
+    if (c === '"' || c === "'") i = stringEnd(css, i) - 1;
+    else if (c === '/' && css[i + 1] === '*') {
+      const end = css.indexOf('*/', i + 2);
+      i = end < 0 ? css.length : end + 1;
+    } else if (c === '(') parens++;
+    else if (c === ')') parens = Math.max(0, parens - 1);
+    else if (parens > 0) continue;
+    else if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) {
+      rest += css.slice(start, i + 1);
+      start = i + 1;
+    } else if (c === ';' && depth === 0) {
+      const text = css.slice(start, i + 1);
+      const statement = text.replace(/\/\*[\s\S]*?\*\//g, '').trim();
+      if (/^@charset\b/i.test(statement)) charsets.push(statement);
+      else if (/^@import\b/i.test(statement)) imports.push(statement);
+      else rest += text;
+      start = i + 1;
+    }
+  }
+  if (!charsets.length && !imports.length) return css;
+  return [...charsets, ...imports, (rest + css.slice(start)).trimStart()].join('\n');
 }
 
 /** the selectors of a list, split at its top-level commas only */
@@ -149,10 +192,10 @@ const unwrapped = (list: string): string[] =>
 /**
  * custom properties declared unconditionally on the root: by a rule whose selector list includes `:root`, `:host` or
  * `html`, alone or in `:where()` / `:is()` (daisyUI's `:where(:root)`), at the top level or inside `@layer`. Of several
- * declarations, the one the cascade layers put last wins (`!important` aside). With `layer` (`@layer theme`), only the
- * rules directly in that layer count.
+ * declarations, the one the cascade layers put last wins (`!important` aside). With `themeOnly`, only Tailwind's own
+ * theme rule counts, in whichever layer the entry imports it, so a project's `:root` override is left out.
  */
-export function rootVariables(css: string, layer?: string): Record<string, string> {
+export function rootVariables(css: string, themeOnly = false): Record<string, string> {
   const out: Record<string, string> = {};
   const ranks = new Map<CssRule, number[]>();
   const stored: Record<string, number[]> = {};
@@ -164,7 +207,7 @@ export function rootVariables(css: string, layer?: string): Record<string, strin
   for (const rule of scanCss(css, ranks)) {
     if (!unwrapped(rule.selector).some((s) => s === ':root' || s === ':host' || s === 'html')) continue;
     if (!rule.atRules.every((a) => /^@layer(\s|$)/.test(a))) continue;
-    if (layer !== undefined && rule.atRules.join(' ') !== layer) continue;
+    if (themeOnly && rule.selector !== ':root, :host') continue;
     const rank = ranks.get(rule)!;
     for (const [property, value] of rule.declarations) {
       if (!property.startsWith('--')) continue;
@@ -248,10 +291,8 @@ export const CATEGORIES: readonly {
   stem: string;
   property: string;
   kind: Kind;
-  /** the theme namespace of the class's own variable, `<namespace>-<suffix>` */
-  namespace?: string;
-  /** the other theme namespaces the utility reads, in Tailwind's order */
-  alsoReads?: string[];
+  /** the theme namespaces the utility reads, in Tailwind's order: the first with the class's suffix gives its value */
+  reads?: string[];
 }[] = [
   {
     id: 'background-color',
@@ -259,8 +300,7 @@ export const CATEGORIES: readonly {
     stem: 'bg',
     property: 'background-color',
     kind: 'color',
-    namespace: 'color',
-    alsoReads: ['background-color']
+    reads: ['background-color', 'color']
   },
   {
     id: 'text-color',
@@ -268,8 +308,7 @@ export const CATEGORIES: readonly {
     stem: 'text',
     property: 'color',
     kind: 'text-color',
-    namespace: 'color',
-    alsoReads: ['text-color']
+    reads: ['text-color', 'color']
   },
   {
     id: 'border-color',
@@ -277,8 +316,7 @@ export const CATEGORIES: readonly {
     stem: 'border',
     property: 'border-color',
     kind: 'border-color',
-    namespace: 'color',
-    alsoReads: ['border-color']
+    reads: ['border-color', 'color']
   },
   {
     id: 'padding',
@@ -286,8 +324,7 @@ export const CATEGORIES: readonly {
     stem: 'p',
     property: 'padding',
     kind: 'padding',
-    namespace: 'spacing',
-    alsoReads: ['padding']
+    reads: ['padding', 'spacing']
   },
   {
     id: 'margin',
@@ -295,26 +332,25 @@ export const CATEGORIES: readonly {
     stem: 'm',
     property: 'margin',
     kind: 'margin',
-    namespace: 'spacing',
-    alsoReads: ['margin']
+    reads: ['margin', 'spacing']
   },
-  { id: 'font-size', title: 'Font Size', stem: 'text', property: 'font-size', kind: 'text', namespace: 'text' },
+  { id: 'font-size', title: 'Font Size', stem: 'text', property: 'font-size', kind: 'text', reads: ['text'] },
   {
     id: 'font-weight',
     title: 'Font Weight',
     stem: 'font',
     property: 'font-weight',
     kind: 'text',
-    namespace: 'font-weight'
+    reads: ['font-weight']
   },
-  { id: 'font-family', title: 'Font Family', stem: 'font', property: 'font-family', kind: 'text', namespace: 'font' },
+  { id: 'font-family', title: 'Font Family', stem: 'font', property: 'font-family', kind: 'text', reads: ['font'] },
   {
     id: 'letter-spacing',
     title: 'Letter Spacing',
     stem: 'tracking',
     property: 'letter-spacing',
     kind: 'text',
-    namespace: 'tracking'
+    reads: ['tracking']
   },
   {
     id: 'line-height',
@@ -322,8 +358,7 @@ export const CATEGORIES: readonly {
     stem: 'leading',
     property: 'line-height',
     kind: 'text',
-    namespace: 'leading',
-    alsoReads: ['spacing']
+    reads: ['leading', 'spacing']
   },
   {
     id: 'drop-shadow',
@@ -331,7 +366,7 @@ export const CATEGORIES: readonly {
     stem: 'drop-shadow',
     property: 'filter',
     kind: 'box',
-    namespace: 'drop-shadow'
+    reads: ['drop-shadow']
   },
   {
     id: 'border-radius',
@@ -339,7 +374,7 @@ export const CATEGORIES: readonly {
     stem: 'rounded',
     property: 'border-radius',
     kind: 'box',
-    namespace: 'radius'
+    reads: ['radius']
   },
   {
     id: 'border-width',
@@ -347,7 +382,7 @@ export const CATEGORIES: readonly {
     stem: 'border',
     property: 'border-width',
     kind: 'border',
-    alsoReads: ['border-width']
+    reads: ['border-width']
   },
   {
     id: 'width',
@@ -355,8 +390,7 @@ export const CATEGORIES: readonly {
     stem: 'w',
     property: 'width',
     kind: 'width',
-    namespace: 'spacing',
-    alsoReads: ['width', 'container']
+    reads: ['width', 'spacing', 'container']
   },
   {
     id: 'height',
@@ -364,8 +398,7 @@ export const CATEGORIES: readonly {
     stem: 'h',
     property: 'height',
     kind: 'height',
-    namespace: 'spacing',
-    alsoReads: ['height']
+    reads: ['height', 'spacing']
   },
   {
     id: 'box-shadow',
@@ -373,11 +406,11 @@ export const CATEGORIES: readonly {
     stem: 'shadow',
     property: 'box-shadow',
     kind: 'box',
-    namespace: 'shadow'
+    reads: ['shadow']
   },
-  { id: 'opacity', title: 'Opacity', stem: 'opacity', property: 'opacity', kind: 'box', alsoReads: ['opacity'] },
+  { id: 'opacity', title: 'Opacity', stem: 'opacity', property: 'opacity', kind: 'box', reads: ['opacity'] },
   { id: 'breakpoints', title: 'Breakpoints', stem: 'breakpoint', property: '', kind: 'value' },
-  { id: 'z-index', title: 'Z-index', stem: 'z', property: 'z-index', kind: 'value', alsoReads: ['z-index'] },
+  { id: 'z-index', title: 'Z-index', stem: 'z', property: 'z-index', kind: 'value', reads: ['z-index'] },
   { id: 'spacing', title: 'Spacing', stem: 'p', property: 'padding', kind: 'width' }
 ];
 
@@ -469,7 +502,9 @@ export function extractTokens(
   );
   // an `options` of another shape (the API is unstable) reads as not inline
   const inline = new Set(
-    entries.flatMap(([key, { options }]) => (typeof options === 'number' && options & 1 ? [key] : []))
+    entries.flatMap(([key, { options }]) =>
+      typeof options === 'number' && options & 1 && Object.hasOwn(variables, key) ? [key] : []
+    )
   );
   const matches = (name: string, stem: string) => name === stem || name.startsWith(`${stem}-`);
 
@@ -495,7 +530,7 @@ export function extractTokens(
   // functions (`--spacing(6)`, `theme(--radius-lg)`) replaced: the entries keep them as written.
   const css = build(classes.map((name) => classPrefix + name));
   const known = rootVariables(css);
-  const written = rootVariables(css, '@layer theme');
+  const written = rootVariables(css, true);
   for (const key of Object.keys(variables)) if (Object.hasOwn(written, key)) variables[key] = written[key];
 
   // `@theme reference` and what `@config` and `@plugin` load: listed with the theme, but Tailwind declares none of
@@ -518,14 +553,15 @@ export function extractTokens(
   );
   const values = { ...variables, ...known };
 
-  const token = (name: string, own: string | null, others: string[], value: string, shown = value): TailwindToken => {
+  const token = (name: string, own: string | null, value: string, shown = value): TailwindToken => {
     const variable = soleVar(value);
     let cssVariable: string | null = variable && Object.hasOwn(variables, variable) ? variable : null;
     // an `@theme inline` token puts its value into the class, so the class reads the variable it aliases
     // (`--color-primary: var(--color-blue-500)` gives `bg-primary` the value `var(--color-blue-500)`): name its own
     if (variable && own && variable !== own && Object.hasOwn(variables, own)) cssVariable = own;
-    // another namespace can hold the same value under the same suffix (`--text-xs` and `--spacing-xs`)
-    if (!cssVariable && own && variables[own] === value) cssVariable = own;
+    // an inline token's class holds what Tailwind makes of its value (`--alpha()`, `--spacing()`), not the value as
+    // written; an `options` of another shape leaves only the comparison
+    if (!cssVariable && own && (inline.has(own) || variables[own] === value)) cssVariable = own;
     // a drop shadow's helper reads its variable (`drop-shadow(var(--drop-shadow-md))`), a box shadow's copies the value
     if (
       !cssVariable &&
@@ -534,9 +570,6 @@ export function extractTokens(
       [...shown.matchAll(/var\(([^,)]+)/g)].some((m) => varName(m[1]) === own)
     )
       cssVariable = own;
-    // only an inline variable of a namespace the utility reads can be the source of a literal value; elsewhere an equal
-    // value is a coincidence (`border-2` is `2px` like `--radius-2`)
-    cssVariable ??= others.find((key) => inline.has(key) && variables[key] === value) ?? null;
     if (cssVariable && reference.has(cssVariable)) cssVariable = null;
     else if (cssVariable) cssVariable = rootName.get(cssVariable) ?? cssVariable;
     // `drop-shadow-none` sets `--tw-drop-shadow` to nothing, which a blank cell would not explain
@@ -545,7 +578,7 @@ export function extractTokens(
 
   const themeIndex = new Map(entries.map(([key], i) => [key, i]));
   const byCategory = new Map<TailwindCategoryId, TailwindToken[]>();
-  for (const { id, stem, property, namespace, alsoReads = [], kind } of stems) {
+  for (const { id, stem, property, reads = [], kind } of stems) {
     const tokens: Ordered[] = [];
     for (const name of names) {
       if (!matches(name, stem)) continue;
@@ -553,9 +586,9 @@ export function extractTokens(
       const shown = valueOf(name, SHADOW_VALUE[property]);
       if (value === undefined) continue;
       const suffix = name.slice(stem.length + 1);
-      const own = namespace && suffix ? `${variablePrefix}${namespace}-${suffix}` : null;
-      const others = suffix ? alsoReads.map((ns) => `${variablePrefix}${ns}-${suffix}`) : [];
-      const t = token(name, own, others, value, shown);
+      const keys = suffix ? reads.map((ns) => `${variablePrefix}${ns}-${suffix}`) : [];
+      const own = keys.find((key) => Object.hasOwn(variables, key)) ?? keys[0] ?? null;
+      const t = token(name, own, value, shown);
       // `getClassList()` sorts names alphabetically, so `text-2xl` precedes `text-xs`. The theme lists a scale in its own
       // order. A variable that does not end in the class suffix (`p-1` reads `--spacing`) says nothing about the position.
       const key = t.cssVariable?.endsWith(`-${suffix}`) ? t.cssVariable : (own ?? '');
@@ -597,5 +630,5 @@ export function extractTokens(
   const categories = CATEGORIES.map(({ id, title }) => ({ id, title, tokens: byCategory.get(id) ?? [] })).filter(
     (c) => c.tokens.length > 0
   );
-  return { prefix, categories, variables, css };
+  return { prefix, categories, variables, css: hoistImports(css) };
 }

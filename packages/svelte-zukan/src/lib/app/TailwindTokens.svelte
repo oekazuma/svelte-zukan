@@ -45,6 +45,7 @@
   import type { Theme } from '../components/PreviewFrame/storage.js';
   import type { TailwindCategory } from '../types.js';
   import type { Messages } from './i18n.js';
+  import { sizeOf } from '../vite/tailwind-tokens.js';
   import { filterTokens } from './tailwind-filter.js';
 
   let {
@@ -81,6 +82,12 @@
       const style = doc.defaultView!.getComputedStyle(probe);
       for (const token of category.tokens) {
         if (!LENGTH.test(token.value) || RELATIVE.test(token.value)) continue;
+        // a media query's `rem` and `em` are the browser's initial font size, never the page's
+        const initial = category.id === 'breakpoints' ? sizeOf(token.value, 'width') : null;
+        if (initial !== null) {
+          out[key(token)!] = initial;
+          continue;
+        }
         // an invalid value is dropped and would leave the previous token's in place
         probe.style.removeProperty(property);
         probe.style.setProperty(property, token.value);
@@ -246,6 +253,9 @@
               <div class={['zukan-value', token.class]}>
                 {#if text}{sampleText}{/if}
               </div>
+              {#if kind === 'text-color'}
+                <div class={['zukan-value zukan-dark-band', token.class]} aria-hidden="true">{sampleText}</div>
+              {/if}
             {/if}
           </div>
           <div class="zukan-names">
@@ -347,8 +357,20 @@
     border-radius: 4px;
   }
 
+  /* one band shows a light colour and the other a dark one; no single background shows both */
+  .zukan-card .zukan-text-color {
+    padding: 0;
+  }
+
   .zukan-text-color .zukan-value {
-    min-height: 80px;
+    box-sizing: border-box;
+    min-height: 44px;
+    padding: 8px;
+    background: #fff;
+  }
+
+  .zukan-text-color .zukan-dark-band {
+    background: #1f2328;
   }
 
   .zukan-text .zukan-value {
@@ -422,18 +444,22 @@
     .zukan-card > :is(.zukan-color, .zukan-text-color) {
       grid-area: sample;
       margin: 8px 0 8px 8px;
+    }
+
+    .zukan-card > .zukan-color {
       padding: 4px;
     }
 
-    .zukan-color .zukan-value,
-    .zukan-text-color .zukan-value {
+    .zukan-color .zukan-value {
       height: 40px;
-      min-height: 0;
     }
 
     .zukan-text-color .zukan-value {
+      height: 24px;
+      min-height: 0;
+      padding: 0 4px;
       overflow: hidden;
-      line-height: 40px;
+      line-height: 24px;
       white-space: nowrap;
       text-overflow: ellipsis;
     }
