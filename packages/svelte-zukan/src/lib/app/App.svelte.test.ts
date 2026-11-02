@@ -7,6 +7,7 @@ import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
 import Wrapper from './Wrapper.test.svelte';
 import { modifier } from './SearchDialog.svelte';
+import bundledLogo from './logo.svg?url';
 
 // a negative assertion needs the hashchange to have been handled first
 async function setHash(hash: string) {
@@ -1738,5 +1739,133 @@ describe('App', () => {
     await expect.poll(() => folder.element().closest('details')!.open).toBe(false);
     await expect.element(menu).toHaveAttribute('aria-expanded', 'true');
     expect(document.activeElement).toBe(folder.element().closest('summary'));
+  });
+
+  /** how far the page scrolls sideways */
+  const pageOverflow = () => document.documentElement.scrollWidth - document.documentElement.clientWidth;
+
+  it.each([
+    [
+      'inline code in the doc',
+      { doc: '<p>See <code>src/lib/components/forms/TextField/TextField.zukan.svelte</code>.</p>' }
+    ],
+    [
+      'a link in the doc',
+      { doc: '<p><a href="#/">https://example.com/a/very/long/path/to/some/documentation/page</a></p>' }
+    ],
+    ['the props type', { propsType: 'HTMLButtonAttributesWithoutChildrenAndVariantProps' }],
+    ['a section title', { sections: [{ title: 'WithAVeryLongSectionTitleThatHasNoSpaces', code: '' }] }]
+  ] as [string, Partial<ZukanMeta>][])(
+    'on a 320px screen %s wraps instead of scrolling the page sideways',
+    async (_, m) => {
+      await page.viewport(320, 800);
+      const { props } = setup('#/ui/Card');
+      props.catalog[0].meta = () => Promise.resolve({ default: { sections: [], doc: null, ...m } });
+      const screen = await render(App, { props });
+      // the page's last part to render: the sections, or the line saying there are none
+      if (m.sections) await expect.element(screen.getByRole('link', { name: m.sections[0].title })).toBeInTheDocument();
+      else
+        await expect
+          .element(screen.getByText('This file has no <Section>, so there is nothing to preview.'))
+          .toBeInTheDocument();
+      expect(pageOverflow()).toBe(0);
+    }
+  );
+
+  it('on a 320px screen a wide table in the doc scrolls in its own box, which the keyboard can reach', async () => {
+    await page.viewport(320, 800);
+    const { props } = setup('#/ui/Card');
+    const doc =
+      '<table><tr><th>Variant</th><th>When</th><th>Color</th><th>Example</th><th>Notes</th></tr>' +
+      '<tr><td>primary</td><td>main action</td><td>accent</td><td>Save</td><td>one per view</td></tr></table>';
+    props.catalog[0].meta = () => Promise.resolve({ default: { sections: [], doc } });
+    const screen = await render(App, { props });
+    const table = screen.getByRole('table');
+    await expect.element(table).toBeInTheDocument();
+    const box = table.element().parentElement!;
+    expect(box.className).toBe('table');
+    expect(box.scrollWidth).toBeGreaterThan(box.clientWidth);
+    expect(pageOverflow()).toBe(0);
+    expect((table.element() as HTMLElement).tabIndex).toBe(0);
+  });
+
+  it('a new doc for the entry shown gets its tables wrapped too, and the old ones are gone', async () => {
+    const { props } = setup('#/ui/Card');
+    const doc = (name: string) => `<p>${name}</p><table><tr><td>${name}</td></tr></table>`;
+    props.catalog[0].meta = () => Promise.resolve({ default: { sections: [], doc: doc('first') } });
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('cell', { name: 'first' })).toBeInTheDocument();
+    const meta = () => Promise.resolve({ default: { sections: [], doc: doc('second') } });
+    await screen.rerender({ catalog: [{ ...props.catalog[0], meta }] });
+    await expect.element(screen.getByRole('cell', { name: 'second' })).toBeInTheDocument();
+    expect(document.querySelectorAll('.doc table')).toHaveLength(1);
+    expect(document.querySelector('.doc table')!.parentElement!.className).toBe('table');
+    expect(document.querySelector('.doc')!.textContent).not.toContain('first');
+  });
+
+  /** the buttons in the sidebar's header, and whether the header puts them on the row of the logo or title */
+  async function sidebarHeader() {
+    await expect.element(page.getByRole('heading', { level: 1 })).toBeInTheDocument();
+    await expect.poll(() => document.querySelector<HTMLImageElement>('.sidebar img')?.complete ?? true).toBe(true);
+    const sidebar = document.querySelector('.sidebar')!;
+    const logo = sidebar.querySelector('.logo')!.getBoundingClientRect();
+    const buttons = [...sidebar.querySelectorAll('.actions button')].filter((b) => b.checkVisibility());
+    expect(buttons.length).toBeGreaterThan(0);
+    expect(buttons.filter((b) => b.getBoundingClientRect().right > sidebar.getBoundingClientRect().right)).toEqual([]);
+    expect(sidebar.scrollWidth - sidebar.clientWidth).toBe(0);
+    return { sameRow: buttons.every((b) => b.getBoundingClientRect().top < logo.bottom) };
+  }
+
+  it.each(['DesignSystem', 'Components'])(
+    'the sidebar header moves its buttons below the title %s, which stays on one line',
+    async (title) => {
+      const { props } = setup('');
+      await render(App, { props: { ...props, title } });
+      expect(await sidebarHeader()).toEqual({ sameRow: false });
+      const text = document.createRange();
+      text.selectNodeContents(document.querySelector('.sidebar .logo')!);
+      expect(text.getClientRects()).toHaveLength(1);
+    }
+  );
+
+  it('the sidebar header breaks a title wider than the whole header', async () => {
+    const { props } = setup('');
+    await render(App, { props: { ...props, title: 'AcmeDesignSystemComponentLibrary' } });
+    expect(await sidebarHeader()).toEqual({ sameRow: false });
+    const text = document.createRange();
+    text.selectNodeContents(document.querySelector('.sidebar .logo')!);
+    expect(text.getClientRects().length).toBeGreaterThan(1);
+  });
+
+  it('the sidebar header moves its buttons below a wide logo', async () => {
+    const { props } = setup('');
+    const logo =
+      'data:image/svg+xml,' +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="32"><rect width="160" height="32"/></svg>'
+      );
+    await render(App, { props: { ...props, logo } });
+    expect(await sidebarHeader()).toEqual({ sameRow: false });
+    expect(document.querySelector('.sidebar img')!.getBoundingClientRect().width).toBe(160);
+  });
+
+  it.each([1280, 375])('at %ipx the bundled logo keeps the buttons on its row', async (width) => {
+    await page.viewport(width, 800);
+    const { props } = setup('');
+    await render(App, { props: { ...props, logo: bundledLogo } });
+    expect(await sidebarHeader()).toEqual({ sameRow: true });
+  });
+
+  it('on a 320px screen the shortcuts fit', async () => {
+    await page.viewport(320, 800);
+    const { props } = setup('');
+    const screen = await render(App, { props });
+    await expect.element(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+    await userEvent.keyboard('?');
+    const dialog = screen.getByRole('dialog', { name: 'Keyboard shortcuts' });
+    await expect.element(dialog).toBeVisible();
+    const { left, right } = dialog.element().getBoundingClientRect();
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(right).toBeLessThanOrEqual(innerWidth);
   });
 });

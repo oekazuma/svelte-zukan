@@ -17,7 +17,9 @@ const meta: ZukanMeta = {
     { title: 'One', code: '<p>one</p>' },
     { title: 'Two', code: '<p>two</p>' }
   ],
-  doc: '<p>A <code>doc</code> with a <a href="https://example.com">link</a>.</p>',
+  doc:
+    '<p>A <code>doc</code> with a <a href="https://example.com">link</a>.</p>' +
+    '<table><tr><th>Variant</th><th>Use</th></tr><tr><td>primary</td><td>the main action</td></tr></table>',
   props: [
     { name: 'title', type: 'string', default: null, required: true, bindable: false, description: 'The heading' },
     { name: 'open', type: 'boolean', default: 'false', required: false, bindable: true, description: null }

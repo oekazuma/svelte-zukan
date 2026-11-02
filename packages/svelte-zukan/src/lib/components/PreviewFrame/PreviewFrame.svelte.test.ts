@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import { userEvent } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { messages } from '../../app/i18n.js';
 import PreviewFrame from './PreviewFrame.svelte';
 
@@ -1178,6 +1178,59 @@ describe('PreviewFrame tools', () => {
     await expect.poll(() => preview.classList.contains('expanded')).toBe(false);
   });
 
+  it('passes no letter shortcut on from a dialog inside the preview, but ⌘K and Ctrl K', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    doc.body.innerHTML = '<dialog><button>ok</button></dialog>';
+    const keys: string[] = [];
+    const listener = (e: KeyboardEvent) => {
+      if (e.key.length === 1) keys.push(`${e.metaKey ? 'Meta+' : e.ctrlKey ? 'Control+' : ''}${e.key}`);
+    };
+    addEventListener('keydown', listener);
+    try {
+      doc.querySelector('dialog')!.showModal();
+      doc.querySelector('button')!.focus();
+      await userEvent.keyboard('jt?');
+      await userEvent.keyboard('{Control>}k{/Control}{Meta>}k{/Meta}');
+      expect(keys).toEqual(['Control+k', 'Meta+k']);
+    } finally {
+      removeEventListener('keydown', listener);
+    }
+  });
+
+  it('passes no letter shortcut on from a shadow root inside a dialog in the preview, but Ctrl K', async () => {
+    const screen = await render(PreviewFrame, { props });
+    const iframe = screen.container.querySelector('iframe')!;
+    await expect.poll(() => iframe.contentDocument?.readyState).toBe('complete');
+    const doc = iframe.contentDocument!;
+    const view = iframe.contentWindow as Window & typeof globalThis;
+    view.customElements.define(
+      'zukan-field',
+      class extends view.HTMLElement {
+        connectedCallback() {
+          this.attachShadow({ mode: 'open' }).innerHTML = '<button>ok</button>';
+        }
+      }
+    );
+    doc.body.innerHTML = '<dialog><zukan-field></zukan-field></dialog>';
+    const keys: string[] = [];
+    const listener = (e: KeyboardEvent) => {
+      if (e.key.length === 1) keys.push(`${e.ctrlKey ? 'Control+' : ''}${e.key}`);
+    };
+    addEventListener('keydown', listener);
+    try {
+      doc.querySelector('dialog')!.showModal();
+      doc.querySelector('zukan-field')!.shadowRoot!.querySelector('button')!.focus();
+      await userEvent.keyboard('j');
+      await userEvent.keyboard('{Control>}k{/Control}');
+      expect(keys).toEqual(['Control+k']);
+    } finally {
+      removeEventListener('keydown', listener);
+    }
+  });
+
   it('shows a tooltip with the name of a toolbar control on hover, without a native title', async () => {
     const screen = await render(PreviewFrame, { props: { ...props, shareUrl: () => '' } });
     const tip = screen.container.querySelector<HTMLElement>('.tip')!;
@@ -1216,6 +1269,26 @@ describe('PreviewFrame tools', () => {
     expect(tip.getBoundingClientRect().right).toBeLessThanOrEqual(document.documentElement.clientWidth);
     await userEvent.keyboard('{Escape}');
     await expect.poll(() => tip.matches(':popover-open')).toBe(false);
+  });
+
+  it('wraps a tooltip wider than a narrow screen inside it', async () => {
+    await page.viewport(360, 800);
+    try {
+      const screen = await render(PreviewFrame, { props });
+      const tip = screen.container.querySelector<HTMLElement>('.tip')!;
+      await screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }).click();
+      const zoom = screen.container.querySelector<HTMLElement>('.zoom')!;
+      await userEvent.hover(zoom);
+      await expect.poll(() => tip.matches(':popover-open') && tip.textContent).toBe(messages.en.scaledToFit);
+      const { left, right, top } = tip.getBoundingClientRect();
+      expect(left).toBeGreaterThanOrEqual(0);
+      expect(right).toBeLessThanOrEqual(document.documentElement.clientWidth);
+      // below the control, or above it near the bottom of the screen: never over it
+      const r = zoom.getBoundingClientRect();
+      expect(top >= r.bottom || tip.getBoundingClientRect().bottom <= r.top).toBe(true);
+    } finally {
+      await page.viewport(414, 896);
+    }
   });
 
   it('shows a skeleton until the preview is measured', async () => {
