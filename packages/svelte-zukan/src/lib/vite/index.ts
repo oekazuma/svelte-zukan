@@ -108,26 +108,42 @@ const realPath = (file: string): string => {
   }
 };
 
-/** the names the importers of these modules, as last served, import from them by name */
+/** the names the importers of these modules, as last served, import from them by name, through `export *` too */
 const importedNames = (mods: Iterable<EnvironmentModuleNode>, base: string) => {
   const names = new Set<string>();
-  for (const mod of mods) {
-    const url = mod.url.split('?')[0];
-    for (const importer of mod.importers) {
-      const code = importer.transformResult?.code;
-      if (!code) continue;
-      for (const node of parseSync('importer.js', code).program.body) {
-        if ((node.type !== 'ImportDeclaration' && node.type !== 'ExportNamedDeclaration') || !node.source) continue;
-        const from = node.source.value.split('?')[0];
-        if (from !== url && from !== base.slice(0, -1) + url) continue;
-        for (const spec of node.specifiers) {
-          const name =
-            spec.type === 'ImportSpecifier' ? spec.imported : spec.type === 'ExportSpecifier' ? spec.local : null;
-          if (name) names.add('name' in name ? name.name : String(name.value));
+  const seen = new Set<EnvironmentModuleNode>();
+  const collect = (mods: Iterable<EnvironmentModuleNode>) => {
+    for (const mod of mods) {
+      if (seen.has(mod)) continue;
+      seen.add(mod);
+      const url = mod.url.split('?')[0];
+      for (const importer of mod.importers) {
+        const code = importer.transformResult?.code;
+        if (!code) continue;
+        for (const node of parseSync('importer.js', code).program.body) {
+          if (
+            (node.type !== 'ImportDeclaration' &&
+              node.type !== 'ExportNamedDeclaration' &&
+              node.type !== 'ExportAllDeclaration') ||
+            !node.source
+          )
+            continue;
+          const from = node.source.value.split('?')[0];
+          if (from !== url && from !== base.slice(0, -1) + url) continue;
+          if (node.type === 'ExportAllDeclaration') {
+            if (!node.exported) collect([importer]);
+            continue;
+          }
+          for (const spec of node.specifiers) {
+            const name =
+              spec.type === 'ImportSpecifier' ? spec.imported : spec.type === 'ExportSpecifier' ? spec.local : null;
+            if (name) names.add('name' in name ? name.name : String(name.value));
+          }
         }
       }
     }
-  }
+  };
+  collect(mods);
   names.delete('default');
   return [...names];
 };

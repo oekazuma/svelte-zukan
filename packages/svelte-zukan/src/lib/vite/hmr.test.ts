@@ -451,6 +451,35 @@ describe('modules shared with the app', () => {
   );
 
   it(
+    'a module only a catalog file reaches through `export *` also throws its compile error, not a link error',
+    { timeout: 25_000 },
+    async () => {
+      await server.close();
+      link('svelte');
+      writeFileSync(join(tmp, 'app/src/bad.ts'), 'export const x = ;\n');
+      // two levels, and a cycle the search has to end on
+      writeFileSync(join(tmp, 'app/src/mid.ts'), "export * from './bad.ts';\nexport * from './cycle.ts';\n");
+      writeFileSync(join(tmp, 'app/src/cycle.ts'), "export * from './mid.ts';\n");
+      writeFileSync(join(tmp, 'app/src/outer.ts'), "export * from './mid.ts';\n");
+      writeFileSync(join(tmp, 'app/src/named.ts'), "export * as ns from './bad.ts';\nexport const z = 1;\n");
+      writeFileSync(
+        join(tmp, 'app/src/A.zukan.svelte'),
+        "<script>\n  import { x } from './mid.ts';\n  import { y } from './outer.ts';\n  import { z } from './named.ts';\n</script>\n<Section title=\"A\"><p>{x}{y}{z}</p></Section>"
+      );
+      await start({}, { plugins: [svelte()] });
+      await list();
+      for (const id of ['/src/A.zukan.svelte', '/src/outer.ts', '/src/mid.ts', '/src/cycle.ts', '/src/named.ts'])
+        await server.environments.client.transformRequest(id);
+      const body = await get('/src/bad.ts');
+      const data = (code: string) => 'data:text/javascript,' + encodeURIComponent(code);
+      const importer = `import { x, y } from ${JSON.stringify(data(body))}; export default [x, y];`;
+      await expect(import(/* @vite-ignore */ data(importer))).rejects.toThrow(/\[ src[\\/]bad\.ts:1:18 \]/);
+      // `export * as` names the module itself, so what its importers import is not asked of the failed module
+      expect(body).not.toContain('"z"');
+    }
+  );
+
+  it(
     'a stylesheet only a catalog file imports reloads the catalog once its error is fixed',
     { timeout: 25_000 },
     async () => {
