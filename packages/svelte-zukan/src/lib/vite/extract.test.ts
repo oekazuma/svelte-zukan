@@ -402,6 +402,27 @@ describe('extractSections', () => {
     );
   });
 
+  it('finds the tabs of a script that is not indented past the lines of a JSDoc comment', () => {
+    const source =
+      '<script>\n/**\n * doc\n */\nfunction f() {\n\treturn 1;\n}\n</script>\n<Section title="a">{f()}</Section>';
+    expect(extractSections(source, FILE)[0].code).toBe(
+      '<script>\n\tfunction f() {\n\t\treturn 1;\n\t}\n</script>\n\n{f()}'
+    );
+  });
+
+  it('keeps spaces in a space-indented script with a JSDoc comment and a tab in a string', () => {
+    const source =
+      '<script>\n  /**\n   * doc\n   */\n  const s = `\n\tx`;\n</script>\n<Section title="a">{s}</Section>';
+    expect(extractSections(source, FILE)[0].code).toBe('<script>\n  const s = `\n\tx`;\n</script>\n\n{s}');
+  });
+
+  it('keeps the lines of a multi-line attribute value as written', () => {
+    const source = '<Section title="a">\n    <Foo code="one\n    two" />\n    <Bar />\n</Section>';
+    expect(extractSections(source, FILE)[0].code).toBe('<Foo code="one\n    two" />\n<Bar />');
+    const dynamic = '<Section title="a">\n    <Foo code="one {x}\n    two" style:color="a\n    b" />\n</Section>';
+    expect(extractSections(dynamic, FILE)[0].code).toBe('<Foo code="one {x}\n    two" style:color="a\n    b" />');
+  });
+
   it('gives the same code for CRLF line endings', () => {
     const lf = `<script>
   import { Section } from 'svelte-zukan';
@@ -442,6 +463,54 @@ describe('extractSections', () => {
     expect(extractSections(source, FILE)[0].code).toBe(
       `<script lang="ts">\n  type Item = { id: number };\n  const items: Item[] = [];\n</script>\n\n<List {items} />`
     );
+  });
+
+  it.each([
+    ['a function type', 'type V = (value: string) => boolean;\n  const used: V = (v) => !!v;'],
+    ['a constructor type', 'type V = new (value: string) => object;\n  let used: V;'],
+    ['a method signature', 'type V = { m(value: string): void };\n  let used: V;'],
+    ['a call signature', 'type V = { (value: string): void };\n  let used: V;'],
+    ['a construct signature', 'type V = { new (value: string): object };\n  let used: V;'],
+    ['an index signature', 'type V = { [value: string]: number };\n  let used: V;'],
+    ['a tuple label', 'type V = [value: number, other?: number];\n  let used: V;'],
+    ['an overload signature', 'function used(value: string): void;\n  function used(x: unknown) {}'],
+    ['a method overload', 'class used {\n    m(value: string): void;\n    m(x: unknown) {}\n  }'],
+    ['a named function expression', 'const used = function value() {};'],
+    ['a named class expression', 'const used = class value {};']
+  ])('leaves out a script variable named like the name in %s', (_, declaration) => {
+    const source = `<script lang="ts">\n  let value = 1;\n  ${declaration}\n</script>\n\n<Section title="a">{used}</Section>`;
+    expect(extractSections(source, FILE)[0].code).not.toContain('let value');
+  });
+
+  it.each([
+    ['a function', 'function used<T>(x: T): T {\n    return x;\n  }'],
+    ['a function type', 'type V = <T>(x: T) => T;\n  let used: V;'],
+    ['a type alias', 'type V<T> = T[];\n  let used: V<string>;'],
+    ['an interface', 'interface V<T> {\n    a: T;\n  }\n  let used: V<string>;'],
+    ['a class', 'class used<T> {\n    a?: T;\n  }'],
+    ['a mapped type', "type V = { [T in 'a']: T };\n  let used: V;"],
+    ['infer', 'type V<A> = A extends (infer T)[] ? T : never;\n  let used: V<string>;']
+  ])('leaves out a type named like the type parameter of %s', (_, declaration) => {
+    const source = `<script lang="ts">\n  type T = string;\n  ${declaration}\n</script>\n\n<Section title="a">{used}</Section>`;
+    expect(extractSections(source, FILE)[0].code).not.toContain('type T');
+  });
+
+  it.each([
+    ['typeof in a parameter type', 'let value = 1;', 'type V = (x: typeof value) => void;\n  let used: V;'],
+    ['typeof in a mapped type', 'let value = 1;', "type V = { [K in 'a']: typeof value };\n  let used: V;"],
+    [
+      'a reference next to a type parameter',
+      'type T = string;',
+      'function used<U>(x: U): T {\n    return x as T;\n  }'
+    ],
+    [
+      'the branch infer does not reach',
+      'type T = string;',
+      'type V<A> = A extends (infer T)[] ? 1 : T;\n  let used: V<1>;'
+    ]
+  ])('still includes what %s uses', (_, outer, declaration) => {
+    const source = `<script lang="ts">\n  ${outer}\n  ${declaration}\n</script>\n\n<Section title="a">{used}</Section>`;
+    expect(extractSections(source, FILE)[0].code).toContain(outer);
   });
 
   it('includes an exported declaration', () => {

@@ -485,6 +485,109 @@ describe('extractProps', () => {
     expect(found.props[0].description).toBe('use:\n<code>&lt;A /&gt;</code>');
   });
 
+  it.each([
+    ['as', '  let { a, b = 1 } = $props() as { a: string; b?: number };'],
+    ['as unknown as', '  let { a, b = 1 } = $props() as unknown as { a: string; b?: number };'],
+    ['satisfies', '  let { a, b = 1 } = $props() satisfies { a: string; b?: number };'],
+    ['a type assertion', '  let { a, b = 1 } = <{ a: string; b?: number }>$props();'],
+    ['!', '  let { a, b = 1 }: { a: string; b?: number } = $props()!;'],
+    ['as, under a type on the variable', '  let { a, b = 1 }: { a: string; b?: number } = $props() as never;']
+  ])('reads the props of $props() wrapped in %s', (_, script) => {
+    const found = extractProps(ts(script), 'A.svelte')!;
+    expect(found.props.map((p) => [p.name, p.type, p.default, p.required])).toEqual([
+      ['a', 'string', null, true],
+      ['b', 'number', '1', false]
+    ]);
+  });
+
+  it('sees $bindable() inside a TypeScript wrapper', () => {
+    const found = extractProps(
+      ts(
+        '  let { a = $bindable(1)!, b = $bindable() as string, c = $bindable(2) satisfies number, d = 3 as number }: { a?: number; b?: string; c?: number; d?: number } = $props();'
+      ),
+      'A.svelte'
+    )!;
+    expect(found.props.map((p) => [p.name, p.default, p.bindable])).toEqual([
+      ['a', '1', true],
+      ['b', null, true],
+      ['c', '2', true],
+      ['d', '3 as number', false]
+    ]);
+  });
+
+  it('separates the members of an object type written without semicolons', () => {
+    const typeOf = (script: string) => extractProps(ts(script), 'A.svelte')!.props[0].type;
+    expect(typeOf('  let { a }: {\n    a: {\n      id: string\n      label: string\n    }\n  } = $props()')).toBe(
+      '{ id: string; label: string }'
+    );
+    expect(
+      typeOf(
+        "  import type { Snippet } from 'svelte'\n  let { a }: {\n    a: Snippet<[{\n      index: number\n      value: string\n    }]>\n  } = $props()"
+      )
+    ).toBe('Snippet<[{ index: number; value: string }]>');
+    expect(typeOf('  let { a }: {\n    a(o: {\n      x: string\n      y: number\n    }): void\n  } = $props()')).toBe(
+      'a(o: { x: string; y: number }): void'
+    );
+    expect(
+      typeOf(
+        '  let { a }: {\n    a: {\n      x: string // the x\n      y: {\n        z: 1\n      }\n      w: 2\n    }\n  } = $props()'
+      )
+    ).toBe('{ x: string; y: { z: 1 }; w: 2 }');
+    expect(typeOf('  let { a }: {\n    a: { x: string, y: number; z: boolean }\n  } = $props()')).toBe(
+      '{ x: string, y: number; z: boolean }'
+    );
+  });
+
+  it('separates the members of an object type in a type name and a default', () => {
+    const found = extractProps(
+      ts(
+        '  let { a = {} as {\n    x: string\n    y: number\n  } }: {\n    x: string\n    y: number\n  } | null = $props()'
+      ),
+      'A.svelte'
+    )!;
+    expect(found.typeName).toBe('{ x: string; y: number } | null');
+    expect(found.props[0].default).toBe('{} as { x: string; y: number }');
+  });
+
+  it('keeps the lines of a class default, whose fields need no semicolons', () => {
+    const found = extractProps(
+      ts('  let { a = class {\n    x = 1\n    y = 2\n  } }: { a?: unknown } = $props()'),
+      'A.svelte'
+    )!;
+    expect(found.props[0].default).toBe('class {\n  x = 1\n  y = 2\n}');
+  });
+
+  it('reads an @ line in a JSDoc code block as code, and one outside it as a tag', () => {
+    const description = (...lines: string[]) =>
+      extractProps(
+        ts(
+          `  let { a }: {\n    /**\n${lines.map((l) => `     * ${l}\n`).join('')}     */\n    a: string;\n  } = $props();`
+        ),
+        'A.svelte'
+      )!.props[0].description;
+    expect(description('Styles:', '```css', '@media print { a {} }', '```', 'More text.')).toBe(
+      'Styles:\n<code>@media print { a {} }</code>\nMore text.'
+    );
+    expect(description('Styles:', '```css', '@apply flex;', '@layer base;', '```', '@default 1')).toBe(
+      'Styles:\n<code>@apply flex; @layer base;</code>'
+    );
+    const indented = description('Use:', '', '    @decorator', '    class A {}', '', 'More text.');
+    expect(indented).toContain('@decorator');
+    expect(indented).toContain('More text.');
+    expect(description('Ask', '@username', 'for help')).toBe('Ask');
+    expect(description('Ask', '', '@username', 'for help')).toBe('Ask');
+    expect(description('Ask', '    @default 1')).toBe('Ask');
+    expect(description('@deprecated')).toBe(null);
+  });
+
+  it('stops at a tag in an indented JSDoc comment without stars', () => {
+    const found = extractProps(
+      ts('  let { a }: {\n    /**\n      Text\n\n      @default 1\n    */\n    a: string;\n  } = $props();'),
+      'A.svelte'
+    )!;
+    expect(found.props[0].description).toBe('Text');
+  });
+
   it('does not take a <style> in an attribute for a style block', () => {
     const source = ts('  let { a }: { a: number } = $props();', '<p data-x="<style>">x</p>\n<style>p{}</style>');
     expect(extractProps(source, 'Y.svelte')?.props[0].type).toBe('number');
@@ -942,8 +1045,74 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
     expect(named.typeName).toBe("Omit<Attrs, 'type'>");
     expect(named.props.map((p) => [p.name, p.type])).toEqual([
       ['label', 'string'],
+      ['title', 'string']
+    ]);
+    const kept = read(
+      component("  import type { Attrs } from 'ui';\n  let { title, type }: Omit<Attrs, 'type'> = $props();")
+    )!;
+    expect(kept.typeName).toBe("Omit<Attrs, 'type'>");
+    expect(kept.props.map((p) => [p.name, p.type])).toEqual([
+      ['title', 'string'],
+      ['type', null]
+    ]);
+    const picked = read(
+      component("  import type { Attrs } from 'ui';\n  let { title, type }: Pick<Attrs, 'type'> = $props();")
+    )!;
+    expect(picked.typeName).toBe("Pick<Attrs, 'type'>");
+    expect(picked.props.map((p) => [p.name, p.type])).toEqual([
+      ['type', 'string'],
       ['title', null]
     ]);
+  });
+
+  it('types the destructured members of Omit over svelte/elements', () => {
+    const file = join(import.meta.dirname, 'A.svelte');
+    const found = extractProps(
+      ts(
+        "  import type { HTMLButtonAttributes } from 'svelte/elements';\n  let { kind, disabled, class: c, ...rest }: Omit<HTMLButtonAttributes, 'type'> & { kind: 'a' } = $props();"
+      ),
+      file
+    )!;
+    expect(found.typeName).toBe("Omit<HTMLButtonAttributes, 'type'>");
+    expect(found.props.map((p) => [p.name, p.type])).toEqual([
+      ['kind', "'a'"],
+      ['disabled', 'boolean | undefined | null'],
+      ['class', 'ClassValue | undefined | null']
+    ]);
+    const inherited = extractProps(
+      ts(
+        "  import type { HTMLAttributes } from 'svelte/elements';\n  interface P extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {\n    title: number;\n  }\n  let { title, children }: P = $props();"
+      ),
+      file
+    )!;
+    expect(inherited.props.map((p) => [p.name, p.type])).toEqual([
+      ['title', 'number'],
+      ['children', 'Snippet']
+    ]);
+  });
+
+  it('keeps what Omit over a union and a type it reads can list', () => {
+    write('lib/types.ts', 'export type Base = { a: string; b?: number };\n');
+    const found = read(
+      component(
+        "  import type { Base } from './types';\n  let { a, b }: Omit<Base & ({ c: 1 } | { d: 2 }), 'a'> = $props();"
+      )
+    )!;
+    expect(found.typeName).toBe("Omit<Base & ({ c: 1 } | { d: 2 }), 'a'>");
+    expect(found.props.map((p) => [p.name, p.type])).toEqual([
+      ['b', 'number'],
+      ['a', null]
+    ]);
+  });
+
+  it('reads ComponentProps<typeof X> of a component typed with $props() as T', () => {
+    write('lib/Field.svelte', ts('  let { label } = $props() as { label: string };'));
+    const found = read(
+      component(
+        "  import type { ComponentProps } from 'svelte';\n  import Field from './Field.svelte';\n  let { label }: ComponentProps<typeof Field> = $props();"
+      )
+    )!;
+    expect(found.props.map((p) => [p.name, p.type])).toEqual([['label', 'string']]);
   });
 
   it('reads ComponentProps<typeof X> of a source component', () => {

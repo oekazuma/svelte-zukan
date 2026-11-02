@@ -60,6 +60,12 @@ function declaredNames(node: Node) {
   return patternNames(node.id as Node);
 }
 
+/** the parameter names a node declares for itself: `<V>(v: V) => V`, `{ [K in keyof T]: … }`, `infer U` */
+export const ownParams = (n: Node) =>
+  [...(((n.typeParameters as Node | undefined)?.params as Node[] | undefined) ?? []), n.typeParameter as Node]
+    .filter((p) => p?.type === 'TSTypeParameter')
+    .map((p) => p.name as string);
+
 /** the names `node` declares for what is under its `key` */
 function namesFor(node: Node, key: string): string[] {
   switch (node.type) {
@@ -77,9 +83,31 @@ function namesFor(node: Node, key: string): string[] {
     case 'SnippetBlock':
       return key === 'expression' ? [] : (node.parameters as Node[]).flatMap((p) => patternNames(p));
     case 'ArrowFunctionExpression':
-    case 'FunctionExpression':
     case 'FunctionDeclaration':
+    case 'TSDeclareFunction':
+    case 'TSDeclareMethod':
       return (node.params as Node[]).flatMap((p) => patternNames(p));
+    // its own name is for what is inside it, unlike a declaration's
+    case 'FunctionExpression':
+      return [...patternNames(node.id as Node | null), ...(node.params as Node[]).flatMap((p) => patternNames(p))];
+    case 'ClassExpression':
+      return patternNames(node.id as Node | null);
+    case 'TSFunctionType':
+    case 'TSConstructorType':
+    case 'TSMethodSignature':
+    case 'TSCallSignatureDeclaration':
+    case 'TSConstructSignatureDeclaration':
+    case 'TSIndexSignature':
+      return (node.parameters as Node[]).flatMap((p) => patternNames(p));
+    case 'TSConditionalType': {
+      // `infer U` reaches the branch taken when it matched, and no further
+      if (key === 'checkType' || key === 'falseType') return [];
+      const inferred: string[] = [];
+      walk(node.extendsType, (n) => {
+        if (n.type === 'TSInferType') inferred.push(...ownParams(n));
+      });
+      return inferred;
+    }
     case 'CatchClause':
       return patternNames(node.param as Node);
     case 'ForStatement':
@@ -127,8 +155,8 @@ function identifiersOf(value: unknown, hidden: ReadonlySet<string> = new Set(), 
   else if (n.type === 'StyleDirective' && n.value === true) add(n.name as string);
   for (const [key, child] of Object.entries(n)) {
     if (key === 'metadata' || key === 'parent') continue;
-    // `obj.label`, `{ label: 1 }`, `import { format as fmt }`, `import.meta`, `NS.Type`, `enum E { A }` and
-    // `outer: for (…) break outer` name no variable
+    // `obj.label`, `{ label: 1 }`, `import { format as fmt }`, `import.meta`, `NS.Type`, `enum E { A }`,
+    // `outer: for (…) break outer` and `[x: number]` name no variable
     if (key === 'property' && n.type === 'MemberExpression' && !n.computed) continue;
     // a snippet's name declares it, and the list around it sees that name
     if (key === 'expression' && n.type === 'SnippetBlock') continue;
@@ -137,7 +165,8 @@ function identifiersOf(value: unknown, hidden: ReadonlySet<string> = new Set(), 
       (key === 'imported' && n.type === 'ImportSpecifier') ||
       (key === 'right' && n.type === 'TSQualifiedName') ||
       (key === 'id' && n.type === 'TSEnumMember') ||
-      (key === 'label' && ['LabeledStatement', 'BreakStatement', 'ContinueStatement'].includes(n.type))
+      (key === 'label' &&
+        ['LabeledStatement', 'BreakStatement', 'ContinueStatement', 'TSNamedTupleMember'].includes(n.type))
     )
       continue;
     if (
@@ -149,7 +178,7 @@ function identifiersOf(value: unknown, hidden: ReadonlySet<string> = new Set(), 
       !n.shorthand
     )
       continue;
-    const local = typeof n.type === 'string' ? namesFor(n, key) : [];
+    const local = typeof n.type === 'string' ? [...namesFor(n, key), ...ownParams(n)] : [];
     identifiersOf(child, local.length ? new Set([...hidden, ...local]) : hidden, names);
   }
   return names;
@@ -210,10 +239,13 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
   });
   if (!top.length) return [];
 
-  // a template literal and a string continued with `\` past a line break, whose next line's indentation is in the string
+  // a template literal, a string continued with `\` past a line break and an attribute's text, whose next line's
+  // indentation is in the string
   const strings: Node[] = [];
   walk([ast.module, ast.instance, ast.fragment], (n) => {
     if (n.type === 'TemplateElement' || (n.type === 'Literal' && typeof n.value === 'string')) strings.push(n);
+    else if ((n.type === 'Attribute' || n.type === 'StyleDirective') && Array.isArray(n.value))
+      strings.push(...(n.value as Node[]).filter((v) => v.type === 'Text'));
   });
   const lineStartOf = (pos: number) => source.lastIndexOf('\n', pos - 1) + 1;
   /**
@@ -228,9 +260,10 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
     return dedent(source.slice(start, end), kept, indent, midLine);
   };
   const scriptDefs = (script: typeof ast.instance, kind: 'module' | 'script') => {
-    // a tab-indented script gets tabs in the code view too, never spaces mixed with its own tabs
+    // a tab-indented script gets tabs in the code view too, never spaces mixed with its own tabs. The `*` lines of a
+    // comment are indented by a space even in such a script
     const content = script?.content as unknown as Node | undefined;
-    const lead = content && source.slice(content.start, content.end).match(/^[ \t]+(?=\S)/m)?.[0];
+    const lead = content && source.slice(content.start, content.end).match(/^[ \t]+(?=[^\s*])/m)?.[0];
     const indent = lead?.startsWith('\t') ? '\t' : '  ';
     return ((script?.content.body ?? []) as unknown as Node[])
       .filter(
