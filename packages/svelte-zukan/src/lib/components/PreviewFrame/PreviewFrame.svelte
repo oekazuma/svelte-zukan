@@ -115,7 +115,7 @@
     /** a width from a shared link, `null` for full width; it wins over the remembered one */
     requestedWidth?: number | null;
     expanded?: boolean;
-    /** the source of axe-core; without it there is no accessibility check */
+    /** the URL of axe-core's script; without it there is no accessibility check */
     axe?: () => Promise<string>;
     title: string;
     theme: Theme;

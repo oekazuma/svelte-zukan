@@ -122,7 +122,8 @@ test('kit monorepo build under paths.base', { timeout: 180_000 }, async () => {
     root: dir,
     configFile: join(dir, 'vite.config.base.ts'),
     logLevel: 'error',
-    preview: { port: 0 }
+    // the accessibility check loads axe-core as a file of the catalog, which this policy allows, not inline
+    preview: { port: 0, headers: { 'Content-Security-Policy': "script-src 'self'" } }
   });
   const browser = await chromium.launch();
   try {
@@ -151,6 +152,12 @@ test('kit monorepo build under paths.base', { timeout: 180_000 }, async () => {
     for (const name of ['Basic', 'Long title'])
       await expect.poll(() => detail.getByRole('heading', { level: 2, name }).count(), { timeout: 30_000 }).toBe(1);
     await expect.poll(() => detail.getByText('A card from').count(), { timeout: 30_000 }).toBe(1);
+    await detail.getByRole('button', { name: 'Check accessibility' }).first().click();
+    await expect
+      .poll(() => detail.getByText(/^(No accessibility issues found|Accessibility issues \(\d+\))$/).count(), {
+        timeout: 30_000
+      })
+      .toBe(1);
     expect(errors).toEqual([]);
   } finally {
     await browser.close();

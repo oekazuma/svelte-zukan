@@ -264,16 +264,38 @@ describe('metadata modules', () => {
     expect(p.load('\0virtual:svelte-zukan/catalog')).toContain(`import("${metaId('app/A')}")`);
   });
 
-  it('serves the source of axe-core as a string', async () => {
+  // a script the page injects inline is blocked by a `script-src 'self'` policy
+  it('serves axe-core as a script of its own at /__zukan/axe.js, under base, in its locale', async () => {
     const { root } = await makeApp();
-    const { p } = boot(root);
-    expect(p.resolveId('virtual:svelte-zukan/axe')).toBe('\0virtual:svelte-zukan/axe');
-    const code: string = p.load('\0virtual:svelte-zukan/axe');
-    expect(code.startsWith('export default "')).toBe(true);
-    expect(code).toContain('axe.run');
-    expect(code).not.toContain('axe.configure({ locale');
-    const ja: string = boot(root, { locale: 'ja' }).p.load('\0virtual:svelte-zukan/axe');
-    expect(ja).toContain('axe.configure({ locale');
+    for (const [base, locale] of [
+      ['/', 'en'],
+      ['/sub/', 'ja']
+    ] as const) {
+      const { p } = boot(root, { locale });
+      expect(p.resolveId('virtual:svelte-zukan/axe')).toBe('\0virtual:svelte-zukan/axe');
+      const code: string = p.load.call({ environment: { config: { base } } }, '\0virtual:svelte-zukan/axe');
+      expect(code).toBe(`export default "${base}__zukan/axe.js";\n`);
+      const server = fakeServer(root, base, { 'content-security-policy': "script-src 'self'" });
+      p.configureServer(server);
+      const res = await request(server.middlewares.use.mock.calls[0][0], `${base}__zukan/axe.js`);
+      expect(res.type).toMatch(/^text\/javascript/);
+      expect(res.headers).toEqual({ 'content-security-policy': "script-src 'self'" });
+      expect(res.body).toContain('axe.run');
+      expect(res.body!.includes('axe.configure({ locale')).toBe(locale === 'ja');
+    }
+  });
+
+  it('writes axe-core as an asset of the build', async () => {
+    const { root } = await makeApp();
+    const { p } = await bootBuild(root, { build: true });
+    const emitFile = vi.fn(() => 'ref');
+    const code: string = p.load.call({ emitFile }, '\0virtual:svelte-zukan/axe');
+    expect(code).toBe('export default import.meta.ROLLUP_FILE_URL_ref;\n');
+    expect(emitFile).toHaveBeenCalledWith({
+      type: 'asset',
+      name: 'axe.js',
+      source: expect.stringContaining('axe.run')
+    });
   });
 
   it('exports the sections and no absolute path', async () => {
@@ -1072,7 +1094,6 @@ describe('build', () => {
       emptyOutDir: false,
       cssCodeSplit: true,
       cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
-      chunkSizeWarningLimit: 1000,
       rolldownOptions: { input: { zukan: ENTRY } }
     });
     const client = inherited();

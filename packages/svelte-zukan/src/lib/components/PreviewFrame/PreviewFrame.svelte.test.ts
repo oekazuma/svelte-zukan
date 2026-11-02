@@ -4,6 +4,10 @@ import { page, userEvent } from 'vitest/browser';
 import { messages } from '../../app/i18n.js';
 import PreviewFrame from './PreviewFrame.svelte';
 
+/** the URL the catalog gives for axe-core's script, here a stand-in's */
+const scriptUrl = (source: string) =>
+  Promise.resolve(URL.createObjectURL(new Blob([source], { type: 'text/javascript' })));
+
 const props = {
   src: 'about:blank',
   tabHref: 'about:blank',
@@ -450,7 +454,7 @@ describe('PreviewFrame resizing', () => {
     const source = `window.axe = { run: async (context) => ({ violations: [{ id: 'image-alt', impact: 'critical',
       help: 'Images must have alternative text', helpUrl: 'https://example.com/image-alt',
       nodes: [{ target: [context.tagName.toLowerCase()] }] }] }) };`;
-    const axe = vi.fn(() => Promise.resolve(source));
+    const axe = vi.fn(() => scriptUrl(source));
     const screen = await render(PreviewFrame, { props: { ...props, axe } });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
@@ -476,7 +480,7 @@ describe('PreviewFrame resizing', () => {
       await new Promise((r) => setTimeout(r, 300));
       return { violations: [] };
     } };`;
-    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => scriptUrl(source) } });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
     await screen.getByRole('button', { name: 'Check accessibility' }).click();
@@ -496,7 +500,7 @@ describe('PreviewFrame resizing', () => {
     const source = `window.axe = { run: async () => ({ violations: [{ id: 'color-contrast', impact: 'serious',
       help: 'Elements must meet minimum color contrast ratio thresholds', helpUrl: 'https://example.com/c',
       nodes: [{ target: ['body'] }] }] }) };`;
-    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => scriptUrl(source) } });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
     const head = () => frame.contentDocument!.head.textContent;
@@ -530,7 +534,7 @@ describe('PreviewFrame resizing', () => {
     const source = `window.axe = { run: async () => ({ violations: [], incomplete: [{ id: 'color-contrast', impact: 'serious',
       help: 'Elements must meet minimum color contrast ratio thresholds', helpUrl: 'https://example.com/c',
       nodes: [{ target: ['body'] }] }] }) };`;
-    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => scriptUrl(source) } });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
     await screen.getByRole('button', { name: 'Check accessibility' }).click();
@@ -549,7 +553,7 @@ describe('PreviewFrame resizing', () => {
       return { violations: [{ id: 'color-contrast', impact: 'serious', help: 'Contrast', helpUrl: 'https://example.com/c',
         nodes: [{ target: [['my-el', 'span']] }] }] };
     } };`;
-    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => scriptUrl(source) } });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
     await screen.getByRole('button', { name: 'Check accessibility' }).click();
@@ -568,7 +572,7 @@ describe('PreviewFrame resizing', () => {
       return { violations: [{ id: 'button-name', impact: 'critical', help: 'Buttons must have discernible text',
         helpUrl: 'https://example.com/b', nodes: [{ target: ['my-el[title="go >>> next"]'] }, { target: ['body'] }] }] };
     } };`;
-    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => scriptUrl(source) } });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
     await screen.getByRole('button', { name: 'Check accessibility' }).click();
@@ -577,7 +581,7 @@ describe('PreviewFrame resizing', () => {
 
   it('doubles the text size of the preview, from its own root font size', async () => {
     const screen = await render(PreviewFrame, {
-      props: { ...props, axe: () => Promise.resolve('window.axe = { run: async () => ({ violations: [] }) };') }
+      props: { ...props, axe: () => scriptUrl('window.axe = { run: async () => ({ violations: [] }) };') }
     });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
@@ -594,7 +598,7 @@ describe('PreviewFrame resizing', () => {
 
   it('numbers the elements in Tab order over the preview, and again when they change', async () => {
     const screen = await render(PreviewFrame, {
-      props: { ...props, axe: () => Promise.resolve('window.axe = { run: async () => ({ violations: [] }) };') }
+      props: { ...props, axe: () => scriptUrl('window.axe = { run: async () => ({ violations: [] }) };') }
     });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
@@ -619,7 +623,7 @@ describe('PreviewFrame resizing', () => {
 
   it('numbers the elements again on a scroll inside the preview and on a radio pick, which change no DOM', async () => {
     const screen = await render(PreviewFrame, {
-      props: { ...props, axe: () => Promise.resolve('window.axe = { run: async () => ({ violations: [] }) };') }
+      props: { ...props, axe: () => scriptUrl('window.axe = { run: async () => ({ violations: [] }) };') }
     });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
@@ -646,7 +650,7 @@ describe('PreviewFrame resizing', () => {
 
   it('says when nothing is found, and when the check fails', async () => {
     const axe = () =>
-      Promise.resolve(
+      scriptUrl(
         'window.axe = { run: async () => { if (window.fail) throw new Error("boom"); return { violations: [] }; } };'
       );
     const screen = await render(PreviewFrame, { props: { ...props, axe } });
@@ -659,8 +663,20 @@ describe('PreviewFrame resizing', () => {
     await expect.element(screen.getByText('Could not run the check: boom')).toBeInTheDocument();
   });
 
+  it('says when the script of axe-core does not load', async () => {
+    const screen = await render(PreviewFrame, {
+      props: { ...props, axe: () => Promise.resolve('/__zukan/missing-axe.js') }
+    });
+    const frame = screen.container.querySelector('iframe')!;
+    await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
+    await screen.getByRole('button', { name: 'Check accessibility' }).click();
+    await expect
+      .element(screen.getByText(/^Could not run the check: axe-core could not be loaded from .*missing-axe\.js$/))
+      .toBeInTheDocument();
+  });
+
   it('reports a preview that failed to load instead of checking its error message', async () => {
-    const axe = vi.fn(() => Promise.resolve('window.axe = { run: async () => ({ violations: [] }) };'));
+    const axe = vi.fn(() => scriptUrl('window.axe = { run: async () => ({ violations: [] }) };'));
     const screen = await render(PreviewFrame, { props: { ...props, axe } });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
@@ -674,7 +690,7 @@ describe('PreviewFrame resizing', () => {
   it('keeps the expanded preview visible and scrolls a long list of issues', async () => {
     const source = `window.axe = { run: async () => ({ violations: Array.from({ length: 40 }, (_, i) => ({ id: 'r' + i,
       impact: 'minor', help: 'Rule ' + i, helpUrl: 'https://example.com/' + i, nodes: [{ target: ['body'] }] })) }) };`;
-    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => scriptUrl(source) } });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
     await screen.getByRole('button', { name: 'Expand' }).click();
@@ -690,7 +706,7 @@ describe('PreviewFrame resizing', () => {
   it('checks again when the preview changes in place, but not for its own outlines and badges', async () => {
     const source = `window.runs = 0; window.axe = { run: async () => (window.runs++, { violations: [{ id: 'x',
       impact: 'minor', help: 'X', helpUrl: 'https://example.com/x', nodes: [{ target: ['button'] }] }] }) };`;
-    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => scriptUrl(source) } });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
     const doc = frame.contentDocument!;
@@ -728,7 +744,7 @@ describe('PreviewFrame resizing', () => {
 
   it('checks again after a theme switch or a width change, keeping the options picked', async () => {
     const source = 'window.runs = 0; window.axe = { run: async () => (window.runs++, { violations: [] }) };';
-    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => scriptUrl(source) } });
     screen.container.style.width = '1000px';
     await expect.element(screen.getByRole('spinbutton', { name: 'Width in pixels' })).toHaveValue(1000 - 14);
     const frame = screen.container.querySelector('iframe')!;
@@ -751,7 +767,7 @@ describe('PreviewFrame resizing', () => {
   it('checks a theme switch once the preview has finished its transitions', async () => {
     const source = `window.colors = []; window.axe = { run: async () => (window.colors.push(
       getComputedStyle(document.querySelector('p')).color), { violations: [] }) };`;
-    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => scriptUrl(source) } });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
     frame.contentDocument!.body.innerHTML =
@@ -773,7 +789,7 @@ describe('PreviewFrame resizing', () => {
       busy = false;
       return { violations: [] };
     } };`;
-    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => scriptUrl(source) } });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
     const button = screen.getByRole('button', { name: 'Check accessibility' });
@@ -787,7 +803,7 @@ describe('PreviewFrame resizing', () => {
   it('scrolls to a picked element by its scaled position', async () => {
     const source = `window.axe = { run: async () => ({ violations: [{ id: 'x', impact: 'minor', help: 'X',
       helpUrl: 'https://example.com/x', nodes: [{ target: ['#t'] }] }] }) };`;
-    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => scriptUrl(source) } });
     screen.container.style.width = '600px';
     await screen.getByRole('button', { name: 'Desktop (1280px)', exact: true }).click();
     const frame = screen.container.querySelector('iframe')!;
@@ -808,7 +824,7 @@ describe('PreviewFrame resizing', () => {
   it('scrolls the expanded stage, not the page, to a picked element', async () => {
     const source = `window.axe = { run: async () => ({ violations: [{ id: 'x', impact: 'minor', help: 'X',
       helpUrl: 'https://example.com/x', nodes: [{ target: ['#t'] }] }] }) };`;
-    const screen = await render(PreviewFrame, { props: { ...props, axe: () => Promise.resolve(source) } });
+    const screen = await render(PreviewFrame, { props: { ...props, axe: () => scriptUrl(source) } });
     const frame = screen.container.querySelector('iframe')!;
     await expect.poll(() => frame.contentDocument?.readyState).toBe('complete');
     const doc = frame.contentDocument!;

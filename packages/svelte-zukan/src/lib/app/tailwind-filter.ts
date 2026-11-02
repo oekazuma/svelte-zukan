@@ -1,4 +1,4 @@
-import type { TailwindToken } from '../types.js';
+import type { TailwindCategory, TailwindToken } from '../types.js';
 
 const includes = (q: string, ...fields: (string | null)[]) => fields.some((s) => s?.toLowerCase().includes(q));
 
@@ -7,6 +7,10 @@ export function filterTokens(tokens: TailwindToken[], query: string): TailwindTo
   const q = query.trim().toLowerCase();
   return q ? tokens.filter((t) => includes(q, t.class, t.cssVariable, t.value)) : tokens;
 }
+
+/** distinct tokens: the Spacing category repeats every Padding class */
+export const countTokens = (categories: TailwindCategory[]) =>
+  new Set(categories.flatMap((c) => c.tokens.map((t) => t.class ?? t.cssVariable))).size;
 
 export function filterVariables(variables: Record<string, string>, query: string): [string, string][] {
   const q = query.trim().toLowerCase();

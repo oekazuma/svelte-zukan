@@ -1,4 +1,13 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -169,6 +178,58 @@ describe('discoverGroups', () => {
   it('missing groups dir throws', () => {
     mkdirSync(join(tmp, 'app'));
     expect(() => discoverGroups(join(tmp, 'app'), { ui: 'nope' })).toThrow(/"ui".*nope/);
+  });
+
+  // macOS and Windows find the directory under either case, but the watcher reports only the one on disk
+  it('a groups dir written in another case than on disk throws on every platform', () => {
+    write('app/src/lib/Card.zukan.svelte');
+    write('ui/src/Card.zukan.svelte');
+    const caseInsensitive = existsSync(join(tmp, 'APP'));
+    for (const dir of ['src/Lib', 'SRC/lib', '../UI/src'])
+      expect(() => discoverGroups(join(tmp, 'app'), { ui: dir })).toThrow(
+        caseInsensitive ? `"ui" is written "${dir}", but is "${dir.toLowerCase()}" on disk` : /directory not found/
+      );
+  });
+
+  // macOS opens a decomposed name by its composed spelling; Linux and Windows find neither by the other
+  it('a groups dir is matched by case, not by Unicode normalization', () => {
+    const [nfc, nfd] = ['Café', 'Café'.normalize('NFD')];
+    write(`app/src/${nfd}/Card.zukan.svelte`);
+    const app = join(tmp, 'app');
+    const either = existsSync(join(app, 'src', nfc));
+    if (either)
+      expect(discoverGroups(app, { ui: `src/${nfc}` })).toEqual([{ name: 'ui', dirs: [p(`app/src/${nfc}`)] }]);
+    else expect(() => discoverGroups(app, { ui: `src/${nfc}` })).toThrow(/directory not found/);
+    const upper = nfc.toUpperCase();
+    expect(() => discoverGroups(app, { ui: `src/${upper}` })).toThrow(
+      existsSync(join(app, 'src', upper))
+        ? `is written "src/${upper}", but is "src/${nfd}" on disk`
+        : 'directory not found'
+    );
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'a groups dir under a parent that can not be listed is taken as written',
+    () => {
+      write('app/src/lib/Card.zukan.svelte');
+      const src = join(tmp, 'app/src');
+      chmodSync(src, 0o111);
+      try {
+        expect(discoverGroups(join(tmp, 'app'), { ui: 'src/lib' })).toEqual([{ name: 'ui', dirs: [p('app/src/lib')] }]);
+      } finally {
+        chmodSync(src, 0o755);
+      }
+    }
+  );
+
+  it('a groups dir reached through a link or by an absolute path is not taken for one in another case', () => {
+    write('ui/src/Card.zukan.svelte');
+    mkdirSync(join(tmp, 'app/node_modules'), { recursive: true });
+    symlinkSync(join(tmp, 'ui'), join(tmp, 'app/node_modules/Linked'), 'junction');
+    expect(discoverGroups(join(tmp, 'app'), { a: 'node_modules/Linked/src', b: join(tmp, 'ui/src') })).toEqual([
+      { name: 'a', dirs: [p('app/node_modules/Linked/src')] },
+      { name: 'b', dirs: [p('ui/src')] }
+    ]);
   });
 
   it('reserved group names throw', () => {

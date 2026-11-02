@@ -8,6 +8,10 @@ import App from './App.svelte';
 import Catalog from './Catalog.test.svelte';
 import { modifier } from './SearchDialog.svelte';
 
+/** the URL the catalog gives for axe-core's script, here a stand-in's */
+const scriptUrl = (source: string) =>
+  Promise.resolve(URL.createObjectURL(new Blob([source], { type: 'text/javascript' })));
+
 const meta: ZukanMeta = {
   sections: [
     { title: 'One', code: '<p>one</p>' },
@@ -48,7 +52,7 @@ const props = (hash: string, theme: 'light' | 'dark') => {
     locale: 'en' as const,
     searched: [],
     axe: () =>
-      Promise.resolve(`window.axe = { run: async () => ({ violations: [{ id: 'image-alt', impact: 'critical',
+      scriptUrl(`window.axe = { run: async () => ({ violations: [{ id: 'image-alt', impact: 'critical',
         help: 'Images must have alternative text', helpUrl: 'https://example.com/image-alt',
         nodes: [{ target: ['body'] }] }] }) };`)
   };

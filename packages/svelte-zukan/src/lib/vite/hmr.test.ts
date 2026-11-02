@@ -367,6 +367,30 @@ describe('modules shared with the app', () => {
     }
   );
 
+  // without the names, the import would fail to link ("does not provide an export named") before the module throws
+  it(
+    'a module only a catalog file imports by name throws its compile error, not a link error',
+    { timeout: 25_000 },
+    async () => {
+      await server.close();
+      link('svelte');
+      writeFileSync(join(tmp, 'app/src/bad.ts'), 'export const x = ;\n');
+      writeFileSync(
+        join(tmp, 'app/src/A.zukan.svelte'),
+        "<script>\n  import { x, y as z, 'a-b' as ab } from './bad.ts';\n</script>\n<Section title=\"A\"><p>{x}{z}{ab}</p></Section>"
+      );
+      await start({}, { plugins: [svelte()] });
+      await list();
+      await server.environments.client.transformRequest('/src/A.zukan.svelte');
+      const body = await get('/src/bad.ts');
+      expect(body).not.toContain(tmp);
+      const data = (code: string) => 'data:text/javascript,' + encodeURIComponent(code);
+      const importer = `import { x, y, 'a-b' as ab } from ${JSON.stringify(data(body))}; export default [x, y, ab];`;
+      // the path is relative to the root, as Oxc's relative to the working directory is not
+      await expect(import(/* @vite-ignore */ data(importer))).rejects.toThrow(/\[ src[\\/]bad\.ts:1:18 \]/);
+    }
+  );
+
   it(
     'a stylesheet only a catalog file imports reloads the catalog once its error is fixed',
     { timeout: 25_000 },

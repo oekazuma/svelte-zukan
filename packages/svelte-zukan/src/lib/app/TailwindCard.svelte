@@ -2,7 +2,7 @@
   import type { TailwindListItem, TailwindSource } from '../types.js';
   import { formatTailwindHash } from './hash.js';
   import type { Messages } from './i18n.js';
-  import { isColor } from './tailwind-filter.js';
+  import { countTokens, isColor } from './tailwind-filter.js';
 
   let { item, t }: { item: TailwindListItem; t: Messages } = $props();
 
@@ -46,7 +46,7 @@
         <dl>
           <div>
             <dt>{t.tokenCount}</dt>
-            <dd>{source.categories.reduce((n, c) => n + c.tokens.length, 0)}</dd>
+            <dd>{countTokens(source.categories)}</dd>
           </div>
           <div>
             <dt>{t.variableCount}</dt>
