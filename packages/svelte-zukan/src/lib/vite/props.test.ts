@@ -1295,6 +1295,142 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
     });
   });
 
+  describe("a package's generic types", () => {
+    const generics = `export interface Base<T> {
+  onclick?: (e: T) => void;
+  class?: string;
+  hidden?: boolean;
+}
+export type WithChild<Props = {}, Slots = { _default: never }, Ref = HTMLElement> = Omit<Props, 'child'> & {
+  children?: Slots extends { _default: never } ? Snippet : Snippet<[Slots]>;
+  ref?: Ref | null;
+};
+export type Without<T, U> = Omit<T, keyof U>;
+`;
+    beforeEach(() => {
+      write('node_modules/lib/package.json', JSON.stringify({ types: './index.d.ts' }));
+    });
+
+    it('take their arguments and defaults, and list only what is destructured', () => {
+      write(
+        'node_modules/lib/index.d.ts',
+        `${generics}export type Props = WithChild<{ /** the way */ orientation?: 'x' | 'y'; child?: string; other?: 1 }>;\n`
+      );
+      const file = component(
+        "  import type { Props, Base } from 'lib';\n  let { orientation, child, children, ref, onclick }: Props & Base<HTMLDivElement> = $props();"
+      );
+      const found = read(file)!;
+      expect(found.typeName).toBe('Props, Base<HTMLDivElement>');
+      expect(found.props.map((p) => [p.name, p.type, p.description])).toEqual([
+        ['orientation', "'x' | 'y'", 'the way'],
+        ['children', 'Snippet', null],
+        ['ref', 'HTMLElement | null', null],
+        ['onclick', '(e: HTMLDivElement) => void', null],
+        ['child', null, null]
+      ]);
+    });
+
+    it('keep a condition that an argument leaves open', () => {
+      write('node_modules/lib/index.d.ts', generics);
+      const file = component(
+        "  import type { WithChild } from 'lib';\n  let { children }: WithChild<{}, { x: 1 }> = $props();"
+      );
+      expect(read(file)!.props.map((p) => [p.name, p.type])).toEqual([
+        ['children', '{ x: 1 } extends { _default: never } ? Snippet : Snippet<[{ x: 1 }]>']
+      ]);
+    });
+
+    it('take a type of the project as an argument, which is listed in full', () => {
+      write('node_modules/lib/index.d.ts', generics);
+      const file = component(
+        "  import type { WithChild } from 'lib';\n  let { ref }: WithChild<{ mine: string }> = $props();"
+      );
+      const found = read(file)!;
+      expect(found.typeName).toBe('WithChild<{ mine: string }>');
+      expect(found.props.map((p) => [p.name, p.type])).toEqual([
+        ['mine', 'string'],
+        ['ref', 'HTMLElement | null']
+      ]);
+    });
+
+    it('read `Omit` with `keyof`', () => {
+      write(
+        'node_modules/lib/index.d.ts',
+        `${generics}export type Props = Without<Base<HTMLElement>, { hidden?: string }> & { hidden?: 'own' };\n`
+      );
+      const file = component("  import type { Props } from 'lib';\n  let { class: c, hidden }: Props = $props();");
+      expect(read(file)!.props.map((p) => [p.name, p.type])).toEqual([
+        ['class', 'string'],
+        ['hidden', "'own'"]
+      ]);
+    });
+
+    // the real layout: `class` is in `svelte/elements`, under the attributes of the library, under its barrels
+    it('reach the deepest member of a package laid out like bits-ui', () => {
+      write('node_modules/lib/package.json', JSON.stringify({ types: './dist/index.d.ts' }));
+      write('node_modules/lib/dist/index.d.ts', 'export { Accordion } from "./bits/index.js";\n');
+      write('node_modules/lib/dist/bits/index.d.ts', 'export { Accordion } from "./accordion/index.js";\n');
+      write('node_modules/lib/dist/bits/accordion/index.d.ts', 'export * as Accordion from "./exports.js";\n');
+      write(
+        'node_modules/lib/dist/bits/accordion/exports.d.ts',
+        'export type { AccordionTriggerProps as TriggerProps } from "./types.js";\n'
+      );
+      write(
+        'node_modules/lib/dist/bits/accordion/types.d.ts',
+        'import type { BitsButton } from "../../attributes.js";\nexport type AccordionTriggerProps = BitsButton;\n'
+      );
+      write(
+        'node_modules/lib/dist/attributes.d.ts',
+        'import type { HTMLButtonAttributes } from "elements";\ntype Primitive<T> = Omit<T, "style">;\nexport type BitsButton = Primitive<HTMLButtonAttributes>;\n'
+      );
+      write('node_modules/elements/package.json', JSON.stringify({ types: './index.d.ts' }));
+      write('node_modules/elements/index.d.ts', 'export interface HTMLButtonAttributes { class?: string }\n');
+      const file = component(
+        "  import { Accordion } from 'lib';\n  let { class: c }: Accordion.TriggerProps = $props();"
+      );
+      expect(read(file)!.props.map((p) => [p.name, p.type])).toEqual([['class', 'string']]);
+    });
+  });
+
+  describe('a conditional type', () => {
+    const conditional = (type: string) =>
+      read(
+        component(
+          `  type Own = { a: string; child?: number };\n  type WithoutChild<T> = ${type};\n  let { a, child }: WithoutChild<Own> = $props();`
+        )
+      )!;
+
+    it('reads `T extends … ? Omit<T, …> : T` as the `Omit`', () => {
+      const found = conditional("T extends { child?: any } ? Omit<T, 'child'> : T");
+      expect(found.typeName).toBeNull();
+      expect(found.props.map((p) => [p.name, p.type])).toEqual([
+        ['a', 'string'],
+        ['child', null]
+      ]);
+    });
+
+    it('names any other', () => {
+      const found = conditional('T extends string ? { b: 1 } : T');
+      expect(found.typeName).toBe('Own extends string ? { b: 1 } : Own');
+      expect(found.props.map((p) => p.type)).toEqual([null, null]);
+    });
+  });
+
+  it('reads `Omit` with `keyof` of a type of the project, and names it when that type can not be read in full', () => {
+    const file = component(
+      '  type Base = { a: string; b: number };\n  type Own = { a: 1 };\n  let { b }: Omit<Base, keyof Own> = $props();'
+    );
+    const found = read(file)!;
+    expect(found.typeName).toBeNull();
+    expect(found.props.map((p) => [p.name, p.type])).toEqual([['b', 'number']]);
+    const open = component(
+      '  type Base = { a: string; b: number };\n  type Own = { a: 1 } | { b: 2 };\n  let { b }: Omit<Base, keyof Own> = $props();'
+    );
+    const named = read(open)!;
+    expect(named.typeName).toBe('Omit<Base, keyof Own>');
+    expect(named.props.map((p) => [p.name, p.type])).toEqual([['b', null]]);
+  });
+
   it('expands Omit and Pick over a type it reads, and names them over a package type', () => {
     write('lib/types.ts', 'export type Base = { a: string; b?: number; c: boolean };\n');
     const file = component(
