@@ -1816,7 +1816,7 @@ describe('App', () => {
     return { sameRow: buttons.every((b) => b.getBoundingClientRect().top < logo.bottom) };
   }
 
-  it.each(['AcmeDesignSystem', 'Components'])(
+  it.each(['DesignSystem', 'Components'])(
     'the sidebar header moves its buttons below the title %s, which stays on one line',
     async (title) => {
       const { props } = setup('');
@@ -1827,6 +1827,15 @@ describe('App', () => {
       expect(text.getClientRects()).toHaveLength(1);
     }
   );
+
+  it('the sidebar header breaks a title wider than the whole header', async () => {
+    const { props } = setup('');
+    await render(App, { props: { ...props, title: 'AcmeDesignSystemComponentLibrary' } });
+    expect(await sidebarHeader()).toEqual({ sameRow: false });
+    const text = document.createRange();
+    text.selectNodeContents(document.querySelector('.sidebar .logo')!);
+    expect(text.getClientRects().length).toBeGreaterThan(1);
+  });
 
   it('the sidebar header moves its buttons below a wide logo', async () => {
     const { props } = setup('');
