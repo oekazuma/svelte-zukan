@@ -1,5 +1,40 @@
 # svelte-zukan
 
+## 0.17.0
+
+### Minor Changes
+
+- 764cb5a: fix: the `svelte` peer dependency is now `^5.57.1`, the same floor as SvelteKit 3. Svelte 5.46.4 to 5.56.3 could not build the catalog at all; users of a Svelte below 5.57.1 must upgrade.
+
+### Patch Changes
+
+- 06adae5: fix: read more of how props and catalog files are written.
+
+  - `Omit` and `Pick` over a package type now give the destructured members their types, as the package type does.
+  - A nested object type without semicolons (Prettier's `semi: false`) no longer prints as invalid text such as `{ id: string label: string }`, and a class default keeps its lines.
+  - `$props() as Props`, `$props() satisfies Props`, `<Props>$props()` and `$props()!` now give a props table, also for `ComponentProps<typeof X>`.
+  - `$bindable()` inside `!`, `as` or `satisfies` is now seen as bindable, with its default.
+  - The code view no longer shows a script variable or type just because a name inside a TypeScript type matches it: parameter names in function types, method signatures and overloads, index signatures, tuple labels, type parameters, and the name of a function or class expression. `typeof x` and type references still count.
+  - An `@` line in a JSDoc code block (`@media` in a fence) no longer cuts the description.
+  - A script that is not indented, with a JSDoc comment and tabs in its code, gets tabs in the code view.
+  - The code view keeps the lines of a multi-line attribute value as written, instead of changing the value it shows.
+
+- df2cbf2: fix: correct several values and samples on the Tailwind CSS page. Tokens written with `color-mix()` or `--alpha()` show the mix instead of Tailwind's fallback; a class next to a more specific namespace (`text-primary` with `--text-color-primary`, `p-card` with `--padding-card`) shows the variable it reads; an `@theme inline` token written with a CSS function shows its variable; Full config resolves Tailwind's CSS functions for a theme in any layer or none; breakpoints show their px at the browser's initial font size; Text Color samples stay visible for white tokens; an `@import` with `reference` no longer makes or hides an entry; and an external `@import`, such as a web font, now loads in the samples.
+- f1393ef: fix: catalog UI fixes for scroll position, keyboard use and small screens. Back and Forward keep the scroll position on detail pages and the top page. Escape leaves an expanded preview past a non-modal dialog or a manual popover. The search keeps its selected option in view. A contents link and a route that removes the focused element move the keyboard focus to the new place. Long code can be scrolled by keyboard. ⌘K works from a text field in a preview. Pressed toolbar buttons show in forced colors mode, wide images and long names reflow at 320px, low-contrast colors meet WCAG AA, toolbar tooltips can be hovered, and a preview in its own tab has a descriptive title. The WebMCP tools report a catalog file that does not compile and a missing ID.
+- 10c8799: fix: an edit that stops a component compiling, when only its catalog file imports it, now shows the error in the preview and leaves the app's tabs alone. The static catalog keeps its own output whatever `build.rollupOptions.output` the app sets (a `format`, a `dir` or an array). A wrapper, logo or `groups` directory inside the Vite root is now allowed under an explicit `server.fs.allow`, which fixes 404s in SvelteKit with `paths.base`. An error in a module reached through an `export *` barrel now shows the real message instead of a missing-export error. A `groups` directory written in another Unicode normalization than on disk keeps its HMR on macOS. The static catalog now includes a copy of `publicDir`, so `url('/bg.png')` in CSS and imports of public files work under a subpath; a literal `/bg.png` in markup does not, as the static export docs explain.
+- c701e6e: fix: treat a plain CSS file that imports Tailwind CSS entries as the entry. An `app.css` with only `@import "./tw.css"` and `@import "./tokens.css"` used to give two entries, neither with the whole theme; it now gives one, `app.css`, with the tokens of both.
+- 7b105a1: fix: read props types through aliases, subpath imports and namespace re-exports.
+
+  - A type imported through an alias, such as `$lib/utils.js` with `alias: { $lib: 'src/lib' }` in SvelteKit's config, or through `imports` in `package.json`, such as SvelteKit's `#lib/utils.js`, is now read as a file of the project, and editing that file refreshes the table.
+  - `P.Props` now reads through `export * as P from './p'`, as with `Accordion.TriggerProps` from `bits-ui`, and `ComponentProps<typeof P.Root>` through a namespace.
+  - Imports are now followed up to six files deep instead of three, which a package's chain of barrels needs.
+
+- 14449c6: fix: read a package's generic types in the props table.
+
+  - A package's generic type now takes its type arguments and defaults, so members it adds through `WithChild<{ orientation?: string }>` get a type and `onclick` of `HTMLAttributes<HTMLDivElement>` names `HTMLDivElement`.
+  - `Omit` and `Pick` with `keyof` of a type the table can read, and a conditional type such as `T extends { child?: any } ? Omit<T, 'child'> : T`, now list their members.
+  - Imports are now followed up to seven files deep instead of six, which reaches `svelte/elements` from a type of `bits-ui`.
+
 ## 0.16.5
 
 ### Patch Changes
