@@ -1,5 +1,63 @@
 # svelte-zukan
 
+## 0.16.5
+
+### Patch Changes
+
+- b12ad27: fix: on the dev server, fixing or creating a stylesheet that only the catalog imports now reloads the catalog's previews, without reloading the app's tabs, and creating a file that both a catalog file and an app entry failed to import reloads the app as Vite does.
+- 385b91b: fix: serve `.mjs` and `.cjs` catalog files as JavaScript under `vite preview`, so module workers load; refresh the props when a props type file outside a `groups` directory linked through `node_modules` changes; and show a duplicate catalog ID outside the Vite root by paths relative to it in the dev server's catalog and `catalog.json`.
+- 9d735b2: fix: a generic props type (`WithElementRef<HTMLButtonAttributes, HTMLButtonElement>`, `ListProps<string>`) is read with its type arguments or defaults in place of its type parameters, instead of naming `T` as the props type and showing `T[]` or `U | null` as member types.
+
+  fix: a section's code no longer includes a script variable that the section only shadows with a name it declares itself (an `{#each}` item or index, a snippet or function parameter, an `{:then}` or `{:catch}` value, `{@const}`, `let:`).
+
+- 4051d6b: fix: a circular type parameter default (`type P<T = T>`) no longer crashes the catalog; a generic type given itself as an argument (`W<W<{ x: 1 }>>`) lists all of its props; `Omit` and `Pick` whose keys are a type parameter are expanded; a function or conditional type argument is parenthesized in a conditional type; and a `for` loop variable in a section no longer pulls in the script variable of the same name.
+- 4e439ea: fix: read props and section code more faithfully. A type that Prettier breaks into lines no longer starts with `|` or `&`, `export *` passes on an `export const` / `export declare const` component, a JSDoc written on the line of the member before is read, and a fenced code block in a JSDoc no longer shows its language. Section code keeps the lines of a template literal as written and no longer pulls in a definition for an imported name, `import.meta`, a qualified type name, an enum member or a label. A `<Section>` inside a block or an element now says it must be at the top level of the file.
+- 1368a80: fix: read catalog files and props more faithfully.
+
+  - A `{#snippet}` declared inside a section no longer pulls a top-level snippet or an import of the same name into that section's code.
+  - `<Z.Section>` with `import * as Z from 'svelte-zukan'` is read as a section, with the same rules as `<Section>`.
+  - Section content that starts on the `<Section>` line is dedented like the rest.
+  - The script definitions in a section's code keep the tabs of a tab-indented file instead of mixing in spaces.
+  - A prop default with a block body keeps its line breaks, so one written without semicolons stays valid code.
+  - A prop type `typeof import('./config').default` keeps its `import()`.
+
+- 2fab08a: fix: read Tailwind CSS root variables declared in `:where(:root)` (daisyUI 5), watch a `@plugin` or `@config` file that throws, show the variable of Drop Shadow tokens, and leave Tailwind's reference-only compatibility variables (`--radius`, `--shadow`, `--blur`, …) out of the full config and `catalog.json`.
+- 4287195: fix: resolve Tailwind CSS tokens through the `:root` variables that win the cascade layers, read the last declaration when a class has two of its property, and show no CSS variable on a token whose variable Tailwind never writes (`@theme reference`, `@config`, `@plugin`).
+- 84789f8: fix: show the variable of a daisyUI-style `@plugin` token whose class reads a root variable of its own name, and draw the light value of a `light-dark()` color in the swatches of a dark catalog.
+- 3556ba8: fix: show the values Tailwind writes for theme values that use its CSS functions, and count each token once on the Tailwind CSS card.
+
+  - A theme value written with `--spacing()`, `--alpha()`, `--theme()` or `theme()` showed as written, for example `p-gutter` as `--spacing(6)`. The Tailwind CSS page, `catalog.json` and WebMCP now show the value Tailwind writes (`calc(0.25rem * 6)`), with its px size, its swatch and its place in the scale, and Full config lists it the same way.
+  - The token count on the top page's Tailwind CSS card counted every padding class twice, once in Padding and once in Spacing. It now counts each token once.
+
+- 630bbc9: fix: Back and Forward return to the scroll position of a page taller than the one left, and of a filtered Tailwind CSS page; the accessibility panel checks again after a theme switch or a width change; `check_accessibility` reports a preview that did not finish rendering instead of an empty result; a section link that names no heading opens the page at the top; an empty catalog no longer says "No matches" before anything is typed; J, K, T and F work with Shift or Caps Lock; a name starting with an emoji shows the whole emoji as its initial.
+- 971e17a: fix: return to the scroll position on Back and Forward onto a detail page, also one with a `?section=`, leave the page where it is when a link opens in another tab, and pass the catalog's shortcuts on from the Tailwind CSS samples.
+- 00e17e7: fix: catalog UI accessibility and layout fixes.
+
+  - Closing the accessibility panel returns the focus to its toggle, and Check again keeps the focus while it runs.
+  - Following a sidebar link on a narrow screen moves the focus to the main content instead of the body.
+  - Long component names wrap on detail pages and in search results instead of scrolling the page sideways or being clipped.
+  - The initial tile of a component without sections keeps white text above 3:1 at every hue.
+  - The sidebar search shows "No matches" only once section titles are loaded, and both searches announce the number of results.
+  - The Tailwind CSS link in the sidebar is marked current for an unknown `source`, as the page shows the first entry.
+  - The expand button is no longer announced as pressed on top of its changing name.
+  - The WebMCP `check_accessibility` tool gives separate errors for an unknown ID and a missing section, listing the component's sections.
+  - A component whose metadata fails to load no longer hides the section titles of the others from the sidebar search, and leaves no unhandled rejection on the top page.
+
+- 28dfafc: fix: keep the catalog inside narrow screens and keep a preview's dialog keys in the dialog.
+
+  - Long inline code, links, the props type and section titles on a detail page wrap instead of scrolling the page sideways at 320px, and a wide table in the `.md` doc scrolls in its own box, which the keyboard can reach.
+  - A wide custom `logo` or a long one-word `title` no longer pushes the sidebar's search, theme and shortcut buttons out of the sidebar.
+  - A letter shortcut (J, K, T, F, ?) pressed in a dialog inside a preview stays in the dialog, as on the catalog's own page; ⌘K (Ctrl K) still opens the search.
+  - A toolbar tooltip wider than the screen, such as the "scaled to fit" one, wraps inside it.
+  - The keyboard shortcuts dialog fits a 320px screen.
+
+- 7b10341: fix: build catalog entries with long IDs; ignore a workspace package named `preview` that has no catalog files, and fail on one that has them before the previous catalog is removed; on the catalog page, turn `X-Frame-Options: DENY` into `SAMEORIGIN` and allow `'self'` in a Content-Security-Policy `frame-ancestors`, so previews load; match catalog files, their `.md` and component files, and Tailwind CSS entries by case on every platform; and write no catalog files with `build.write: false`.
+- e965226: fix: run the accessibility check under a `script-src 'self'` policy, reject a `groups` directory written in another case, and show the real error of a module imported by name.
+
+  - The accessibility check loads axe-core as a script file of the catalog (`/__zukan/axe.js` on the dev server, a file under `_zukan/` in the static export) instead of an inline script, so a Content-Security-Policy of `script-src 'self'` in `server.headers` or `preview.headers` no longer makes it fail with "Cannot read properties of undefined (reading 'run')".
+  - A `groups` directory written in another case than on disk (`src/Lib` for `src/lib`) is an error that names both spellings on macOS and Windows too, as it is on Linux, instead of a catalog whose edits never reload.
+  - A module only the catalog imports that fails to compile now shows its own error in the preview when a catalog file imports it by name (`import { x } from './bad.ts'`), instead of "does not provide an export named", and the error names the file relative to the Vite root.
+
 ## 0.16.4
 
 ### Patch Changes
