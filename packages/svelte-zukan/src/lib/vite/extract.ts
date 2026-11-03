@@ -205,6 +205,8 @@ function identifiersOf(
   return names;
 }
 
+const RUNE_NAMES = new Set(['state', 'derived', 'effect', 'props', 'bindable', 'inspect', 'host']);
+
 /** `let x = $state(0)`, `$derived.by(...)`, `$props()` */
 function isRuneDeclaration(node: Node) {
   if (node.type !== 'VariableDeclaration') return false;
@@ -304,8 +306,11 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
       .map((node) => ({
         kind,
         names: declaredNames((node.type === 'ExportNamedDeclaration' ? node.declaration : node) as Node),
-        // as Svelte decides: `$state` is a store only when `state` is not itself declared with a rune
-        store: !isRuneDeclaration((node.type === 'ExportNamedDeclaration' ? node.declaration : node) as Node),
+        // as Svelte decides: `$state` is a store only when `state` is not itself declared with a rune, while `$s` is a
+        // store whatever `s` is declared with
+        store: (name: string) =>
+          !RUNE_NAMES.has(name) ||
+          !isRuneDeclaration((node.type === 'ExportNamedDeclaration' ? node.declaration : node) as Node),
         uses: identifiersOf(node),
         text: codeOf(node.start, node.end, indent)
       }));
@@ -315,7 +320,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
     .map((node) => ({
       kind: 'snippet' as const,
       names: [(node.expression as { name: string }).name],
-      store: false,
+      store: () => false,
       uses: identifiersOf(node),
       text: codeOf(node.start, node.end)
     }));
@@ -352,7 +357,7 @@ function sectionsFrom(ast: Ast, source: string, filename: string): ZukanSection[
     for (let grew = true; grew;) {
       grew = false;
       for (const def of defs) {
-        if (used.has(def) || !def.names.some((n) => refs.has(n) || (def.store && refs.has('$' + n)))) continue;
+        if (used.has(def) || !def.names.some((n) => refs.has(n) || (def.store(n) && refs.has('$' + n)))) continue;
         used.add(def);
         def.uses.forEach((n) => refs.add(n));
         grew = true;
