@@ -1,7 +1,17 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, globSync, readFileSync, rmSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  globSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { chromium } from 'playwright';
 import { normalizePath, preview } from 'vite';
 import { beforeAll, expect, test } from 'vitest';
@@ -252,6 +262,111 @@ test('plain vite build', { timeout: 120_000 }, async () => {
   } finally {
     await server.close();
   }
+});
+
+/** the vite-svelte fixture with `files` written, next to it so that its relative paths and Tailwind still resolve */
+const withViteSvelteCopy = (name: string, files: Record<string, string>, run: (dir: string) => void) => {
+  const dir = join(fixtures, `.tmp-${name}`);
+  const link = join(dir, 'node_modules/svelte-zukan');
+  const links = [link, join(dir, 'node_modules/@acme/theme')];
+  try {
+    cpSync(join(fixtures, 'vite-svelte'), dir, {
+      recursive: true,
+      filter: (src) => !/[\\/](node_modules|dist|zukan-dist)$/.test(src)
+    });
+    for (const [file, content] of Object.entries(files)) {
+      mkdirSync(dirname(join(dir, file)), { recursive: true });
+      writeFileSync(join(dir, file), content);
+    }
+    mkdirSync(dirname(link), { recursive: true });
+    symlinkSync(join(fixtures, '../../packages/svelte-zukan'), link, 'junction');
+    if (files['packages/theme/index.css']) {
+      mkdirSync(dirname(links[1]), { recursive: true });
+      symlinkSync(join(dir, 'packages/theme'), links[1], 'junction');
+    }
+    run(dir);
+  } finally {
+    // the links point into the repository: remove them before the recursive delete
+    for (const l of links) if (existsSync(l) && lstatSync(l).isSymbolicLink()) rmSync(l);
+    rmSync(dir, { recursive: true, force: true });
+  }
+};
+
+const theme = '@import "tailwindcss";\n@theme { --color-acme: #abcdef; }\n';
+test.each<[string, Record<string, string>]>([
+  [
+    'relative imports',
+    {
+      'src/app.css': '@import "../styles/tw.css";\n@import "../styles/tokens.css";\n',
+      'styles/tw.css': '@import "tailwindcss";\n',
+      'styles/tokens.css': '@theme { --color-acme: #abcdef; }\n'
+    }
+  ],
+  [
+    'a package in node_modules',
+    {
+      'src/app.css': '@import "@acme/tokens/index.css";\n',
+      'node_modules/@acme/tokens/package.json': JSON.stringify({ name: '@acme/tokens', version: '1.0.0' }),
+      'node_modules/@acme/tokens/index.css': theme
+    }
+  ],
+  [
+    'a workspace package without src',
+    {
+      'package.json': JSON.stringify({
+        name: 'vite-svelte',
+        private: true,
+        type: 'module',
+        dependencies: { '@acme/theme': 'workspace:*' }
+      }),
+      'src/app.css': '@import "@acme/theme";\n',
+      'packages/theme/package.json': JSON.stringify({
+        name: '@acme/theme',
+        version: '1.0.0',
+        exports: { '.': { style: './index.css' } }
+      }),
+      'packages/theme/index.css': theme
+    }
+  ]
+])('a plain app.css reaches Tailwind outside the scanned directories: %s', { timeout: 120_000 }, (name, files) => {
+  withViteSvelteCopy(name.replaceAll(' ', '-'), files, (dir) => {
+    build(dir);
+    const { tailwind } = JSON.parse(readFileSync(join(dir, 'zukan-dist/catalog.json'), 'utf8'));
+    expect(tailwind.map((t: { file: string; error?: string }) => [t.file, t.error])).toEqual([
+      ['src/app.css', undefined]
+    ]);
+    expect(tailwind[0].variables['--color-acme']).toBe('#abcdef');
+    // the page: the list and the entry's sample stylesheet are in the catalog
+    expect(catalogJs(dir).some(({ code }) => code.includes('.bg-acme'))).toBe(true);
+    expect(withLocalPaths(dir)).toEqual([]);
+  });
+});
+
+test('a CSS project whose imports reach no Tailwind builds no file for it', { timeout: 180_000 }, () => {
+  withViteSvelteCopy(
+    'plain-css',
+    {
+      'src/app.css': 'body { margin: 0; }\n'
+    },
+    (dir) => {
+      const files = () =>
+        globSync('zukan-dist/_zukan/*', { cwd: dir }).map((f) => basename(f).replace(/-[\w-]{8}\.(\w+)$/, '.$1'));
+      build(dir);
+      const bare = files();
+      expect(JSON.parse(readFileSync(join(dir, 'zukan-dist/catalog.json'), 'utf8')).tailwind).toBeNull();
+
+      writeFileSync(
+        join(dir, 'src/app.css'),
+        '@import "../styles/reset.css";\n@import "@acme/gone.css";\n@import "./self.css";\n'
+      );
+      writeFileSync(join(dir, 'src/self.css'), '@import "./app.css";\n');
+      mkdirSync(join(dir, 'styles'));
+      writeFileSync(join(dir, 'styles/reset.css'), 'body { margin: 0; }\n');
+      build(dir);
+      expect(files().sort()).toEqual([...bare].sort());
+      expect(JSON.parse(readFileSync(join(dir, 'zukan-dist/catalog.json'), 'utf8')).tailwind).toBeNull();
+    }
+  );
 });
 
 test.each(['cjs', 'iife', 'dir', 'array', 'chunks and names', 'inlineDynamicImports'])(
