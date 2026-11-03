@@ -209,6 +209,20 @@ function viteResolver(
   };
 }
 
+const cssResolver = (env: () => Environment) =>
+  viteResolver(
+    env,
+    (config) => ({
+      ...config.resolve,
+      extensions: ['.css'],
+      mainFields: ['style'],
+      conditions: ['style', 'development|production'],
+      tryIndex: false,
+      preferRelative: true
+    }),
+    (file) => file.endsWith('.css')
+  );
+
 const assertApart = (out: string, what: string, dir: string) => {
   if (isInside(out, dir) || isInside(dir, out))
     throw new Error(`svelte-zukan: build.outDir of the catalog (${out}) must not overlap ${what} (${dir})`);
@@ -320,24 +334,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   // it; the build's `__SVELTEKIT_PAYLOAD__` define is the same payload. A JSON string, so it is a JS expression
   let kitGlobal: string | undefined;
   const generateTailwind = async (env: () => Environment) => {
-    const css = viteResolver(
-      env,
-      (config) => ({
-        ...config.resolve,
-        extensions: ['.css'],
-        mainFields: ['style'],
-        conditions: ['style', 'development|production'],
-        tryIndex: false,
-        preferRelative: true
-      }),
-      (file) => file.endsWith('.css')
-    );
     const js = viteResolver(
       env,
       (config) => config.resolve,
       (file) => !file.endsWith('.css')
     );
-    const data = await loadTailwind(root, cssDirs(), { css, js });
+    const data = await loadTailwind(root, cssDirs(), { css: cssResolver(env), js });
     // Vite does not watch node_modules; a reinstall restarts the dev server anyway
     const watch = data.watch.filter((file) => !file.includes('/node_modules/'));
     tailwindWatch = new Set(watch);
@@ -717,14 +719,20 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         // by its file path, a logo in publicDir would be served under /public/, which Vite warns about on every request
         const { logo } = resolved;
         const inPublic = logo && publicDir && isInside(logo, publicDir);
-        return generateEntryModule({
-          appFile: appFile('App.svelte'),
-          ...resolved,
-          logo: inPublic ? '/' + normalizePath(relative(publicDir, logo)) : logo,
-          searched,
-          tailwind: hasTailwind(cssDirs(), root),
-          kitGlobal
-        });
+        return hasTailwind(
+          cssDirs(),
+          root,
+          cssResolver(() => this.environment)
+        ).then((tailwind) =>
+          generateEntryModule({
+            appFile: appFile('App.svelte'),
+            ...resolved,
+            logo: inPublic ? '/' + normalizePath(relative(publicDir, logo)) : logo,
+            searched,
+            tailwind,
+            kitGlobal
+          })
+        );
       }
     },
     configResolved(config) {

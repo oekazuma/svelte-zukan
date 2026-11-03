@@ -68,12 +68,14 @@ function readSheets(dirs: string[]): Map<string, string> {
 /**
  * The CSS files that `@import "tailwindcss"`, declare `@theme` or import such a file, minus those another of them
  * imports. A plain CSS file counts only if `canLoad` accepts it: its candidates would otherwise be partials of an
- * entry that `loadTailwind` skips.
+ * entry that `loadTailwind` skips. A file outside `dirs` is never an entry, but it counts for the files that import it,
+ * and `onOutside` gets each one the search reads: an edit of it can change the entries.
  */
 export async function findTailwindEntries(
   dirs: string[],
   resolveCss: Resolver,
-  canLoad: (file: string) => boolean = () => true
+  canLoad: (file: string) => boolean = () => true,
+  onOutside: (file: string) => void = () => {}
 ): Promise<string[]> {
   const sheets = readSheets(dirs);
   // Vite's resolver answers with real paths, while the glob keeps a symlinked root or `groups` directory as given
@@ -88,7 +90,6 @@ export async function findTailwindEntries(
   const byReal = new Map<string, string>();
   for (const file of sheets.keys()) if (!byReal.has(real(file))) byReal.set(real(file), file);
   const candidates = new Set([...byReal.keys()].filter((id) => isCandidate(sheets.get(byReal.get(id)!)!)));
-  if (!candidates.size) return [];
 
   const reached = async (file: string, css: string, skip: RegExp, seen = new Set<string>()) => {
     const base = path.dirname(file);
@@ -97,13 +98,18 @@ export async function findTailwindEntries(
       if (isTailwindId(id)) continue;
       const resolved = real((await resolveCss(id, base).catch(() => undefined)) || resolveFallback(base, id));
       if (seen.has(resolved)) continue;
-      if (!byReal.has(resolved) && (!resolved.endsWith('.css') || resolved.includes('/node_modules/'))) continue;
+      const outside = !byReal.has(resolved);
+      if (outside && !resolved.endsWith('.css')) continue;
       seen.add(resolved);
       let text: string;
       try {
         text = readFileSync(resolved, 'utf8');
       } catch {
         continue;
+      }
+      if (outside) {
+        onOutside(resolved);
+        if (isCandidate(text)) candidates.add(resolved);
       }
       await reached(resolved, text, skip, seen);
     }
@@ -183,11 +189,13 @@ export function resolveTailwindNode(from: string[]): { node: string; tailwind: s
   return null;
 }
 
-/** the entry-module check: no resolver, so a partial counts as an entry too */
-export function hasTailwind(dirs: string[], root: string): boolean {
-  return [...readSheets(dirs)].some(
-    ([file, css]) => isCandidate(css) && resolveTailwindNode([path.dirname(file), root])
-  );
+const loadableFrom = (root: string) => (file: string) => resolveTailwindNode([path.dirname(file), root]) !== null;
+const noResolver: Resolver = async () => undefined;
+
+/** the entry-module check: whether `loadTailwind` would load an entry, without loading it */
+export async function hasTailwind(dirs: string[], root: string, resolveCss = noResolver): Promise<boolean> {
+  const canLoad = loadableFrom(root);
+  return (await findTailwindEntries(dirs, resolveCss, canLoad)).some(canLoad);
 }
 
 function tooOld(version: string): boolean {
@@ -249,8 +257,7 @@ export async function loadTailwind(
   const watch = new Set<string>();
   const onDependency = (file: string) => void watch.add(normalizePath(file));
 
-  const canLoad = (file: string) => resolveTailwindNode([path.dirname(file), root]) !== null;
-  for (const entry of await findTailwindEntries(dirs, resolvers.css ?? (async () => undefined), canLoad)) {
+  for (const entry of await findTailwindEntries(dirs, resolvers.css ?? noResolver, loadableFrom(root), onDependency)) {
     const found = resolveTailwindNode([path.dirname(entry), root]);
     if (!found) continue;
     const file = normalizePath(path.relative(root, entry));

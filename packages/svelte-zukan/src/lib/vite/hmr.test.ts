@@ -936,6 +936,64 @@ describe('Tailwind CSS', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  describe('with a plain entry whose Tailwind files are outside the searched directories', () => {
+    const entryModule = () =>
+      (plugin.load as (id: string) => unknown).call({ environment: server.environments.client }, '\0' + ENTRY);
+    const files = {
+      'app/src/app.css': '@import "../../theme/tw.css";\n@import "../styles/tokens.css";\n',
+      'theme/tw.css': '@import "tailwindcss";\n',
+      'app/styles/tokens.css': '@theme { --color-acme: red; }\n'
+    };
+
+    it(
+      'lists it in the entry module and regenerates on an edit, with no full-reload',
+      { timeout: 30_000 },
+      async () => {
+        await withTailwind(files);
+        expect(await entryModule()).toContain(TAILWIND);
+        expect(sourceIds(await transform(TAILWIND))).toHaveLength(1);
+        expect(await firstSource()).toContain('"--color-acme":"red"');
+        send.mockClear();
+        writeFileSync(join(tmp, 'app/styles/tokens.css'), '@theme { --color-acme: blue; }\n');
+        await waitForReload();
+        expect(await firstSource()).toContain('"--color-acme":"blue"');
+        send.mockClear();
+        writeFileSync(join(tmp, 'theme/tw.css'), '@import "tailwindcss";\n@theme { --color-far: green; }\n');
+        await waitForReload();
+        expect(await firstSource()).toContain('"--color-far":"green"');
+        expect(fullReloads()).toBe(0);
+      }
+    );
+
+    it('comes back when the file outside the root is a candidate again', { timeout: 30_000 }, async () => {
+      await withTailwind({ ...files, 'app/styles/tokens.css': '', 'app/src/other.css': brand });
+      expect(sourceIds(await transform(TAILWIND))).toHaveLength(2);
+      writeFileSync(join(tmp, 'theme/tw.css'), 'body { margin: 0; }\n');
+      await expect.poll(async () => sourceIds(await transform(TAILWIND)), { timeout: 10_000 }).toHaveLength(1);
+      writeFileSync(join(tmp, 'theme/tw.css'), '@import "tailwindcss";\n');
+      await expect.poll(async () => sourceIds(await transform(TAILWIND)), { timeout: 10_000 }).toHaveLength(2);
+      expect(fullReloads()).toBe(0);
+    });
+
+    it("does not hold back the app's update of that file", { timeout: 30_000 }, async () => {
+      await withTailwind(files);
+      await transform(TAILWIND);
+      const result = (plugin.hotUpdate as (...args: unknown[]) => unknown).call(
+        { environment: server.environments.client },
+        { type: 'update', file: join(tmp, 'theme/tw.css'), modules: [], timestamp: Date.now() }
+      );
+      expect(result).toBeUndefined();
+    });
+
+    it('leaves the list out of the entry module when the imports reach nothing', { timeout: 30_000 }, async () => {
+      await withTailwind({
+        'app/src/app.css': '@import "../styles/reset.css";\n',
+        'app/styles/reset.css': 'a { b: c; }'
+      });
+      expect(await entryModule()).not.toContain(TAILWIND);
+    });
+  });
+
   it('reloads on a change to an imported file outside the root', { timeout: 30_000 }, async () => {
     await withTailwind({
       'app/src/app.css': '@import "tailwindcss";\n@import "../../tokens.css";\n',

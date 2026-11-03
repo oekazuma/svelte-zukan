@@ -235,6 +235,191 @@ describe('findTailwindEntries', () => {
       expect(await findTailwindEntries([src], noResolver, (file) => file === tw)).toEqual([tw]);
     });
 
+    describe('with the Tailwind files outside the searched directories', () => {
+      const aggregator = (css: string, files: Record<string, string>, resolver = noResolver) => {
+        const f = fixture(css);
+        for (const [file, content] of Object.entries(files)) write(join(f.root, file), content);
+        return {
+          ...f,
+          found: () => findTailwindEntries([f.src], resolver),
+          has: () => hasTailwind([f.src], f.root, resolver)
+        };
+      };
+      const tw = '@import "tailwindcss";\n';
+      const tokens = '@theme { --color-acme: red; }\n';
+      const crlfBom = (css: string) => `\uFEFF${css.replaceAll('\n', '\r\n')}`;
+
+      it.each([
+        ['basic', '@import "../styles/tw.css";\n@import "../styles/tokens.css";\n', tw, tokens],
+        ['layer()', '@import "../styles/tw.css" layer(base);\n@import "../styles/tokens.css" layer(x);\n', tw, tokens],
+        ['url() next to it', '@import url("./x.css");\n@import "../styles/tw.css";\n', tw, tokens],
+        ['extensionless', '@import "../styles/tw";\n@import "../styles/tokens";\n', tw, tokens],
+        [
+          'CRLF and BOM',
+          crlfBom('@import "../styles/tw.css";\n@import "../styles/tokens.css";\n'),
+          crlfBom(tw),
+          crlfBom(tokens)
+        ]
+      ])('is the entry: %s', async (_, css, twCss, tokensCss) => {
+        const { entry, found, has } = aggregator(css, { 'styles/tw.css': twCss, 'styles/tokens.css': tokensCss });
+        expect(await found()).toEqual([entry]);
+        expect(await has()).toBe(true);
+      });
+
+      it('is the entry with a @theme file alone', async () => {
+        const { entry, found, has } = aggregator('@import "../styles/tokens.css";', { 'styles/tokens.css': tokens });
+        expect(await found()).toEqual([entry]);
+        expect(await has()).toBe(true);
+      });
+
+      it('is the entry through plain CSS files on both sides of the search', async () => {
+        const { src, found } = aggregator('@import "./mid.css";', {
+          'src/mid.css': '@import "../styles/index.css";',
+          'styles/index.css': '@import "./deep/tw.css";',
+          'styles/deep/tw.css': tw
+        });
+        expect(await found()).toEqual([normalizePath(join(src, 'app.css'))]);
+      });
+
+      it.each([
+        ['an alias', '$theme/tw.css', 'theme/tw.css'],
+        ['a package file in node_modules', '@acme/theme/index.css', 'node_modules/@acme/theme/index.css'],
+        ['a bare package name', '@acme/theme', 'node_modules/@acme/theme/index.css']
+      ])('is the entry through %s', async (_, id, file) => {
+        const resolver: Resolver = async (asked) => (asked === id ? join(root, file) : undefined);
+        const { root, entry, found, has } = aggregator(`@import "${id}";`, { [file]: tw + tokens }, resolver);
+        expect(await found()).toEqual([entry]);
+        expect(await has()).toBe(true);
+      });
+
+      it('mixes with partials in the searched directories', async () => {
+        const { entry, found } = aggregator('@import "../styles/tw.css";\n@import "./tokens.css";', {
+          'styles/tw.css': tw,
+          'src/tokens.css': tokens
+        });
+        expect(await found()).toEqual([entry]);
+      });
+
+      it('leaves one entry when a shadcn-svelte style app.css is the entry itself', async () => {
+        const resolver: Resolver = async (id) =>
+          id === 'tw-animate-css' ? join(root, 'node_modules/tw-animate-css/a.css') : undefined;
+        const { root, entry, found } = aggregator(
+          `${tw}@import "tw-animate-css";\n@import "../styles/tokens.css";\n@custom-variant dark (&:is(.dark *));\n`,
+          { 'node_modules/tw-animate-css/a.css': '@theme inline { --animate-x: x 1s; }', 'styles/tokens.css': tokens },
+          resolver
+        );
+        expect(await found()).toEqual([entry]);
+      });
+
+      it('stays two entries when two files share the candidate', async () => {
+        const { src, entry, found } = aggregator('@import "../styles/tw.css";', {
+          'styles/tw.css': tw,
+          'src/admin.css': '@import "../styles/tw.css";'
+        });
+        expect(await found()).toEqual([normalizePath(join(src, 'admin.css')), entry]);
+      });
+
+      it('survives an import cycle', async () => {
+        const { entry, found, has } = aggregator('@import "../styles/a.css";', {
+          'styles/a.css': '@import "./b.css";\n@import "./a.css";',
+          'styles/b.css': `@import "./a.css";\n@import "../src/app.css";\n${tokens}`
+        });
+        expect(await found()).toEqual([entry]);
+        expect(await has()).toBe(true);
+      });
+
+      it('makes no entry from a cycle that reaches nothing', async () => {
+        const { found, has } = aggregator('@import "../styles/a.css";', {
+          'styles/a.css': '@import "./b.css";',
+          'styles/b.css': '@import "./a.css";'
+        });
+        expect(await found()).toEqual([]);
+        expect(await has()).toBe(false);
+      });
+
+      it('survives a missing import next to the candidate', async () => {
+        const { entry, found } = aggregator('@import "../styles/gone.css";\n@import "../styles/tw.css";', {
+          'styles/tw.css': `@import "./gone-too.css";\n${tw}`
+        });
+        expect(await found()).toEqual([entry]);
+      });
+
+      it('makes no entry from a missing import, or from a resolver that fails', async () => {
+        const failing: Resolver = async () => {
+          throw new Error('boom');
+        };
+        const { found, has } = aggregator(
+          '@import "../styles/gone.css";\n@import "@acme/theme/index.css";',
+          {},
+          failing
+        );
+        expect(await found()).toEqual([]);
+        expect(await has()).toBe(false);
+      });
+
+      it('makes no entry from plain CSS, in or out of node_modules', async () => {
+        const resolver: Resolver = async (id) =>
+          id === 'normalize.css' ? join(root, 'node_modules/normalize.css/normalize.css') : undefined;
+        const { root, src, found, has } = aggregator(
+          '@import "../styles/reset.css";\n@import "normalize.css";',
+          {
+            'styles/reset.css': '@layer theme { body { margin: 0; } }',
+            'node_modules/normalize.css/normalize.css': '/* @theme { --color-x: red; } */ html { margin: 0; }'
+          },
+          resolver
+        );
+        expect(await found()).toEqual([]);
+        expect(await has()).toBe(false);
+        expect((await loadTailwind(root, [src], { css: resolver })).sources).toEqual([]);
+      });
+
+      it('makes no entry through a reference', async () => {
+        const { found, has } = aggregator(
+          [
+            '@import "../styles/tw.css" reference;',
+            '@reference "../styles/tw.css";',
+            '@import "../styles/tw.css" theme(reference);',
+            '@import url("../styles/tw.css");'
+          ].join('\n'),
+          { 'styles/tw.css': tw }
+        );
+        expect(await found()).toEqual([]);
+        expect(await has()).toBe(false);
+      });
+
+      it('resolves nothing without Tailwind', async () => {
+        const { root, src } = fixture('@import "@acme/theme/index.css";', { tailwind: false });
+        const asked: string[] = [];
+        const spy: Resolver = async (id) => void asked.push(id);
+        expect(await hasTailwind([src], root, spy)).toBe(false);
+        expect((await loadTailwind(root, [src], { css: spy })).sources).toEqual([]);
+        expect(asked).toEqual([]);
+      });
+
+      it('gets the tokens of those files, and watches them', async () => {
+        const { root, src, entry } = aggregator('@import "../styles/tw.css";\n@import "../styles/tokens.css";', {
+          'styles/tw.css': tw,
+          'styles/tokens.css': tokens
+        });
+        const { sources, watch } = await loadTailwind(root, [src]);
+        expect(sources.map((s) => [s.file, s.error])).toEqual([['src/app.css', undefined]]);
+        expect(sources[0].variables['--color-acme']).toBe('red');
+        expect(sources[0].css).toContain('.bg-acme');
+        expect(watch).toEqual(
+          expect.arrayContaining([entry, ...['tw', 'tokens'].map((n) => normalizePath(join(root, `styles/${n}.css`)))])
+        );
+      });
+
+      it('watches what the search read while it reaches no candidate', async () => {
+        const { root, src } = aggregator('@import "../styles/tw.css";\n@import "../styles/gone.css";', {
+          'styles/tw.css': 'body { margin: 0; }'
+        });
+        const { sources, watch } = await loadTailwind(root, [src]);
+        expect(sources).toEqual([]);
+        expect(watch).toEqual([normalizePath(join(root, 'styles/tw.css'))]);
+      });
+    });
+
     it('leaves one entry in an import cycle', async () => {
       const { src, entry } = fixture('@import "./other.css";\n@import "./tokens.css";', { tailwind: false });
       write(join(src, 'other.css'), '@import "./app.css";');
@@ -246,7 +431,7 @@ describe('findTailwindEntries', () => {
       const { src } = fixture('@import "./reset.css";');
       write(join(src, 'reset.css'), 'body { margin: 0; }');
       expect(await findTailwindEntries([src], noResolver)).toEqual([]);
-      expect(hasTailwind([src], dirname(src))).toBe(false);
+      expect(await hasTailwind([src], dirname(src))).toBe(false);
     });
 
     it('gets the tokens of everything it imports', async () => {
@@ -293,7 +478,7 @@ describe('unreadable CSS files', () => {
 
   it('do not stop loadTailwind or hasTailwind', async () => {
     const { root, src } = withUnreadable();
-    expect(hasTailwind([src], root)).toBe(true);
+    expect(await hasTailwind([src], root)).toBe(true);
     const { sources } = await loadTailwind(root, [src]);
     expect(sources.map((s) => [s.file, s.error])).toEqual([['src/app.css', undefined]]);
   });
@@ -320,13 +505,13 @@ describe('resolveTailwindNode', () => {
 });
 
 describe('hasTailwind', () => {
-  it('needs both an entry and @tailwindcss/node', () => {
+  it('needs both an entry and @tailwindcss/node', async () => {
     const withTailwind = fixture('@import "tailwindcss";');
-    expect(hasTailwind([withTailwind.src], withTailwind.root)).toBe(true);
+    expect(await hasTailwind([withTailwind.src], withTailwind.root)).toBe(true);
     const bare = fixture('@import "tailwindcss";', { tailwind: false });
-    expect(hasTailwind([bare.src], bare.root)).toBe(false);
+    expect(await hasTailwind([bare.src], bare.root)).toBe(false);
     const noEntry = fixture('body { margin: 0; }');
-    expect(hasTailwind([noEntry.src], noEntry.root)).toBe(false);
+    expect(await hasTailwind([noEntry.src], noEntry.root)).toBe(false);
   });
 });
 
