@@ -229,6 +229,62 @@ describe('extractProps', () => {
     ]);
   });
 
+  it('makes a prop of an intersection required when any side requires it, typed from that side', () => {
+    const rows = (type: string) =>
+      extractProps(
+        ts(`  type Base = { /** the target */ href?: string; size?: 'sm' | 'md'; tone?: string };
+  let props: ${type} = $props();`),
+        'R.svelte'
+      )?.props.map((p) => [p.name, p.type, p.required]);
+    const narrowed = [
+      ['href', 'string', true],
+      ['size', "'sm'", true],
+      ['tone', 'string', false]
+    ];
+    expect(rows("Base & { href: string; size: 'sm' }")).toEqual(narrowed);
+    expect(rows("{ href: string; size: 'sm' } & Base")).toEqual(narrowed);
+    expect(rows("Pick<Base & { href: string }, 'href'>")).toEqual([narrowed[0]]);
+    // several required sides: the first read, as for several optional ones
+    expect(rows("Base & { size: 'sm' } & { size: 'md' }")?.[1]).toEqual(['size', "'sm'", true]);
+
+    const described = extractProps(
+      ts(`  type Base = { /** the target */ href?: string };
+  let { href = '/' }: Base & { href: string } = $props();`),
+      'S.svelte'
+    );
+    expect(described?.props).toEqual([
+      { name: 'href', type: 'string', default: "'/'", required: false, bindable: false, description: 'the target' }
+    ]);
+  });
+
+  it('keeps what TypeScript makes of a name an interface or Omit declares again', () => {
+    const required = (type: string) =>
+      extractProps(
+        ts(`  interface Req { x: string }
+  interface Opt { x?: string }
+  interface Overrides extends Req { x?: string }
+  interface TwoBases extends Opt, Req {}
+  interface Merged { x?: string }
+  interface Merged { x: string }
+  let props: ${type} = $props();`),
+        'T.svelte'
+      )?.props.map((p) => p.required);
+    expect(required('Overrides')).toEqual([false]);
+    expect(required('TwoBases')).toEqual([false]);
+    expect(required('Merged')).toEqual([false]);
+    expect(required('Overrides & { x?: string }')).toEqual([false]);
+    expect(required('Overrides & { x: string }')).toEqual([true]);
+    expect(required("Omit<Req, 'x'> & { x?: string }")).toEqual([false]);
+
+    const inherited = extractProps(
+      ts(`  type Both = { x?: string } & { x: string };
+  interface Inherits extends Both {}
+  let props: Inherits = $props();`),
+      'I.svelte'
+    );
+    expect(inherited?.props.map((p) => p.required)).toEqual([true]);
+  });
+
   it('names a type it can not see and lists what is destructured', () => {
     const found = extractProps(
       ts(`  import type { ButtonProps } from './types';
@@ -898,6 +954,41 @@ export interface HTMLButtonAttributes extends HTMLAttributes<HTMLButtonElement> 
     const found = read(file)!;
     expect(found.props.map((p) => [p.name, p.type])).toEqual([['size', 'string']]);
     expect(found.files).toEqual([types]);
+  });
+
+  it("takes a package's required member over the component's optional one, in the component's place", () => {
+    write('node_modules/plain/package.json', JSON.stringify({ types: './index.d.ts' }));
+    write('node_modules/plain/index.d.ts', 'export type Props = { /** the size */ size: number; hidden: string };\n');
+    const file = component(
+      "  import type { Props } from 'plain';\n  let props: Props & { size?: number; tone?: string } = $props();"
+    );
+    expect(read(file)!.props.map((p) => [p.name, p.type, p.required, p.description])).toEqual([
+      ['size', 'number', true, 'the size'],
+      ['tone', 'string', false, null]
+    ]);
+  });
+
+  it("lists a package's interface once, its own member before the one it extends, for a component's own base", () => {
+    write('node_modules/plain/package.json', JSON.stringify({ types: './index.d.ts' }));
+    write('node_modules/plain/index.d.ts', 'export type Attrs = { title?: string };\n');
+    const file = component(
+      "  import type { Attrs } from 'plain';\n  interface Own { /** the heading */ title?: string }\n  interface P extends Attrs, Own {}\n  let props: P = $props();"
+    );
+    expect(read(file)!.props.map((p) => [p.name, p.description])).toEqual([['title', 'the heading']]);
+  });
+
+  it('reads the required side of ComponentProps<typeof Inner> & { … }', () => {
+    write(
+      'lib/Inner.svelte',
+      "<script lang=\"ts\">\n  let { href, size }: { href?: string; size?: 'sm' | 'md' } = $props();\n</script>\n"
+    );
+    const file = component(
+      "  import type { ComponentProps } from 'svelte';\n  import Inner from './Inner.svelte';\n  let props: ComponentProps<typeof Inner> & { href: string; size: 'sm' } = $props();"
+    );
+    expect(read(file)!.props.map((p) => [p.name, p.type, p.required])).toEqual([
+      ['href', 'string', true],
+      ['size', "'sm'", true]
+    ]);
   });
 
   it('reads the types entry of a package root and leaves a package without types untyped', () => {

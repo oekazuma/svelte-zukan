@@ -1,3 +1,4 @@
+import { compile } from 'svelte/compiler';
 import { describe, expect, it } from 'vitest';
 import { extractSections } from './extract.js';
 
@@ -108,6 +109,26 @@ describe('extractSections', () => {
     const { code } = extractSections(source, FILE)[0];
     expect(code).not.toContain('init');
     expect(code).toContain('let count = $state(1);');
+  });
+
+  it('keeps the declaration of a store held in a rune, and of a store named like a rune', () => {
+    const code = (script: string, body: string) =>
+      extractSections(`<script>\n${script}\n</script>\n\n<Section title="a">${body}</Section>`, FILE)[0].code;
+    for (const [script, body] of [
+      [
+        `  import { writable } from 'svelte/store';
+  const stores = { a: writable(0) };
+  let key = $state('a');
+  const current = $derived(stores[key]);`,
+        '{$current}'
+      ],
+      [`  import { writable } from 'svelte/store';\n  let s = $state(writable(0));`, '{$s}'],
+      [`  import { writable } from 'svelte/store';\n  const state = writable(0);`, '{$state}']
+    ]) {
+      const view = code(script, body);
+      expect(view).toBe(`<script>\n${script}\n</script>\n\n${body}`);
+      expect(() => compile(view, { filename: FILE })).not.toThrow();
+    }
   });
 
   it('keeps the overload signatures of a function', () => {
