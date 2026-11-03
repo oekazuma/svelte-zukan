@@ -247,14 +247,18 @@ describe('virtual modules', () => {
     expect(entry).toContain('searched: [{"group":"app","dirs":["src"]}]');
   });
 
-  // imported by its file path it would be served under /public/, which Vite warns about on every request
-  it('on the dev server, imports a logo in publicDir by its public URL', async () => {
+  // imported by its file path it would be served under /public/, which Vite warns about on every request, and by its
+  // public URL SvelteKit's asset middleware would answer the import with the raw file
+  it('on the dev server, uses a logo in publicDir by its public URL, with no import', async () => {
     const { root } = await makeApp();
     mkdirSync(path.join(root, 'public/img'), { recursive: true });
     await writeFile(path.join(root, 'public/img/logo.svg'), '<svg/>');
     const { p } = boot(root, { logo: 'public/img/logo.svg' });
     p.configureServer({ ...fakeServer(root), config: { ...fakeServer(root).config, publicDir: `${root}/public` } });
-    expect(p.load('\0virtual:svelte-zukan/entry')).toContain('import logo from "/img/logo.svg?url"');
+    const entry = p.load.call({ environment: { config: { base: '/app/' } } }, '\0virtual:svelte-zukan/entry');
+    expect(entry).toContain('logo: "/app/img/logo.svg",');
+    expect(entry).not.toContain('import logo');
+    expect(entry).not.toContain('hot.accept');
     const built = (await bootBuild(root, { logo: 'public/img/logo.svg' })).p;
     expect(built.load('\0virtual:svelte-zukan/entry')).toContain(`import logo from "${root}/public/img/logo.svg?url"`);
   });

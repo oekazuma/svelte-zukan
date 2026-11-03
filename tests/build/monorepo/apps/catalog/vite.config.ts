@@ -9,7 +9,8 @@ const { zukan } = process.env.ZUKAN_FROM_DIST
   : await import('../../../../../packages/svelte-zukan/src/lib/vite/index.js');
 
 export const config = (
-  kit: { paths?: { base: '' | `/${string}` }; output?: { bundleStrategy: 'split' | 'single' | 'inline' } } = {}
+  kit: { paths?: { base: '' | `/${string}` }; output?: { bundleStrategy: 'split' | 'single' | 'inline' } } = {},
+  options: { logo?: string; wrapper?: string } = {}
 ) =>
   defineConfig({
     resolve: {
@@ -24,7 +25,7 @@ export const config = (
             }
           ]
     },
-    plugins: [zukan({ build: true }), sveltekit({ adapter: adapter(), alias: { $lib: 'src/lib' }, ...kit })]
+    plugins: [zukan({ build: true, ...options }), sveltekit({ adapter: adapter(), alias: { $lib: 'src/lib' }, ...kit })]
   });
 
 export default config();
