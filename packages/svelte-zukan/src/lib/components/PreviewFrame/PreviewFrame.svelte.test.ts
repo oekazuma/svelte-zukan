@@ -422,6 +422,213 @@ describe('PreviewFrame resizing', () => {
     expect(iframe.style.height).toBe(before);
   });
 
+  describe('content sized to the viewport', () => {
+    /** a real page, as the catalog's is: in quirks mode the body fills the frame, and so reports every resize of it */
+    async function frameOf(html: string) {
+      const page = new Blob([`<!doctype html><body style="margin:8px"><div data-zukan-preview>${html}</div>`], {
+        type: 'text/html'
+      });
+      const src = URL.createObjectURL(page);
+      const screen = await render(PreviewFrame, { props: { ...props, src } });
+      screen.container.style.width = '1000px';
+      const iframe = screen.container.querySelector('iframe')!;
+      await expect.poll(() => screen.container.querySelector('.frame')!.getAttribute('aria-busy')).toBe('false');
+      return { screen, iframe, src };
+    }
+
+    /** the frame's height once it has stopped changing; a frame that never stops fails here */
+    async function settled(iframe: HTMLIFrameElement) {
+      let seen = '';
+      await expect
+        .poll(
+          async () => {
+            const was = iframe.style.height;
+            await new Promise((r) => setTimeout(r, 150));
+            const same = was === iframe.style.height && was === seen;
+            seen = iframe.style.height;
+            return same;
+          },
+          { timeout: 5000 }
+        )
+        .toBe(true);
+      return parseFloat(seen);
+    }
+
+    it.for([
+      ['height: 100vh', '<div style="height:100vh"></div>'],
+      ['min-height: 100vh', '<div style="min-height:100vh"></div>'],
+      ['height: 150vh', '<div style="height:150vh"></div>'],
+      ['height: 50vh', '<div style="height:50vh"></div>'],
+      ['two min-height: 100vh blocks', '<div style="min-height:100vh"></div><div style="min-height:100vh"></div>'],
+      ['a header and 100vh', '<header style="height:40px"></header><main style="min-height:100vh"></main>']
+    ])('%s gives a small frame that stays', async ([, html]) => {
+      const { iframe } = await frameOf(html);
+      expect(await settled(iframe)).toBeLessThan(300);
+    });
+
+    it('ordinary content gets its own height', async () => {
+      const { iframe } = await frameOf('<div style="height:300px"></div>');
+      expect(await settled(iframe)).toBe(316);
+    });
+
+    it('content that loads late, grows again and shrinks back is followed', async () => {
+      const { iframe } = await frameOf('<div id="box" style="height:100px"></div>');
+      expect(await settled(iframe)).toBe(116);
+      const box = iframe.contentDocument!.getElementById('box')!;
+      box.style.height = '500px';
+      expect(await settled(iframe)).toBe(516);
+      box.style.height = '1000px';
+      expect(await settled(iframe)).toBe(1016);
+      box.style.height = '200px';
+      expect(await settled(iframe)).toBe(216);
+    });
+
+    it('content that doubles with the root font size (the 200% text check) is followed, and goes back', async () => {
+      const { iframe } = await frameOf('<div style="height:10rem"></div>');
+      expect(await settled(iframe)).toBe(176);
+      const doc = iframe.contentDocument!;
+      const style = doc.createElement('style');
+      style.textContent = 'html{font-size:32px !important}';
+      doc.head.append(style);
+      expect(await settled(iframe)).toBe(336);
+      style.remove();
+      expect(await settled(iframe)).toBe(176);
+    });
+
+    it('content that gets taller at a narrower width is followed, and goes back', async () => {
+      const { screen, iframe } = await frameOf(
+        '<style>@media (max-width: 500px) { #box { height: 800px !important } }</style><div id="box" style="height:300px"></div>'
+      );
+      expect(await settled(iframe)).toBe(316);
+      await screen.getByRole('button', { name: 'Mobile (375px)', exact: true }).click();
+      expect(await settled(iframe)).toBe(816);
+      await screen.getByRole('button', { name: 'Full width', exact: true }).click();
+      expect(await settled(iframe)).toBe(316);
+    });
+
+    it('a real block next to blocks sized to the viewport counts, at every width', async () => {
+      const { screen, iframe } = await frameOf(
+        '<style>@media (max-width: 500px) { #box { height: 800px !important } }</style>' +
+          '<div style="height:100vh"></div><div style="height:100vh"></div><div id="box" style="height:300px"></div>'
+      );
+      const wide = await settled(iframe);
+      expect(wide).toBeGreaterThanOrEqual(300);
+      expect(wide).toBeLessThan(600);
+      await screen.getByRole('button', { name: 'Mobile (375px)', exact: true }).click();
+      expect(await settled(iframe)).toBe(wide + 500);
+      await screen.getByRole('button', { name: 'Full width', exact: true }).click();
+      expect(await settled(iframe)).toBe(wide);
+    });
+
+    it('a block sized to the viewport next to a huge real block stays within the cap', async () => {
+      const { iframe } = await frameOf('<div style="height:100vh"></div><div style="height:200000px"></div>');
+      expect(await settled(iframe)).toBe(100000);
+    });
+
+    it('blocks of min-height: 100vh are at least as tall as their content', async () => {
+      const { iframe } = await frameOf(
+        '<div style="min-height:100vh"><div style="height:300px"></div></div>'.repeat(2)
+      );
+      const height = await settled(iframe);
+      expect(height).toBeGreaterThanOrEqual(600);
+      expect(height).toBeLessThan(1000);
+    });
+
+    it('does not grow on width presets, keyboard steps and a drag', async () => {
+      const { screen, iframe } = await frameOf('<div style="height:150vh"></div>');
+      const height = await settled(iframe);
+      for (const name of ['Mobile (375px)', 'Tablet (768px)', 'Desktop (1280px)', 'Full width']) {
+        await screen.getByRole('button', { name, exact: true }).click();
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      expect(await settled(iframe)).toBe(height);
+      const separator = screen.getByRole('separator').element();
+      separator.focus();
+      for (let i = 0; i < 12; i++) {
+        await userEvent.keyboard('{ArrowLeft}');
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      expect(await settled(iframe)).toBe(height);
+      const send = (type: string, clientX: number) =>
+        separator.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, button: 0, clientX }));
+      send('pointerdown', 500);
+      for (let x = 500; x > 300; x -= 10) {
+        send('pointermove', x);
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      send('pointerup', 300);
+      expect(await settled(iframe)).toBe(height);
+    });
+
+    it('keeps its height after the preview is expanded and back, every time', async () => {
+      for (const html of ['<div style="height:150vh"></div>', '<div style="height:50vh"></div>']) {
+        const { screen, iframe } = await frameOf(html);
+        const height = await settled(iframe);
+        for (let i = 0; i < 2; i++) {
+          await screen.getByRole('button', { name: 'Expand' }).click();
+          await expect.poll(() => iframe.getBoundingClientRect().height).toBeGreaterThan(height + 100);
+          await settled(iframe);
+          await screen.getByRole('button', { name: 'Exit expanded view (Esc)' }).click();
+          expect(await settled(iframe), html).toBe(height);
+        }
+        await screen.unmount();
+      }
+    });
+
+    it('starts again at the same height when shown again', async () => {
+      const { screen, iframe, src } = await frameOf('<div style="height:150vh"></div>');
+      const height = await settled(iframe);
+      await screen.unmount();
+      const again = await render(PreviewFrame, { props: { ...props, src } });
+      const frame = again.container.querySelector('iframe')!;
+      expect(frame.style.height).toBe(`${height}px`);
+      await expect.poll(() => again.container.querySelector('.frame')!.getAttribute('aria-busy')).toBe('false');
+      expect(await settled(frame)).toBe(height);
+    });
+
+    it('keeps the scroll position inside the frame when the width changes', async () => {
+      const { screen, iframe } = await frameOf('<div style="height:150vh"></div>');
+      await settled(iframe);
+      const win = iframe.contentWindow!;
+      win.scrollTo(0, 50);
+      await screen.getByRole('button', { name: 'Tablet (768px)', exact: true }).click();
+      await expect.poll(() => iframeWidth(screen.container)).toBe(768);
+      await settled(iframe);
+      expect(win.scrollY).toBe(50);
+    });
+
+    it('keeps the scroll position of the page when the width changes', async () => {
+      const { screen, iframe } = await frameOf(
+        '<div style="min-height:100vh"><div style="height:600px"></div></div>'.repeat(4)
+      );
+      await settled(iframe);
+      const scroller = document.scrollingElement!;
+      // at the very end of the page, where a page that is shorter for a moment would pull it back
+      scroller.scrollTop = scroller.scrollHeight;
+      const top = scroller.scrollTop;
+      expect(top).toBeGreaterThan(0);
+      // not the test driver's click, which would scroll to the button
+      (screen.getByRole('button', { name: 'Tablet (768px)', exact: true }).element() as HTMLElement).click();
+      await expect.poll(() => iframeWidth(screen.container)).toBe(768);
+      await settled(iframe);
+      expect(scroller.scrollTop).toBe(top);
+    });
+
+    it('content sized by a script from the window height stays bounded', async () => {
+      for (const ratio of [1, 1.5]) {
+        const { screen, iframe } = await frameOf(
+          `<div id="box"></div><script>
+            const fit = () => (document.getElementById('box').style.height = innerHeight * ${ratio} + 'px');
+            addEventListener('resize', fit);
+            fit();
+          </script>`
+        );
+        expect(await settled(iframe), String(ratio)).toBeLessThanOrEqual(100000);
+        await screen.unmount();
+      }
+    });
+  });
+
   it('gives the focus back to the expand button when the backdrop collapses the preview', async () => {
     const screen = await render(PreviewFrame, { props });
     await screen.getByRole('button', { name: 'Expand' }).click();

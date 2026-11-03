@@ -31,13 +31,15 @@ A preview loads only its catalog file, never the app's entry, so the wrapper is 
 ```svelte
 <!-- .zukan/Wrapper.svelte -->
 <script lang="ts">
-  import '../src/app.css';
+  import '../src/app.css'; // the app's own stylesheet
 
   let { children } = $props();
 </script>
 
 {@render children()}
 ```
+
+Import the app's own stylesheet: in a fresh `npx sv create` app with the Tailwind CSS add-on, that is `src/routes/layout.css`.
 
 ### In a monorepo
 
@@ -107,7 +109,7 @@ let {
 ## Check the result
 
 - Reload `/__zukan/catalog.json`: the component is listed, has no `error`, its sections are the ones you wrote, and each prop has a `description`
-- Open a section alone: `/__zukan/#/preview/<id>?section=<title>` (add `&theme=dark` for the dark theme; ignored when the `theme` option fixes the theme). The page has only the component and fills the window, so set the window width for a phone or tablet layout. It makes a good target for a screenshot
+- Open a section alone: `/__zukan/#/preview/<id>?section=<title>` (add `&theme=dark` for the dark theme; ignored when the `theme` option fixes the theme). The page has only the component and fills the window, so set the window width for a phone or tablet layout. It makes a good target for a screenshot. `theme` sets `color-scheme`, which `light-dark()` follows; a stylesheet that uses `prefers-color-scheme` (Tailwind's default `dark:`) follows the browser, so for a dark screenshot also emulate the color scheme (in Playwright, `colorScheme: 'dark'`)
 - On the detail page, `/__zukan/#/<id>?section=<title>&width=375` opens that section's preview at 375px inside the catalog (`width=full` for full width)
 - Run the accessibility check (axe-core) on the sections you wrote: the button in each preview's toolbar, or, in a browser with WebMCP, the catalog page's `check_accessibility` tool (`list_components`, `get_component` and `open_component` are there too, and, with Tailwind CSS, `list_tailwind_tokens`). Fix its `violations`; its `review` list is what axe-core could not decide, such as text over an image or an ARIA attribute, so tell the user which rules need a manual check instead of calling them passed. A preview gets the catalog's theme, so a `color-contrast` violation on text with no background of its own may only mean the preview is dark and the app is not: if the app has no dark mode, set `theme: 'light'` and check again before changing the component's colors
 - A `vite build` with `build: true` fails on the same catalog file errors, with the file and line

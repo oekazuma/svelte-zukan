@@ -92,6 +92,8 @@
   /** a typed width above the stage is drawn at its real width and scaled down, up to a 4K screen */
   const MAX_WIDTH = 3840;
   const MIN_HEIGHT = 80;
+  /** the end of what `fit` can not see, such as a script keeping content 1.5 times the window's height */
+  const MAX_HEIGHT = 100_000;
   /** the resize grip sits beside the iframe, so the iframe is exactly the chosen width */
   const HANDLE = 14;
   const KEY_STEP = 10;
@@ -195,6 +197,51 @@
     let tiedTo = -1;
     /** the content's bottom and the viewport height at the previous measurement */
     let last = { bottom: 0, viewport: 0 };
+    const read = (found: Element) => {
+      const win = doc.defaultView!;
+      const body = win.getComputedStyle(doc.body);
+      // the app's CSS (loaded by the wrapper) may pad the body; a horizontal scrollbar takes height too
+      const bottom = found.getBoundingClientRect().bottom + win.scrollY;
+      const spacing = parseFloat(body.paddingBottom) + parseFloat(body.marginBottom);
+      // scrollingElement: in quirks mode (an about:blank test page) documentElement.clientHeight is the content height
+      const viewport = (doc.scrollingElement ?? doc.documentElement).clientHeight;
+      return { bottom, viewport, needs: bottom + spacing + win.innerHeight - viewport };
+    };
+    // Whether content is sized to the viewport (`150vh`, two `100vh` blocks) shows only by resizing the frame, and such
+    // content is taller than any frame it gets. Done synchronously, nothing is painted, and nothing but the resize can
+    // have moved the content, as late content could between two measurements.
+    const fit = (found: Element, next: number) => {
+      const from = height;
+      // only growing can run away; no `defaultView`: the frame was taken away while this waited for its animation frame
+      if (next <= from || !doc.defaultView) return next;
+      const before = read(found);
+      height = next;
+      flushSync();
+      const after = read(found);
+      const resized = after.viewport - before.viewport;
+      // 0.99: blocks in `vh` round down, which puts `100vh` split in three just under 1:1, where it would creep for long.
+      // Content that grows slower settles by itself
+      if (resized <= 0 || after.needs - before.needs < 0.99 * resized) return next;
+      // what it needs of the smallest frame depends only on the content, so a later width change or a reload lands on the
+      // same height, and a real block next to it still counts. The holder keeps the page's height and so its scroll
+      // position; the frame's own is cut by the short viewport
+      const win = doc.defaultView;
+      const y = win.scrollY;
+      const holder = iframe!.parentElement!;
+      holder.style.minHeight = `${holder.offsetHeight}px`;
+      height = MIN_HEIGHT;
+      flushSync();
+      // stretched to the expanded stage, it can not get that small; the height is for after leaving
+      const least =
+        iframe!.offsetHeight > MIN_HEIGHT
+          ? from
+          : Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Math.ceil(read(found).needs)));
+      height = least;
+      flushSync();
+      holder.style.minHeight = '';
+      win.scrollTo(win.scrollX, y);
+      return least;
+    };
     // the frame's own ResizeObserver: one of the catalog page keeps the elements of a frame that is taken away (as
     // closing the tab does, before any cleanup) and reports a "ResizeObserver loop" on every frame from then on
     const measure = () => {
@@ -210,34 +257,27 @@
       // minimum height for a frame, which also cuts the position the browser restores. A section that renders nothing
       // never grows, so the page's own signal ends its skeleton
       if (!found.hasAttribute('data-zukan-ready') && !found.getBoundingClientRect().height) return;
-      const win = doc.defaultView!;
-      const body = win.getComputedStyle(doc.body);
-      // the app's CSS (loaded by the wrapper) may pad the body; a horizontal scrollbar takes height too
-      const bottom = found.getBoundingClientRect().bottom + win.scrollY;
-      const spacing = parseFloat(body.paddingBottom) + parseFloat(body.marginBottom);
-      // scrollingElement: in quirks mode (an about:blank test page) documentElement.clientHeight is the content height
-      const viewport = (doc.scrollingElement ?? doc.documentElement).clientHeight;
-      const scrollbar = win.innerHeight - viewport;
+      const { bottom, viewport, needs } = read(found);
       const own = found.getBoundingClientRect().height;
       const tied = Math.abs(own - viewport) < 1;
       const grown = bottom - last.bottom;
       const resized = viewport - last.viewport;
       last = { bottom, viewport };
-      // content that grew with the viewport holds an element sized to it (`100vh`) next to more content, so it is always
-      // taller than the frame: following it would grow the frame without end
+      // a script that sizes content from the window's height does so after the resize, too late for `fit` to see
       if (ready && Math.abs(resized) >= 1 && Math.abs(grown - resized) < 2) return;
       // a page that fills the viewport has nothing new to measure when the viewport has not changed since, or when the
       // frame is stretched to the expanded stage: measuring it would grow the frame by the body's margins each time
       if (tied && ready && (expanded || Math.abs(tiedTo - viewport) < 1)) return;
       const follows = tied && tiedTo !== -1 && Math.abs(tiedTo - viewport) >= 1;
       if (tied) tiedTo = viewport;
-      const next = Math.max(MIN_HEIGHT, follows ? own : Math.ceil(bottom + spacing + scrollbar));
+      const next = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, follows ? own : Math.ceil(needs)));
       // resizing the frame inside the callback would resize what is observed in the same frame (a "ResizeObserver loop")
       requestAnimationFrame(() => {
-        height = next;
+        const fitted = fit(found, next);
+        height = fitted;
         ready = true;
         // an expanded frame takes the stage's height, not its own
-        if (!expanded) heights.set(src, next);
+        if (!expanded) heights.set(src, fitted);
       });
     };
     observer = new doc.defaultView!.ResizeObserver(measure);
