@@ -31,7 +31,7 @@ A preview loads only its catalog file, never the app's entry, so the wrapper is 
 ```svelte
 <!-- .zukan/Wrapper.svelte -->
 <script lang="ts">
-  import '../src/app.css';
+  import '../src/app.css'; // the app's own stylesheet
 
   let { children } = $props();
 </script>

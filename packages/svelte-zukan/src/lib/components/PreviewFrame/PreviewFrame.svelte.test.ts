@@ -520,6 +520,11 @@ describe('PreviewFrame resizing', () => {
       expect(await settled(iframe)).toBe(wide);
     });
 
+    it('a block sized to the viewport next to a huge real block stays within the cap', async () => {
+      const { iframe } = await frameOf('<div style="height:100vh"></div><div style="height:200000px"></div>');
+      expect(await settled(iframe)).toBe(100000);
+    });
+
     it('blocks of min-height: 100vh are at least as tall as their content', async () => {
       const { iframe } = await frameOf(
         '<div style="min-height:100vh"><div style="height:300px"></div></div>'.repeat(2)

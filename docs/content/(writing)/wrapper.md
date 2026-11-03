@@ -16,7 +16,7 @@ The wrapper accepts `children` and renders it.
 ```svelte
 <!-- .zukan/Wrapper.svelte -->
 <script lang="ts">
-  import '../src/app.css';
+  import '../src/app.css'; // the app's own stylesheet
   import ThemeProvider from '../src/lib/ThemeProvider.svelte';
 
   let { children } = $props();

@@ -232,7 +232,10 @@
       height = MIN_HEIGHT;
       flushSync();
       // stretched to the expanded stage, it can not get that small; the height is for after leaving
-      const least = iframe!.offsetHeight > MIN_HEIGHT ? from : Math.max(MIN_HEIGHT, Math.ceil(read(found).needs));
+      const least =
+        iframe!.offsetHeight > MIN_HEIGHT
+          ? from
+          : Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Math.ceil(read(found).needs)));
       height = least;
       flushSync();
       holder.style.minHeight = '';
