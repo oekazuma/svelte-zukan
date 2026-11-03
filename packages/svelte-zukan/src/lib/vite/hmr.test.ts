@@ -4,6 +4,7 @@ import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import tailwindcss from '@tailwindcss/vite';
 import { createServer, normalizePath, type InlineConfig, type Plugin, type ViteDevServer } from 'vite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { zukan } from './index.js';
@@ -141,6 +142,39 @@ it('editing an .md updates the metadata', { timeout: 20_000 }, async () => {
   writeFileSync(join(tmp, 'app/src/A.zukan.md'), '# Two');
   await waitForReload();
   expect(await meta('app/A')).toContain('<h1>Two</h1>');
+});
+
+it('re-creating a deleted .md reloads only the catalog', { timeout: 20_000 }, async () => {
+  send.mockClear();
+  writeFileSync(join(tmp, 'app/src/A.zukan.md'), '# One');
+  await waitForReload();
+  await list();
+  expect(await meta('app/A')).toContain('<h1>One</h1>');
+  send.mockClear();
+  rmSync(join(tmp, 'app/src/A.zukan.md'));
+  await waitForReload();
+  // the catalog reloads: the metadata no longer watches the file, whose module is left with no importers
+  expect(await meta('app/A')).toContain('"doc":null');
+  send.mockClear();
+  writeFileSync(join(tmp, 'app/src/A.zukan.md'), '# Two');
+  await waitForReload();
+  await new Promise((r) => setTimeout(r, 300));
+  expect(fullReloads()).toBe(0);
+  expect(await meta('app/A')).toContain('<h1>Two</h1>');
+});
+
+it('re-creating a deleted catalog file reloads only the catalog', { timeout: 20_000 }, async () => {
+  await list();
+  send.mockClear();
+  rmSync(join(tmp, 'app/src/A.zukan.svelte'));
+  await waitForReload();
+  await list();
+  send.mockClear();
+  writeFileSync(join(tmp, 'app/src/A.zukan.svelte'), '<Section title="A"><p>a</p></Section>');
+  await waitForReload();
+  await new Promise((r) => setTimeout(r, 300));
+  expect(fullReloads()).toBe(0);
+  expect(await list()).toContain('A.zukan.svelte');
 });
 
 it('a deleted and re-created file has its new content', { timeout: 20_000 }, async () => {
@@ -285,6 +319,18 @@ const updated = (url: string) =>
     (p as { updates?: { path: string }[] })?.updates?.some((u) => u.path === url)
   );
 
+/** a request through the dev server's middlewares, as a page makes it; rejected when they all pass it on */
+const get = (url: string) =>
+  new Promise<string>((resolve, reject) => {
+    const res = {
+      statusCode: 200,
+      getHeader() {},
+      setHeader() {},
+      end: (body: string | Buffer) => resolve(String(body))
+    };
+    server.middlewares({ url, method: 'GET', headers: { host: 'localhost' } } as never, res as never, reject);
+  });
+
 describe('modules shared with the app', () => {
   /** restarts the server with Svelte, a page of the app that imports the catalog file, and every module loaded */
   async function withApp(svelteOptions: Parameters<typeof svelte>[0] = {}) {
@@ -295,18 +341,6 @@ describe('modules shared with the app', () => {
     const env = server.environments.client;
     for (const id of [ENTRY, 'virtual:svelte-zukan/catalog', '/src/A.zukan.svelte']) await env.transformRequest(id);
   }
-
-  /** a request through the dev server's middlewares, as a page makes it; rejected when they all pass it on */
-  const get = (url: string) =>
-    new Promise<string>((resolve, reject) => {
-      const res = {
-        statusCode: 200,
-        getHeader() {},
-        setHeader() {},
-        end: (body: string | Buffer) => resolve(String(body))
-      };
-      server.middlewares({ url, method: 'GET', headers: { host: 'localhost' } } as never, res as never, reject);
-    });
 
   it('an app page that imports a catalog file still hot-updates it', { timeout: 25_000 }, async () => {
     await withApp();
@@ -623,8 +657,8 @@ describe('modules shared with the app', () => {
       await start({ logo: 'public/logo.svg' });
       const warn = vi.spyOn(server.config.logger, 'warn');
       const entry = await get('/@id/__x00__' + ENTRY);
-      const logo = entry.match(/import logo from "([^"]+)"/)![1];
-      expect(await get(logo)).toMatch(/^export default "\/logo\.svg"/);
+      expect(entry).toContain('logo: "/logo.svg",');
+      expect(entry).not.toContain('import logo');
       expect(warn).not.toHaveBeenCalled();
       send.mockClear();
       writeFileSync(join(tmp, 'app/public/logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="1"/>');
@@ -636,6 +670,176 @@ describe('modules shared with the app', () => {
 });
 
 const errors = () => send.mock.calls.filter(([p]: unknown[]) => (p as { type?: string })?.type === 'error');
+
+// `@tailwindcss/vite` calls `addWatchFile` on every file it scans, which makes the stylesheet an importer of each
+describe('with @tailwindcss/vite', () => {
+  const catalogFile = '<script>\n  import B from \'./B.svelte\';\n</script>\n<Section title="B"><B /></Section>';
+
+  /** restarts the server with B.svelte and its catalog file, and an app that uses a Tailwind CSS stylesheet */
+  async function withApp(main: string) {
+    await server.close();
+    for (const name of ['svelte', 'tailwindcss', '@tailwindcss/node']) link(name);
+    writeFileSync(join(tmp, 'app/src/app.css'), '@import "tailwindcss";\n');
+    writeFileSync(join(tmp, 'app/src/main.js'), `import './app.css';\n${main}`);
+    writeFileSync(join(tmp, 'app/src/B.svelte'), '<p>b</p>\n');
+    writeFileSync(join(tmp, 'app/src/B.zukan.svelte'), catalogFile);
+    await start({}, { plugins: [tailwindcss(), svelte()] });
+    await list();
+    const env = server.environments.client;
+    for (const id of ['/src/main.js', '/src/app.css', '/src/B.zukan.svelte', '/src/B.svelte'])
+      await env.transformRequest(id);
+    for (const file of ['B.zukan.svelte', 'B.svelte', 'main.js']) {
+      const mods = env.moduleGraph.getModulesByFile(normalizePath(join(tmp, 'app/src', file)))!;
+      expect([...mods].flatMap((m) => [...m.importers].map((i) => i.url))).toContain('/src/app.css');
+    }
+    send.mockClear();
+  }
+
+  it(
+    'a missing import in a catalog file keeps off the app, shows its message and reloads only the catalog once fixed',
+    { timeout: 30_000 },
+    async () => {
+      await withApp('');
+      writeFileSync(
+        join(tmp, 'app/src/B.zukan.svelte'),
+        catalogFile.replace('<script>\n', "<script>\n  import './missing.js';\n")
+      );
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(await get('/src/B.zukan.svelte')).toMatch(/^throw new Error\(.*missing\.js/);
+      expect(errors()).toHaveLength(0);
+      expect(fullReloads()).toBe(0);
+      send.mockClear();
+      writeFileSync(join(tmp, 'app/src/B.zukan.svelte'), catalogFile);
+      await waitForReload();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(errors()).toHaveLength(0);
+      expect(fullReloads()).toBe(0);
+      expect(await get('/src/B.zukan.svelte')).not.toMatch(/^throw /);
+    }
+  );
+
+  it('a compile error in a component only a catalog file imports keeps off the app', { timeout: 30_000 }, async () => {
+    await withApp('');
+    writeFileSync(join(tmp, 'app/src/B.svelte'), '{#if}\n');
+    await waitForReload();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(errors()).toHaveLength(0);
+    expect(fullReloads()).toBe(0);
+    expect(await get('/src/B.svelte')).toMatch(/^throw new Error\(/);
+  });
+
+  it("a compile error in a component the app imports stays Vite's error", { timeout: 30_000 }, async () => {
+    await withApp("import './B.svelte';\n");
+    writeFileSync(join(tmp, 'app/src/B.svelte'), '{#if}\n');
+    await expect.poll(() => errors().length, { timeout: 10_000 }).toBe(1);
+    expect(reloaded()).toBe(false);
+  });
+
+  it("a missing import in a component the app imports stays Vite's error", { timeout: 30_000 }, async () => {
+    await withApp("import './B.svelte';\n");
+    writeFileSync(join(tmp, 'app/src/B.svelte'), "<script>\n  import './missing.js';\n</script>\n<p>b</p>\n");
+    await new Promise((r) => setTimeout(r, 1000));
+    send.mockClear();
+    await get('/src/B.svelte').catch(() => {});
+    expect(errors()).toHaveLength(1);
+  });
+
+  // what `@import` makes an importer is a real import, unlike `addWatchFile`
+  it("a stylesheet only the app's stylesheet imports stays Vite's error", { timeout: 30_000 }, async () => {
+    await withApp('');
+    const inner = join(tmp, 'app/src/inner.css');
+    writeFileSync(inner, 'p { color: red }\n');
+    writeFileSync(join(tmp, 'app/src/app.css'), '@import "tailwindcss";\n@import "./inner.css";\n');
+    await new Promise((r) => setTimeout(r, 1000));
+    const env = server.environments.client;
+    await env.transformRequest('/src/app.css');
+    expect(
+      [...env.moduleGraph.getModulesByFile(normalizePath(inner))!].flatMap((m) => [...m.importers].map((i) => i.url))
+    ).toContain('/src/app.css');
+    send.mockClear();
+    writeFileSync(inner, '@import "./missing.css";\np { color: red }\n');
+    await new Promise((r) => setTimeout(r, 1000));
+    await get('/src/app.css').catch(() => {});
+    expect(errors()).toHaveLength(1);
+  });
+
+  it.each([
+    ['catalog file', 'B.zukan.svelte', catalogFile],
+    ['.md', 'B.zukan.md', '# B']
+  ])('re-creating a deleted %s reloads only the catalog', { timeout: 30_000 }, async (_, name, source) => {
+    await withApp('');
+    const file = join(tmp, 'app/src', name);
+    writeFileSync(file, source);
+    await waitForReload();
+    const env = server.environments.client;
+    // Tailwind CSS scans the file, and the catalog reads it
+    const load = async () => {
+      env.moduleGraph.invalidateAll();
+      await list();
+      // none while the catalog file is deleted
+      await meta('app/B').catch(() => {});
+      for (const id of ['/src/main.js', '/src/app.css']) await env.transformRequest(id);
+    };
+    await load();
+    const before = await meta('app/B');
+    send.mockClear();
+    rmSync(file);
+    await waitForReload();
+    await load();
+    send.mockClear();
+    writeFileSync(file, source);
+    await waitForReload();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(fullReloads()).toBe(0);
+    expect(await meta('app/B')).toBe(before);
+  });
+
+  it('a stylesheet only a catalog file imports keeps its error off the app', { timeout: 30_000 }, async () => {
+    await withApp('');
+    const css = join(tmp, 'app/src/only.css');
+    writeFileSync(css, 'p { color: red }\n');
+    writeFileSync(
+      join(tmp, 'app/src/B.zukan.svelte'),
+      catalogFile.replace('<script>\n', "<script>\n  import './only.css';\n")
+    );
+    await new Promise((r) => setTimeout(r, 1000));
+    const env = server.environments.client;
+    // scanned again, now that the file exists
+    env.moduleGraph.invalidateAll();
+    for (const id of ['/src/app.css', '/src/B.zukan.svelte', '/src/only.css']) await env.transformRequest(id);
+    writeFileSync(css, '@import "./missing.css";\np { color: red }\n');
+    await new Promise((r) => setTimeout(r, 1000));
+    send.mockClear();
+    expect(await get('/src/only.css')).toMatch(/^throw new Error\(/);
+    expect(errors()).toHaveLength(0);
+  });
+
+  it(
+    'a stylesheet a catalog file imports through another keeps its error off the app',
+    { timeout: 30_000 },
+    async () => {
+      await withApp('');
+      const inner = join(tmp, 'app/src/inner.css');
+      writeFileSync(inner, 'p { color: red }\n');
+      writeFileSync(join(tmp, 'app/src/outer.css'), '@import "./inner.css";\n');
+      writeFileSync(
+        join(tmp, 'app/src/B.zukan.svelte'),
+        catalogFile.replace('<script>\n', "<script>\n  import './outer.css';\n")
+      );
+      await new Promise((r) => setTimeout(r, 1000));
+      const env = server.environments.client;
+      await env.transformRequest('/src/B.zukan.svelte');
+      await env.transformRequest('/src/outer.css');
+      send.mockClear();
+      writeFileSync(inner, '@import "./missing.css";\np { color: red }\n');
+      await new Promise((r) => setTimeout(r, 1000));
+      send.mockClear();
+      expect(await get('/src/outer.css')).toMatch(/^throw new Error\(/);
+      expect(errors()).toHaveLength(0);
+    }
+  );
+});
 
 /** restarts the server with A.svelte reading its props type from types.ts */
 async function withPropsType() {

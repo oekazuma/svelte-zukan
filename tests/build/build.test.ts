@@ -66,6 +66,14 @@ const expectWorker = (dir: string) => {
   expect(readFileSync(join(dir, worker), 'utf8')).not.toMatch(/[`'"]\/[^`'"]*message-[\w-]+\.txt/);
 };
 
+/** the asset a component's stylesheet names, over the inline limit: next to the stylesheet, wherever the catalog is deployed */
+const expectCssAsset = (dir: string) => {
+  const css = globSync('zukan-dist/_zukan/*.css', { cwd: dir }).map((f) => readFileSync(join(dir, f), 'utf8'));
+  const [, name] = css.join('\n').match(/url\(["']?\.\/(bg-[\w-]+\.svg)/) ?? [];
+  expect(name).toBeDefined();
+  expect(existsSync(join(dir, 'zukan-dist/_zukan', name))).toBe(true);
+};
+
 const catalogJs = (dir: string) =>
   globSync('zukan-dist/_zukan/*.js', { cwd: dir }).map((f) => ({ f, code: readFileSync(join(dir, f), 'utf8') }));
 
@@ -109,6 +117,7 @@ test('kit monorepo build', { timeout: 120_000 }, () => {
   for (const text of ['Long title', 'A card from']) expect(all).toContain(text);
   expect(unloadedCss(dir)).toEqual([]);
   expect(withLocalPaths(dir)).toEqual([]);
+  expectCssAsset(dir);
   const catalog = JSON.parse(readFileSync(join(dir, 'zukan-dist/catalog.json'), 'utf8'));
   // `$lib` through `alias` in SvelteKit's config and `#lib` through `imports`: the project's own files, with every member listed
   const aliased = catalog.components.find((c: { id: string }) => c.id.endsWith('/lib/Aliased'));
@@ -132,6 +141,7 @@ test('kit monorepo build under paths.base', { timeout: 180_000 }, async () => {
   const all = [html, ...catalogJs(dir).map(({ code }) => code)].join('\n');
   expect(all).not.toContain('/app/_zukan');
   expect(withLocalPaths(dir)).toEqual([]);
+  expectCssAsset(dir);
   if (!hasChromium) return;
 
   // the catalog starts in a browser, and SvelteKit's runtime APIs give the values the docs promise
@@ -163,6 +173,12 @@ test('kit monorepo build under paths.base', { timeout: 180_000 }, async () => {
     const worker = await preview('Worker');
     for (const id of ['via-url', 'via-import'])
       await expect.poll(() => worker.locator(`#${id}`).textContent(), { timeout: 30_000 }).toBe('from worker');
+    const styled = await preview('Background');
+    const background = () => styled.locator('.with-background').evaluate((el) => getComputedStyle(el).backgroundImage);
+    await expect.poll(background, { timeout: 30_000 }).toContain('bg-');
+    const asset = await styled.request.get((await background()).slice('url("'.length, -'")'.length));
+    expect(asset.status()).toBe(200);
+    expect(asset.headers()['content-type']).toBe('image/svg+xml');
     const detail = await browser.newPage();
     detail.on('pageerror', (e) => errors.push(e.message));
     await detail.goto(`${origin}/app/__zukan/#/@fixture/ui/lib/Card`);

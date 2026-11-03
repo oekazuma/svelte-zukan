@@ -66,6 +66,8 @@ export const RELOAD_ON_PRELOAD_ERROR = [
 export function generateEntryModule(opts: {
   appFile: string;
   logo: string | null;
+  /** a logo's URL, used as it is, in place of importing `logo` */
+  logoUrl?: string | null;
   wrapper: string | null;
   title: string;
   locale: 'en' | 'ja';
@@ -86,9 +88,9 @@ export function generateEntryModule(opts: {
   ];
   // the module runs only once its static imports have loaded, and the key listener must be registered before the ones
   // that scripts injected into this page add (the Vite DevTools dock takes ⌘K in the capture phase of the window too),
-  // so even `svelte` comes lazily. The logo stays static: Vite serves a public file's `?url` module only once it has
-  // seen the import, and a dynamic one is requested before that. The app and the list come lazily, so that the tab
-  // also recovers from an error in the list (e.g. a duplicate ID) on the next reload event
+  // so even `svelte` comes lazily. The logo stays static: a dynamic import would be a chunk of its own in the build,
+  // holding one URL. The app and the list come lazily, so that the tab also recovers from an error in the list (e.g. a
+  // duplicate ID) on the next reload event
   return [
     // in the module, not an inline script, so that a `script-src 'self'` policy still allows it
     ...(opts.kitGlobal ? [`globalThis[${opts.kitGlobal}] = { env: {} };`] : []),
@@ -122,7 +124,7 @@ export function generateEntryModule(opts: {
     `      uncataloged,`,
     `      listError: error,`,
     opts.tailwind ? `      tailwind,` : `      tailwind: [],`,
-    `      logo: ${opts.logo ? 'logo' : 'null'},`,
+    `      logo: ${opts.logoUrl ? s(opts.logoUrl) : opts.logo ? 'logo' : 'null'},`,
     `      wrapper: ${opts.wrapper ? `() => import(${s(opts.wrapper)})` : 'null'},`,
     `      title: ${s(opts.title)},`,
     `      locale: ${s(opts.locale)},`,
