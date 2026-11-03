@@ -25,4 +25,6 @@ The wrapper accepts `children` and renders it.
 <ThemeProvider>{@render children()}</ThemeProvider>
 ```
 
+Import the app's own stylesheet: in a fresh `npx sv create` app with the Tailwind CSS add-on, that is `src/routes/layout.css`.
+
 Global CSS loaded by the wrapper does not affect the catalog's own UI. The catalog UI is a separate HTML page and does not load the app's CSS either.

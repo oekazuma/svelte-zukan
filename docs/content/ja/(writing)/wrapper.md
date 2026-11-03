@@ -25,4 +25,6 @@ wrapper は `children` を受け取って描画します。
 <ThemeProvider>{@render children()}</ThemeProvider>
 ```
 
+import するのはアプリ自身のスタイルシートです。`npx sv create` で Tailwind CSS アドオンを付けて作った直後のアプリなら、`src/routes/layout.css` です。
+
 wrapper が読み込むグローバル CSS は、カタログの UI 側には効きません。カタログの UI は独立した HTML で、アプリの CSS も読み込みません。

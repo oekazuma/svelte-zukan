@@ -49,7 +49,7 @@ Each `tailwind` object has:
 
 The classes in `categories` are the ones the theme defines, so an agent that styles a component should use only those. Dark-mode values, arbitrary values and variants are [not part of it](/tailwind#what-it-does-not-show).
 
-`preview` is a hash on the catalog page: `/__zukan/#/preview/ui/Button?section=Primary` shows only that section, so it is a good page for a screenshot. Add `&theme=dark` for the dark theme, unless the [`theme` option](/options) fixes it. The page fills the window, so set the window's width for a phone or tablet layout.
+`preview` is a hash on the catalog page: `/__zukan/#/preview/ui/Button?section=Primary` shows only that section, so it is a good page for a screenshot. Add `&theme=dark` for the dark theme, unless the [`theme` option](/options) fixes it. It sets the page's `color-scheme`, which `light-dark()` follows; a stylesheet that uses `prefers-color-scheme` follows the browser, so a screenshot in dark also needs the color scheme emulated (in Playwright, `colorScheme: 'dark'`). The page fills the window, so set the window's width for a phone or tablet layout.
 
 ## WebMCP tools in the catalog
 

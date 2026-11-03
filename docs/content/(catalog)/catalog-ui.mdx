@@ -25,7 +25,7 @@ Below the cards, a folded list shows the `.svelte` files in the scanned director
 
 ## Theme
 
-The theme button at the top of the sidebar switches the catalog and every preview between light and dark. It starts from your system's setting, and your choice is remembered in this browser. Each preview gets the theme as its `color-scheme`, so `light-dark()` and `prefers-color-scheme` in your components follow it.
+The theme button at the top of the sidebar switches the catalog and every preview between light and dark. It starts from your system's setting, and your choice is remembered in this browser. Each preview gets the theme as its `color-scheme`, so `light-dark()` and `prefers-color-scheme` in your components follow it. A section opened alone is not in a frame: `light-dark()` still follows the theme, but `prefers-color-scheme` follows the browser, so a stylesheet that uses it (such as Tailwind's default `dark:` variant) can show light there.
 
 To show one theme only, set the [`theme` option](/options) to `'light'` or `'dark'`. The catalog and every preview then always use it, and the theme button and the <kbd>T</kbd> shortcut go away.
 
