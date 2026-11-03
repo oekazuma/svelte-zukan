@@ -1,5 +1,14 @@
 # svelte-zukan
 
+## 0.17.1
+
+### Patch Changes
+
+- f63cbe3: fix: make a prop of an intersection required when any side requires it, with the type of that side, and keep the declaration of a store held in a rune in a section's code.
+- 5d943ed: fix: find a Tailwind CSS entry whose imports reach Tailwind outside the scanned directories, such as `../styles/tw.css` or a package in `node_modules` or the workspace.
+- cf63bb0: fix: keep the preview frame bounded when a section's content is sized to the viewport, such as `height: 150vh` or two `min-height: 100vh` blocks. It used to grow until the browser's limit, which pushed the rest of the page out of reach.
+- ee97b8b: fix: load CSS `url()` assets of the static catalog in a SvelteKit app, show the dev catalog with a `logo` in SvelteKit's assets directory, keep catalog-only errors off the app's tabs with `@tailwindcss/vite`, and reload only the catalog when a deleted `.zukan.md` is created again.
+
 ## 0.17.0
 
 ### Minor Changes
