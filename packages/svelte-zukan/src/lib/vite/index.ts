@@ -187,6 +187,12 @@ const catalogOnly = (mod: EnvironmentModuleNode, seen = new Set<EnvironmentModul
 };
 
 /**
+ * The modules of a file that a page loads. A stylesheet's `addWatchFile` (`@tailwindcss/vite`'s, on every file it scans)
+ * gives the file one more module, with no id and the stylesheet as its importer, which says nothing of who imports it.
+ */
+const realModules = (mods: Iterable<EnvironmentModuleNode> | undefined) => [...(mods ?? [])].filter((m) => m.id);
+
+/**
  * Vite's resolver, wrapped like `@tailwindcss/vite` wraps it for `@tailwindcss/node`: aliases first, a relative result
  * made absolute, and only results that `accept` takes. Built from the environment's config on the first call.
  */
@@ -208,6 +214,20 @@ function viteResolver(
     }
   };
 }
+
+const cssResolver = (env: () => Environment) =>
+  viteResolver(
+    env,
+    (config) => ({
+      ...config.resolve,
+      extensions: ['.css'],
+      mainFields: ['style'],
+      conditions: ['style', 'development|production'],
+      tryIndex: false,
+      preferRelative: true
+    }),
+    (file) => file.endsWith('.css')
+  );
 
 const assertApart = (out: string, what: string, dir: string) => {
   if (isInside(out, dir) || isInside(dir, out))
@@ -320,24 +340,12 @@ export function zukan(options: ZukanOptions = {}): Plugin {
   // it; the build's `__SVELTEKIT_PAYLOAD__` define is the same payload. A JSON string, so it is a JS expression
   let kitGlobal: string | undefined;
   const generateTailwind = async (env: () => Environment) => {
-    const css = viteResolver(
-      env,
-      (config) => ({
-        ...config.resolve,
-        extensions: ['.css'],
-        mainFields: ['style'],
-        conditions: ['style', 'development|production'],
-        tryIndex: false,
-        preferRelative: true
-      }),
-      (file) => file.endsWith('.css')
-    );
     const js = viteResolver(
       env,
       (config) => config.resolve,
       (file) => !file.endsWith('.css')
     );
-    const data = await loadTailwind(root, cssDirs(), { css, js });
+    const data = await loadTailwind(root, cssDirs(), { css: cssResolver(env), js });
     // Vite does not watch node_modules; a reinstall restarts the dev server anyway
     const watch = data.watch.filter((file) => !file.includes('/node_modules/'));
     tailwindWatch = new Set(watch);
@@ -458,7 +466,10 @@ export function zukan(options: ZukanOptions = {}): Plugin {
         // relative, so that the catalog also works under a subpath; `base` can not be set per environment
         const renderBuiltUrl = config.experimental?.renderBuiltUrl;
         (config.experimental ??= {}).renderBuiltUrl = (filename, ctx) => {
-          if (filename.startsWith(OUT_PREFIX)) return { relative: true };
+          // Vite makes a stylesheet's relative URLs from the app's assetsDir (SvelteKit's `_app/immutable/assets`), where
+          // the catalog's stylesheets do not lie: they lie next to these files
+          if (filename.startsWith(OUT_PREFIX))
+            return ctx.hostType === 'css' ? `./${filename.slice(OUT_PREFIX.length)}` : { relative: true };
           // a Web Worker keeps the app's file name (`worker` options and Vite's worker bundles are shared by all
           // environments); generateBundle moves it under OUT_PREFIX. A file of publicDir: buildApp copies it there
           if (
@@ -714,17 +725,28 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           group: g.name,
           dirs: g.dirs.map((dir) => normalizePath(relative(root, dir)) || '.')
         }));
-        // by its file path, a logo in publicDir would be served under /public/, which Vite warns about on every request
+        // a logo in publicDir is not imported: by its file path it would be served under /public/, which Vite warns about
+        // on every request, and by its public URL SvelteKit's asset middleware answers the import with the raw file
         const { logo } = resolved;
         const inPublic = logo && publicDir && isInside(logo, publicDir);
-        return generateEntryModule({
-          appFile: appFile('App.svelte'),
-          ...resolved,
-          logo: inPublic ? '/' + normalizePath(relative(publicDir, logo)) : logo,
-          searched,
-          tailwind: hasTailwind(cssDirs(), root),
-          kitGlobal
-        });
+        return hasTailwind(
+          cssDirs(),
+          root,
+          cssResolver(() => this.environment)
+        ).then((tailwind) =>
+          generateEntryModule({
+            appFile: appFile('App.svelte'),
+            ...resolved,
+            logo: inPublic ? null : logo,
+            logoUrl: inPublic
+              ? this.environment.config.base +
+                normalizePath(relative(publicDir, logo)).split('/').map(encodeURIComponent).join('/')
+              : null,
+            searched,
+            tailwind,
+            kitGlobal
+          })
+        );
       }
     },
     configResolved(config) {
@@ -740,8 +762,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
           return await handler.call(this, options);
         } catch (e) {
           const file = normalizePath(options.file);
-          const mods = this.environment.moduleGraph.getModulesByFile(file);
-          if (this.environment.config.consumer !== 'client' || !mods?.size || ![...mods].every((m) => catalogOnly(m)))
+          const mods = realModules(this.environment.moduleGraph.getModulesByFile(file));
+          if (this.environment.config.consumer !== 'client' || !mods.length || !mods.every((m) => catalogOnly(m)))
             throw e;
           failed.add(file);
           this.environment.hot.send({ type: 'custom', event: 'zukan:reload' });
@@ -810,8 +832,8 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       const onError: Connect.ErrorHandleFunction = (err, _req, res, next) => {
         // relative to the working directory when the Svelte compiler names the file
         const id = typeof err?.id === 'string' ? normalizePath(resolve(err.id.split('?')[0])) : '';
-        const mods = id ? server.environments.client.moduleGraph.getModulesByFile(id) : undefined;
-        if (res.headersSent || !mods?.size || ![...mods].every((m) => catalogOnly(m))) return next(err);
+        const mods = realModules(id ? server.environments.client.moduleGraph.getModulesByFile(id) : undefined);
+        if (res.headersSent || !mods.length || !mods.every((m) => catalogOnly(m))) return next(err);
         failed.add(id);
         const message = `Internal server error: ${err.message}`;
         server.config.logger.error(buildErrorMessage(err, [styleText('red', message)]), {
@@ -878,12 +900,14 @@ export function zukan(options: ZukanOptions = {}): Plugin {
       const inScanned = scanned().some((dir) => isInside(normalized, dir));
       // what the app imports too: the chain of imports through the catalog's own modules (the list, and a meta module
       // that watches the file) ends at the entry, which accepts no update, so Vite would answer with `full-reload` on
-      // every tab. On a creation, also an app entry whose import failed: it has no importers, and Vite reloads the app
+      // every tab. On a creation, also an app entry whose import failed: it has no importers, and Vite reloads the app.
+      // The file's own module with no importers is no such entry: it is what is left of the file since its deletion,
+      // and Vite would answer it with `full-reload` too
       const appModules = () =>
         modules.filter(
           (m) =>
             [...m.importers].some((i) => !i.id?.startsWith('\0virtual:svelte-zukan/')) ||
-            (type === 'create' && !m.importers.size)
+            (type === 'create' && !m.importers.size && m.file !== normalizePath(file))
         );
       // Vite adds the modules whose imports failed to resolve to a creation: the new file may be one of them
       const resolvedFailed =

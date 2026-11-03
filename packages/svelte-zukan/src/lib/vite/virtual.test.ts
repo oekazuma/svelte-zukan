@@ -41,6 +41,12 @@ describe('generateCatalogModule', () => {
 describe('generateEntryModule', () => {
   const base = { appFile: '/lib/app/App.svelte', title: 'zukan', locale: 'en' as const, searched: [] };
 
+  it('uses a logo URL as it is, with no import', () => {
+    const code = generateEntryModule({ ...base, logo: null, logoUrl: '/app/logo.svg', wrapper: null });
+    expect(code).toContain('logo: "/app/logo.svg",');
+    expect(code).not.toContain('import logo');
+  });
+
   it('imports the logo as a URL and the wrapper lazily', () => {
     const code = generateEntryModule({ ...base, logo: '/x/logo.svg', wrapper: '/x/Wrapper.svelte' });
     expect(code).toContain('import("/lib/app/App.svelte")');
