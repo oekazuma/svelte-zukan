@@ -30,6 +30,7 @@ type Scope = {
 };
 
 const keyName = (key: Node) => (key.type === 'Identifier' ? (key.name as string) : String(key.value));
+const propName = (member: Node) => (member.key && !member.computed ? keyName(member.key as Node) : null);
 
 // Markdown, but HTML as text, as an editor shows it: an installed package's comment would otherwise render as markup
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -729,23 +730,42 @@ export function extractProps(
           (node) => node.type === 'TSInterfaceDeclaration' && (node.id as Node).name === (found.node.id as Node).name
         );
         const bound = new Map(merged.map((node) => [node, bind(node)]));
+        // the first declaration or base that has a member is the interface's, even an optional one over a required base:
+        // an error TypeScript reports but which keeps it optional, and which `skipLibCheck` hides in a package. A
+        // component's own member stays beside a package's, which is listed only when destructured
+        const read = new Map<string | null, boolean>();
+        const addPart = (add: () => void) => {
+          const start = members.length;
+          add();
+          const part = members.splice(start).filter(({ node, scope }) => {
+            const own = read.get(propName(node));
+            return own === undefined || (!own && !scope.package);
+          });
+          for (const { node, scope } of part) {
+            const name = propName(node);
+            if (name !== null) read.set(name, !scope.package || !!read.get(name));
+          }
+          members.push(...part);
+        };
         for (const node of merged) {
           seen.add(node);
           const body = node.body as Node;
-          members.push(...listOf(body.body as Node[], body.start, found.scope, bound.get(node)!));
+          addPart(() => members.push(...listOf(body.body as Node[], body.start, found.scope, bound.get(node)!)));
         }
         for (const node of merged)
           for (const h of (node.extends as Node[] | undefined) ?? [])
-            collect(
-              {
-                ...h,
-                type: 'TSTypeReference',
-                typeName: h.expression,
-                typeArguments: h.typeArguments ?? h.typeParameters
-              },
-              found.scope,
-              found.depth,
-              bound.get(node)
+            addPart(() =>
+              collect(
+                {
+                  ...h,
+                  type: 'TSTypeReference',
+                  typeName: h.expression,
+                  typeArguments: h.typeArguments ?? h.typeParameters
+                },
+                found.scope,
+                found.depth,
+                bound.get(node)
+              )
             );
         for (const node of merged) seen.delete(node);
       }
@@ -795,22 +815,23 @@ export function extractProps(
   const typeText = (scope: Scope, n: Node, bindings: Bindings) =>
     print(scope, n, bindings).replace(/(?<!\btypeof\s+)import\((['"])[^'"]*\1\)\./g, '');
   // the component's own types first, so that they win over a package's member of the same name
-  // a name declared again (an interface narrowing what it extends, both sides of an intersection) is listed once: the
-  // first one read, an interface's own member before the one it extends
+  // a name on several sides of an intersection is listed once: the first one read, unless only a later side requires
+  // it, which TypeScript makes required. Not a computed intersection of the types: the side as written reads better
   const props: ZukanProp[] = [];
-  const listed = new Set<string>();
+  const listed = new Map<string, { at: number; optional: unknown }>();
   for (const { node: m, scope, bindings, from } of [
     ...members.filter((m) => !m.scope.package),
     ...members.filter((m) => m.scope.package)
   ]) {
     if ((m.type !== 'TSPropertySignature' && m.type !== 'TSMethodSignature') || m.computed) continue;
     const name = keyName(m.key as Node);
-    if (listed.has(name) || (scope.package && !defaults.has(name))) continue;
-    listed.add(name);
+    const before = listed.get(name);
+    if (before ? !before.optional || m.optional : scope.package && !defaults.has(name)) continue;
+    const at = before?.at ?? props.length;
+    listed.set(name, { at, optional: m.optional });
     const d = defaults.get(name);
-    defaults.delete(name);
     const annotation = (m.typeAnnotation as Node | undefined)?.typeAnnotation as Node | undefined;
-    props.push({
+    props[at] = {
       name,
       type:
         m.type === 'TSMethodSignature'
@@ -821,17 +842,18 @@ export function extractProps(
       default: d?.value ?? null,
       required: !m.optional && d?.value == null,
       bindable: d?.bindable ?? false,
-      description: jsdocOf(m, scope.comments, from) ?? d?.description ?? null
-    });
+      description: jsdocOf(m, scope.comments, from) ?? (before && props[at].description) ?? d?.description ?? null
+    };
   }
   for (const [name, d] of defaults)
-    props.push({
-      name,
-      type: null,
-      default: d.value,
-      required: false,
-      bindable: d.bindable,
-      description: d.description
-    });
+    if (!listed.has(name))
+      props.push({
+        name,
+        type: null,
+        default: d.value,
+        required: false,
+        bindable: d.bindable,
+        description: d.description
+      });
   return { props, typeName: typeNames.length ? [...new Set(typeNames)].join(', ') : null, files: [...files] };
 }

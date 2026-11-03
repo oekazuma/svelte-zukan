@@ -241,7 +241,7 @@ describe('virtual modules', () => {
     expect(p.resolveId('virtual:svelte-zukan/catalog')).toBe('\0virtual:svelte-zukan/catalog');
     expect(p.resolveId('virtual:svelte-zukan/other')).toBeUndefined();
     expect(p.load('\0virtual:svelte-zukan/catalog')).toContain(`import("${root}/src/A.zukan.svelte")`);
-    const entry = p.load('\0virtual:svelte-zukan/entry');
+    const entry = await p.load('\0virtual:svelte-zukan/entry');
     expect(entry).toContain(`import("${bundled('App.svelte')}")`);
     expect(entry).toContain(`import logo from "${bundled('logo.svg')}?url"`);
     expect(entry).toContain('searched: [{"group":"app","dirs":["src"]}]');
@@ -255,18 +255,20 @@ describe('virtual modules', () => {
     await writeFile(path.join(root, 'public/img/logo.svg'), '<svg/>');
     const { p } = boot(root, { logo: 'public/img/logo.svg' });
     p.configureServer({ ...fakeServer(root), config: { ...fakeServer(root).config, publicDir: `${root}/public` } });
-    const entry = p.load.call({ environment: { config: { base: '/app/' } } }, '\0virtual:svelte-zukan/entry');
+    const entry = await p.load.call({ environment: { config: { base: '/app/' } } }, '\0virtual:svelte-zukan/entry');
     expect(entry).toContain('logo: "/app/img/logo.svg",');
     expect(entry).not.toContain('import logo');
     expect(entry).not.toContain('hot.accept');
     const built = (await bootBuild(root, { logo: 'public/img/logo.svg' })).p;
-    expect(built.load('\0virtual:svelte-zukan/entry')).toContain(`import logo from "${root}/public/img/logo.svg?url"`);
+    expect(await built.load('\0virtual:svelte-zukan/entry')).toContain(
+      `import logo from "${root}/public/img/logo.svg?url"`
+    );
   });
 
   it('passes the searched dirs relative to the root', async () => {
     const { tmp, root } = await makeApp();
     const { p } = boot(root, { groups: { a: '.', b: ['src', '../outside'] } });
-    const entry = p.load('\0virtual:svelte-zukan/entry');
+    const entry = await p.load('\0virtual:svelte-zukan/entry');
     expect(entry).toContain('searched: [{"group":"a","dirs":["."]},{"group":"b","dirs":["src","../outside"]}]');
     expect(entry).not.toContain(tmp);
   });
@@ -1403,14 +1405,14 @@ describe('Tailwind CSS', () => {
     vi.mocked(loadTailwind).mockClear();
     const { p } = boot(root);
     p.configureServer(fakeServer(root));
-    p.load('\0virtual:svelte-zukan/entry');
+    await p.load('\0virtual:svelte-zukan/entry');
     p.load('\0virtual:svelte-zukan/catalog');
     expect(loadTailwind).not.toHaveBeenCalled();
   });
 
   it('leaves the Tailwind import out of the entry module without an entry', async () => {
     const { root } = await makeApp();
-    const entry = boot(root).p.load('\0virtual:svelte-zukan/entry');
+    const entry = await boot(root).p.load('\0virtual:svelte-zukan/entry');
     expect(entry).not.toContain('virtual:svelte-zukan/tailwind');
     expect(entry).toContain('tailwind: []');
   });
