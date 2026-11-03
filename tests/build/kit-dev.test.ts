@@ -97,11 +97,16 @@ test.skipIf(!hasChromium).each([
 
     // an edit reloads the catalog, not the app's tab
     const app = await browser!.newPage();
+    const appErrors: string[] = [];
+    app.on('pageerror', (e) => appErrors.push(e.message));
+    app.on('console', (m) => m.type() === 'error' && appErrors.push(m.text()));
     await app.goto(`${origin}${base}/`);
     await app.evaluate(() => ((window as unknown as { kept: boolean }).kept = true));
     writeFileSync(join(dir, logo), source.replaceAll('24', '32'));
     await expect.poll(width, { timeout: 30_000 }).toBe(32);
     expect(await app.evaluate(() => (window as unknown as { kept?: boolean }).kept)).toBe(true);
+    expect(errors).toEqual([]);
+    expect(appErrors).toEqual([]);
   } finally {
     writeFileSync(join(dir, logo), source);
     server.process?.kill();

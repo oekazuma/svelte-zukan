@@ -174,6 +174,7 @@ it('re-creating a deleted catalog file reloads only the catalog', { timeout: 20_
   await waitForReload();
   await new Promise((r) => setTimeout(r, 300));
   expect(fullReloads()).toBe(0);
+  expect(await list()).toContain('A.zukan.svelte');
 });
 
 it('a deleted and re-created file has its new content', { timeout: 20_000 }, async () => {
@@ -781,6 +782,7 @@ describe('with @tailwindcss/vite', () => {
       for (const id of ['/src/main.js', '/src/app.css']) await env.transformRequest(id);
     };
     await load();
+    const before = await meta('app/B');
     send.mockClear();
     rmSync(file);
     await waitForReload();
@@ -790,6 +792,7 @@ describe('with @tailwindcss/vite', () => {
     await waitForReload();
     await new Promise((r) => setTimeout(r, 300));
     expect(fullReloads()).toBe(0);
+    expect(await meta('app/B')).toBe(before);
   });
 
   it('a stylesheet only a catalog file imports keeps its error off the app', { timeout: 30_000 }, async () => {

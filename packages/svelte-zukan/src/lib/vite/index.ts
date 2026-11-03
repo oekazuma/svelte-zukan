@@ -738,7 +738,10 @@ export function zukan(options: ZukanOptions = {}): Plugin {
             appFile: appFile('App.svelte'),
             ...resolved,
             logo: inPublic ? null : logo,
-            logoUrl: inPublic ? this.environment.config.base + normalizePath(relative(publicDir, logo)) : null,
+            logoUrl: inPublic
+              ? this.environment.config.base +
+                normalizePath(relative(publicDir, logo)).split('/').map(encodeURIComponent).join('/')
+              : null,
             searched,
             tailwind,
             kitGlobal

@@ -259,6 +259,15 @@ describe('virtual modules', () => {
     expect(entry).toContain('logo: "/app/img/logo.svg",');
     expect(entry).not.toContain('import logo');
     expect(entry).not.toContain('hot.accept');
+    await writeFile(path.join(root, 'public/img/a#b?.svg'), '<svg/>');
+    const reserved = boot(root, { logo: 'public/img/a#b?.svg' }).p;
+    reserved.configureServer({
+      ...fakeServer(root),
+      config: { ...fakeServer(root).config, publicDir: `${root}/public` }
+    });
+    expect(
+      await reserved.load.call({ environment: { config: { base: '/' } } }, '\0virtual:svelte-zukan/entry')
+    ).toContain('logo: "/img/a%23b%3F.svg",');
     const built = (await bootBuild(root, { logo: 'public/img/logo.svg' })).p;
     expect(await built.load('\0virtual:svelte-zukan/entry')).toContain(
       `import logo from "${root}/public/img/logo.svg?url"`
