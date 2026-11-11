@@ -15,7 +15,7 @@ overrides:
   takumi-js: 2.15.2
   # Security fixes for transitive dependencies (through blume and eslint only) whose parents pin a
   # vulnerable version or a major without the fix. Drop each once its parent allows the fixed one.
-  '@tailwindcss/typography>postcss-selector-parser': ^6.1.5
+  '@tailwindcss/typography>postcss-selector-parser': ^6.1.6
   '@vercel/routing-utils>path-to-regexp': ^6.3.0
   # The fixes exist only in glob 14 and minimatch 11. @vercel/nft calls only glob(pattern, options);
   # eslint and typescript-eslint call only minimatch() and Minimatch#match(), which minimatch 11 keeps.
