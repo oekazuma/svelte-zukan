@@ -256,7 +256,7 @@ overrides:
   takumi-js: 2.15.2
   '@tailwindcss/typography>postcss-selector-parser': ^6.1.5
   '@vercel/routing-utils>path-to-regexp': ^6.3.0
-  glob@13: ^14.0.2
+  glob@13: ^14.0.4
   minimatch@10: ^11.0.5
 
 packageExtensionsChecksum: sha256-QRbB427jafr2uug/EWFsqEu7c3tQtQOSJcLU8vaXoEA=
