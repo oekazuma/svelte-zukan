@@ -13,6 +13,22 @@ allowBuilds:
 # then fails on the OG images of the Japanese pages. Drop this once blume reads the new field.
 overrides:
   takumi-js: 2.15.2
+  # Security fixes for transitive dependencies (through blume and eslint only) whose parents pin a
+  # vulnerable version or a major without the fix. Drop each once its parent allows the fixed one.
+  '@tailwindcss/typography>postcss-selector-parser': ^6.1.5
+  '@vercel/routing-utils>path-to-regexp': ^6.3.0
+  # The fixes exist only in glob 14 and minimatch 11. @vercel/nft calls only glob(pattern, options);
+  # eslint and typescript-eslint call only minimatch() and Minimatch#match(), which minimatch 11 keeps.
+  glob@13: ^14.0.2
+  minimatch@10: ^11.0.5
+
+# @astrojs/astro2tsx 0.1.3 depends on @emnapi/core 1.x but not on @emnapi/runtime, so pnpm gives
+# it the 2.0 beta that rolldown's wasm binding brings, and `blume check` fails in emnapi
+# (this.bridge.setLastError is not a function). 0.1.4 declares it; drop this once the lockfile has 0.1.4.
+packageExtensions:
+  '@astrojs/astro2tsx@0.1.3':
+    dependencies:
+      '@emnapi/runtime': 1.11.3
 
 catalog:
   '@changesets/cli': ^3.0.3
