@@ -48,7 +48,7 @@ catalog:
   eslint-plugin-svelte: ^3.24.1
   globals: ^17.14.0
   playwright: ^1.65.0
-  prettier: ^3.9.10
+  prettier: ^3.10.0
   prettier-plugin-svelte: ^4.1.1
   publint: ^0.3.25
   svelte: ^5.57.3
