@@ -20,7 +20,7 @@ overrides:
   # The fixes exist only in glob 14 and minimatch 11. @vercel/nft calls only glob(pattern, options);
   # eslint and typescript-eslint call only minimatch() and Minimatch#match(), which minimatch 11 keeps.
   glob@13: ^14.0.4
-  minimatch@10: ^11.0.7
+  minimatch@10: ^11.0.8
 
 # @astrojs/astro2tsx 0.1.3 depends on @emnapi/core 1.x but not on @emnapi/runtime, so pnpm gives
 # it the 2.0 beta that rolldown's wasm binding brings, and `blume check` fails in emnapi
