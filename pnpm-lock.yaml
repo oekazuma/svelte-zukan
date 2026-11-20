@@ -266,7 +266,7 @@ overrides:
   '@tailwindcss/typography>postcss-selector-parser': ^7.2.0
   '@vercel/routing-utils>path-to-regexp': ^6.3.0
   glob@13: ^14.0.6
-  minimatch@10: ^11.0.8
+  minimatch@10: ^11.0.9
 
 packageExtensionsChecksum: sha256-QRbB427jafr2uug/EWFsqEu7c3tQtQOSJcLU8vaXoEA=
 
