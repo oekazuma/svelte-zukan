@@ -11,8 +11,9 @@
       <Accordion title="What is a catalog file?" bind:open>
         A <code>.zukan.svelte</code> file next to a component, with one <code>&lt;Section&gt;</code> per example.
       </Accordion>
-      <Accordion title="Does it need a config file?">No. Add the Vite plugin and open <code>/__zukan/</code>.</Accordion
-      >
+      <Accordion title="Does it need a config file?">
+        No. Add the Vite plugin and open <code>/__zukan/</code>.
+      </Accordion>
     </div>
     <p class="demo-note">The first item is {open ? 'open' : 'closed'}.</p>
   </div>

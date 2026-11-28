@@ -218,10 +218,10 @@
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
   <a class={rel} href={formatHash('detail', to.path)} {rel}>
     <span class="hint">{rel === 'prev' ? `← ${t.previous}` : `${t.next} →`}</span>
-    <span class="target"
-      >{to.name}
-      {#if to.dir}<span class="dir">{to.dir}</span>{/if}</span
-    >
+    <span class="target">
+      {to.name}
+      {#if to.dir}<span class="dir">{to.dir}</span>{/if}
+    </span>
   </a>
 {/snippet}
 
@@ -297,22 +297,22 @@
                       <!-- a union wraps between its members, never inside one such as `() => void` -->
                       <!-- the separator is a mustache because Svelte trims the spaces of plain text at the edges of a block, and those spaces are where the union wraps -->
                       <!-- eslint-disable svelte/no-useless-mustaches -->
-                      <td role="cell" data-label={t.propType}
-                        >{#if p.type}<code
-                            >{#each unionMembers(p.type) as part, i (i)}{#if i}{' | '}{/if}<span class="type-part"
-                                >{part}</span
-                              >{/each}</code
-                          >{/if}</td
-                      >
+                      <td role="cell" data-label={t.propType}>
+                        {#if p.type}<code>
+                            {#each unionMembers(p.type) as part, i (i)}{#if i}{' | '}{/if}<span class="type-part">
+                                {part}
+                              </span>{/each}
+                          </code>{/if}
+                      </td>
                       <!-- eslint-enable svelte/no-useless-mustaches -->
-                      <td role="cell" data-label={t.propDefault}
-                        >{#if p.default}<code>{p.default}</code>{/if}</td
-                      >
+                      <td role="cell" data-label={t.propDefault}>
+                        {#if p.default}<code>{p.default}</code>{/if}
+                      </td>
                       <!-- rendered by the plugin from the component's own JSDoc -->
                       <!-- eslint-disable svelte/no-at-html-tags -->
-                      <td role="cell"
-                        >{#if p.description}{@html p.description}{/if}</td
-                      >
+                      <td role="cell">
+                        {#if p.description}{@html p.description}{/if}
+                      </td>
                       <!-- eslint-enable svelte/no-at-html-tags -->
                     </tr>
                   {/each}
@@ -366,8 +366,10 @@
                 <!-- eslint-disable svelte/no-navigation-without-resolve -->
                 <a
                   href={formatHash('detail', entry.path, PROPS)}
-                  aria-current={active === PROPS ? 'location' : undefined}>{t.props}</a
+                  aria-current={active === PROPS ? 'location' : undefined}
                 >
+                  {t.props}
+                </a>
                 <!-- eslint-enable svelte/no-navigation-without-resolve -->
               </li>
             {/if}
@@ -377,8 +379,10 @@
                 <!-- eslint-disable svelte/no-navigation-without-resolve -->
                 <a
                   href={formatHash('detail', entry.path, s.title)}
-                  aria-current={active === s.title ? 'location' : undefined}>{s.title}</a
+                  aria-current={active === s.title ? 'location' : undefined}
                 >
+                  {s.title}
+                </a>
                 <!-- eslint-enable svelte/no-navigation-without-resolve -->
               </li>
             {/each}

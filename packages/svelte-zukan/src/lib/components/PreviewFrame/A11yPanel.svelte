@@ -290,8 +290,10 @@
                 onpointerenter={() => (hovered = target)}
                 onpointerleave={() => (hovered = null)}
                 onfocus={() => (hovered = target)}
-                onblur={() => (hovered = null)}><code>{target}</code></button
+                onblur={() => (hovered = null)}
               >
+                <code>{target}</code>
+              </button>
             </li>
           {/each}
         </ul>
@@ -382,15 +384,19 @@
       class="chip tool"
       aria-pressed={textZoom}
       title={labels.a11yTextZoomHint}
-      onclick={() => (textZoom = !textZoom)}>{labels.a11yTextZoom}</button
+      onclick={() => (textZoom = !textZoom)}
     >
+      {labels.a11yTextZoom}
+    </button>
     <button
       type="button"
       class="chip tool"
       aria-pressed={showTabOrder}
       title={labels.a11yTabOrderHint}
-      onclick={() => (showTabOrder = !showTabOrder)}>{labels.a11yTabOrder}</button
+      onclick={() => (showTabOrder = !showTabOrder)}
     >
+      {labels.a11yTabOrder}
+    </button>
   </div>
   {#if result.status === 'done' && (result.violations.length || result.review.length)}
     <label class="toggle">

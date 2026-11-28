@@ -187,9 +187,9 @@
   {@const px = computed(token)}
   <code class="zukan-raw">{token.value}</code>
   {#if px}
-    <span class="zukan-px"
-      ><span aria-hidden="true">·</span> <span class="zukan-sr-only">{t.computedSize}:</span> <code>{px}</code></span
-    >
+    <span class="zukan-px">
+      <span aria-hidden="true">·</span> <span class="zukan-sr-only">{t.computedSize}:</span> <code>{px}</code>
+    </span>
   {/if}
 {/snippet}
 

@@ -48,8 +48,10 @@
         aria-controls="{uid}-panel-{item.id}"
         aria-selected={item.id === selected}
         tabindex={item.id === selected ? 0 : -1}
-        onclick={() => (selected = item.id)}>{item.label}</button
+        onclick={() => (selected = item.id)}
       >
+        {item.label}
+      </button>
     {/each}
   </div>
   {#each items as item (item.id)}

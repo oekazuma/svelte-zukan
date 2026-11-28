@@ -11,9 +11,9 @@
     <Alert title="新しいバージョンがあります">ページを再読み込みすると、最新のカタログが表示されます。</Alert>
     <Alert tone="success" title="変更を保存しました">プロフィールを更新しました。</Alert>
     <Alert tone="warning" title="ストレージの空きがわずかです">割り当て容量の 92% を使用しています。</Alert>
-    <Alert tone="danger" title="お支払いに失敗しました"
-      >カードが承認されませんでした。別のカードをお試しください。</Alert
-    >
+    <Alert tone="danger" title="お支払いに失敗しました">
+      カードが承認されませんでした。別のカードをお試しください。
+    </Alert>
   </div>
 </Section>
 

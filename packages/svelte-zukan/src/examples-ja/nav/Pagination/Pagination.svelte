@@ -39,8 +39,10 @@
         type="button"
         aria-label="{n} ページ目"
         aria-current={n === page ? 'page' : undefined}
-        onclick={() => (page = n)}>{n}</button
+        onclick={() => (page = n)}
       >
+        {n}
+      </button>
     {/if}
   {/each}
   <button type="button" aria-label="次のページ" disabled={page >= count} onclick={() => page++}>
