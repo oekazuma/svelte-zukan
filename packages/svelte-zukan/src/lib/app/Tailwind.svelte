@@ -266,9 +266,9 @@
                     </td>
                     <td>
                       <!-- a plain colour, not the entry's CSS, so it can be drawn in the catalog document -->
-                      {#if isColor(value)}<span class="swatch" style:background-color={value}></span>{/if}<code
-                        >{value}</code
-                      >
+                      {#if isColor(value)}<span class="swatch" style:background-color={value}></span>{/if}<code>
+                        {value}
+                      </code>
                     </td>
                   </tr>
                 {/each}

@@ -72,9 +72,9 @@
       {#each uncataloged as u (u.file)}
         <!-- a long path wraps after a slash rather than inside a name -->
         <li>
-          <code
-            >{#each u.file.split('/') as part, i (i)}{#if i}/<wbr />{/if}{part}{/each}</code
-          >
+          <code>
+            {#each u.file.split('/') as part, i (i)}{#if i}/<wbr />{/if}{part}{/each}
+          </code>
         </li>
       {/each}
     </ul>

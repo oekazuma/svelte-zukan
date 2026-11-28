@@ -11,9 +11,9 @@
       <Accordion title="カタログファイルとは？" bind:open>
         コンポーネントの隣に置く <code>.zukan.svelte</code> ファイルです。例ごとに <code>&lt;Section&gt;</code> を 1 つ書きます。
       </Accordion>
-      <Accordion title="設定ファイルは必要？"
-        >いりません。Vite プラグインを追加して <code>/__zukan/</code> を開くだけです。</Accordion
-      >
+      <Accordion title="設定ファイルは必要？">
+        いりません。Vite プラグインを追加して <code>/__zukan/</code> を開くだけです。
+      </Accordion>
     </div>
     <p class="demo-note">最初の項目は{open ? '開いています' : '閉じています'}。</p>
   </div>

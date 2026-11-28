@@ -265,8 +265,10 @@
       onclick={(e) => {
         e.preventDefault();
         main?.focus();
-      }}>{t.skipToContent}</a
+      }}
     >
+      {t.skipToContent}
+    </a>
     <Sidebar
       entries={catalog}
       current={entry?.path}

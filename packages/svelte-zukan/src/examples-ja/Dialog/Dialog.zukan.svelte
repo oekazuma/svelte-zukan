@@ -25,8 +25,10 @@
           onclick={() => {
             deleted = true;
             confirmOpen = false;
-          }}>削除</Button
+          }}
         >
+          削除
+        </Button>
       {/snippet}
     </Dialog>
   </div>

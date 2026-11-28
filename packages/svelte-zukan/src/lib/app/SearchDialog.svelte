@@ -199,8 +199,10 @@
             onclick={() => {
               group = g;
               selectFirst();
-            }}>{g === null ? t.searchAllGroups : g === TAILWIND ? t.tailwind : g}</button
+            }}
           >
+            {g === null ? t.searchAllGroups : g === TAILWIND ? t.tailwind : g}
+          </button>
         {/each}
       </div>
     {/if}
@@ -230,9 +232,9 @@
                           <span class="swatch" style:background-color={hit.value}></span>
                         {/if}
                         <span class="name code">{hit.label}</span>
-                        <span class="group"
-                          >{[hit.item.title, files?.get(hit.item.source)].filter(Boolean).join(' · ')}</span
-                        >
+                        <span class="group">
+                          {[hit.item.title, files?.get(hit.item.source)].filter(Boolean).join(' · ')}
+                        </span>
                       {:else}
                         <span class="name">{hit.item.title}</span>
                         {#if files}<span class="group">{files.get(hit.item.source)}</span>{/if}

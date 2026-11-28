@@ -19,8 +19,10 @@
         size="sm"
         variant={page === current ? 'primary' : 'secondary'}
         aria-current={page === current ? 'page' : undefined}
-        onclick={() => (current = page)}>{page}</Button
+        onclick={() => (current = page)}
       >
+        {page}
+      </Button>
     {/each}
     <Button variant="ghost" disabled={current === pages.length} onclick={() => current++}>
       Next <Icon name="arrow-right" size={16} />
